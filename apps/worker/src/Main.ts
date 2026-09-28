@@ -29,8 +29,12 @@ import { HealthHandlers } from "./health/HealthHandlers.ts"
 import { AuthenticatedLive } from "./iam/AuthenticatedLive.ts"
 import { AuthHttp } from "./iam/AuthHttp.ts"
 import { MeHandlers } from "./iam/MeHandlers.ts"
+import { BlobsLive } from "./intake/Blobs.ts"
+import { DocumentParserLive } from "./intake/DocumentParserLive.ts"
+import { IntakeHandlers } from "./intake/IntakeHandlers.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
 import { ReactivityLive } from "./platform/Database.ts"
+import { IdsLive } from "./platform/Ids.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
 
 /**
@@ -48,10 +52,15 @@ const AppLayer = (env: Env) =>
   ).pipe(
     Layer.provide(HealthHandlers),
     Layer.provide(MeHandlers),
+    Layer.provide(IntakeHandlers),
     Layer.provide(AuthenticatedLive),
     // The org-scoping seam. Safe to memoise: Db itself is stateless, and its methods require
     // SqlClient at call time — which `withDatabase` supplies per request.
     Layer.provideMerge(Db.layer),
+    // Stateless: safe to memoise. Only the connection and better-auth pool are per-request.
+    Layer.provideMerge(DocumentParserLive),
+    Layer.provideMerge(IdsLive),
+    Layer.provideMerge(BlobsLive),
     Layer.provideMerge(Layer.succeed(Bindings)(env)),
     Layer.provideMerge(ReactivityLive),
     Layer.provide(WorkerPlatform),

@@ -10,12 +10,13 @@
     "types": "wrangler types"
   },
   "dependencies": {
+    "@ea/shared-database": "workspace:*",
     "@ea/shared-domain": "workspace:*",
     "@effect/sql-pg": "catalog:",
+    "better-auth": "1.7.6",
     "effect": "catalog:",
     "pg": "^8.23.0",
-    "@ea/shared-database": "workspace:*",
-    "better-auth": "1.7.6"
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260926.1",

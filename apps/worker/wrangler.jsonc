@@ -30,6 +30,11 @@
   "hyperdrive": [
     { "binding": "HYPERDRIVE", "id": "local-dev-overridden-by-dotenv" },
   ],
+  // `wrangler dev` emulates R2 locally via miniflare, so nothing needs provisioning to develop
+  // or test. The real bucket is created by Pulumi (infra/index.ts).
+  "r2_buckets": [
+    { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-dev" },
+  ],
 
   // Each environment deploys as its own Worker: effect-ai-staging, effect-ai-production.
   // Separate bindings, separate secrets, separate logs.
@@ -39,11 +44,17 @@
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "PULUMI_hyperdriveId" },
       ],
+      "r2_buckets": [
+        { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-staging" },
+      ],
     },
     "production": {
       "vars": { "ENVIRONMENT": "production" },
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "PULUMI_hyperdriveId" },
+      ],
+      "r2_buckets": [
+        { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-production" },
       ],
     },
   },

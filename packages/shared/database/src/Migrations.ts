@@ -13,14 +13,16 @@
  */
 import { Migrator } from "effect/sql"
 import tenancy from "./migrations/0001_tenancy.ts"
-import intake from "./migrations/0002_intake.ts"
+import sourceDocuments from "./migrations/0002_intake.ts"
 import auth from "./migrations/0003_auth.ts"
+import intakes from "./migrations/0004_intake.ts"
 
 export const migrations = {
   "0001_tenancy": tenancy,
-  "0002_intake": intake,
+  "0002_intake": sourceDocuments,
   // Generated from the installed better-auth by `bun scripts/auth-schema.ts`.
-  "0003_auth": auth
+  "0003_auth": auth,
+  "0004_intake": intakes
 }
 
 export const loader = Migrator.fromRecord(migrations)

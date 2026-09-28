@@ -21,7 +21,7 @@
 import { PgClient } from "@effect/sql-pg"
 import { Effect, type Layer } from "effect"
 import * as ReactivityModule from "effect/reactivity/Reactivity"
-import { SqlClient } from "effect/sql"
+import { SqlClient, type SqlError } from "effect/sql"
 import { Bindings } from "./Bindings.ts"
 import { pgConfigFor } from "./CloudflareSocket.ts"
 
@@ -37,11 +37,19 @@ export const ReactivityLive: Layer.Layer<ReactivityModule.Reactivity> = Reactivi
  */
 export const withDatabase = <A, E, R>(
   effect: Effect.Effect<A, E, R | SqlClient.SqlClient>
-): Effect.Effect<A, E | Error, Exclude<R, SqlClient.SqlClient> | Bindings | ReactivityModule.Reactivity> =>
+): Effect.Effect<
+  A,
+  E | SqlError.SqlError,
+  Exclude<R, SqlClient.SqlClient> | Bindings | ReactivityModule.Reactivity
+> =>
   Effect.scoped(
     Effect.gen(function*() {
       const env = yield* Bindings
       const client = yield* PgClient.make(pgConfigFor(env.HYPERDRIVE))
       return yield* Effect.provideService(effect, SqlClient.SqlClient, client)
     })
-  ) as Effect.Effect<A, E | Error, Exclude<R, SqlClient.SqlClient> | Bindings | ReactivityModule.Reactivity>
+  ) as Effect.Effect<
+    A,
+    E | SqlError.SqlError,
+    Exclude<R, SqlClient.SqlClient> | Bindings | ReactivityModule.Reactivity
+  >
