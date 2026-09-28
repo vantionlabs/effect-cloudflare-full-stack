@@ -3,37 +3,7 @@
   "include": [],
   "references": [
     {
-      "path": "./packages/shared/domain"
-    },
-    {
-      "path": "./packages/iam/domain"
-    },
-    {
-      "path": "./packages/iam/tables"
-    },
-    {
-      "path": "./packages/intake/domain"
-    },
-    {
-      "path": "./packages/intake/tables"
-    },
-    {
-      "path": "./packages/shared/tables"
-    },
-    {
-      "path": "./packages/shared/api"
-    },
-    {
-      "path": "./packages/iam/use-cases"
-    },
-    {
-      "path": "./packages/iam/server"
-    },
-    {
-      "path": "./packages/intake/use-cases"
-    },
-    {
-      "path": "./packages/intake/server"
+      "path": "./packages/modules"
     },
     {
       "path": "./apps/worker"

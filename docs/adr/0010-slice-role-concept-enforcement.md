@@ -1,6 +1,8 @@
 # ADR-0010 — slice × role × concept, and the three places it bends
 
-**Status:** accepted · **Date:** 2026-09-28
+**Status:** accepted; the package-granularity decision below is **superseded by
+[ADR-0011](./0011-one-modules-package.md)** (one `@ea/modules` package). The directory shape,
+the three bends and the enforcement all stand. · **Date:** 2026-09-28
 
 ## Context
 

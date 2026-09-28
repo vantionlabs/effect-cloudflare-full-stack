@@ -1,0 +1,16 @@
+{
+  // One package, one project. The ring boundaries inside it are enforced by
+  // `bun run dep:check` rather than by the module graph — see ADR-0011 for the trade.
+  //
+  // `types: []` stays, deliberately: it means `@cloudflare/workers-types` globals are NOT
+  // ambient here, so a server-ring file that needs `R2Bucket` has to import the type by name.
+  // An explicit import is greppable; an ambient global available to every domain file is not.
+  "extends": "../../tsconfig.base.json",
+  "include": ["**/*.ts"],
+  "compilerOptions": {
+    "noEmit": true,
+    // Tests sit beside the code they test, so rootDir is the package rather than a src/ dir.
+    "rootDir": ".",
+    "types": []
+  }
+}

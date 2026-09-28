@@ -25,7 +25,7 @@ export interface Env {
     /** Assembled by the binding. Used by `pg` for better-auth; the Effect driver takes parts. */
     readonly connectionString: string
   }
-  /** Source documents. Tenancy is a key prefix, enforced in @ea/intake-domain/Document. */
+  /** Source documents. Tenancy is a key prefix, enforced in @ea/modules/intake/domain/Document. */
   readonly DOCUMENTS: R2Bucket
   readonly VERSION?: string | undefined
 }

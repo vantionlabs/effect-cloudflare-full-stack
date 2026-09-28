@@ -1,0 +1,21 @@
+{
+  "name": "@ea/modules",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./*": "./*/index.ts",
+    "./internal/*": null,
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "better-auth": "1.7.6",
+    "effect": "catalog:",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@effect/sql-pg": "catalog:",
+    "@types/pg": "^8.23.1",
+    "vitest": "catalog:"
+  }
+}

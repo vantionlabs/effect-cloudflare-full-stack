@@ -25,12 +25,23 @@ interface Rule {
   readonly permitted?: (path: string, specifier: string) => boolean
 }
 
-/** `packages/<slice>/<role>/...` → `<slice>`, or undefined outside a slice package. */
-const sliceOf = (path: string): string | undefined => path.startsWith("packages/") ? path.split("/")[1] : undefined
+const MODULES = "packages/modules/"
 
-/** `@ea/<slice>-<role>` → `<slice>`, for the slices that exist as packages. */
+/** `packages/modules/<slice>/<role>/...` → `<slice>`, or undefined outside the modules package. */
+const sliceOf = (path: string): string | undefined => path.startsWith(MODULES) ? path.split("/")[2] : undefined
+
+/**
+ * `packages/modules/<slice>/<role>/...` → `<role>`.
+ *
+ * The ring is a directory rather than a package now, so every rule that could once lean on a
+ * package name keys on this instead — which makes this script the only thing keeping the rings
+ * apart. See ADR-0011 for why that trade was taken.
+ */
+const ringOf = (path: string): string | undefined => path.startsWith(MODULES) ? path.split("/")[3] : undefined
+
+/** `@ea/modules/<slice>/<role>/...` → `<slice>`. */
 const sliceOfSpecifier = (specifier: string): string | undefined =>
-  /^@ea\/(iam|intake|decision|policy|shared)-/.exec(specifier)?.[1]
+  /^@ea\/modules\/(iam|intake|decision|policy|shared)\//.exec(specifier)?.[1]
 
 const rules: ReadonlyArray<Rule> = [
   {
@@ -47,7 +58,7 @@ const rules: ReadonlyArray<Rule> = [
   },
   {
     label: "domain packages stay platform-free",
-    appliesTo: (p) => p.startsWith("packages/") && p.includes("/domain/src/"),
+    appliesTo: (p) => ringOf(p) === "domain",
     forbidden: [
       {
         // `effect/http` is the SERVER runtime. `effect/http-api` is deliberately allowed: it
@@ -82,11 +93,11 @@ const rules: ReadonlyArray<Rule> = [
   {
     label: "nothing but the composition root may reach into a server ring",
     appliesTo: (p) =>
-      p.startsWith("packages/") ||
+      p.startsWith(MODULES) ||
       (p.startsWith("apps/worker/src/") && p !== "apps/worker/src/Main.ts"),
     forbidden: [
       {
-        pattern: /^@ea\/[a-z-]+-server(\/|$)/,
+        pattern: /^@ea\/modules\/[a-z-]+\/server(\/|$)/,
         because: "an adapter may only be named by the composition root. A use case or another " +
           "slice that imports one has bound itself to a platform, and the fakes-only test tier " +
           "stops being possible"
@@ -95,7 +106,7 @@ const rules: ReadonlyArray<Rule> = [
   },
   {
     label: "tables rings stay driver-free",
-    appliesTo: (p) => p.startsWith("packages/") && p.includes("/tables/src/"),
+    appliesTo: (p) => ringOf(p) === "tables",
     forbidden: [
       {
         pattern: /^@effect\/sql-/,
@@ -108,7 +119,7 @@ const rules: ReadonlyArray<Rule> = [
   },
   {
     label: "a slice never reaches into another slice",
-    appliesTo: (p) => p.startsWith("packages/"),
+    appliesTo: (p) => p.startsWith(MODULES),
     forbidden: [
       {
         pattern: /^@ea\//,
@@ -121,8 +132,8 @@ const rules: ReadonlyArray<Rule> = [
     // composition points, which exist precisely to name every slice — `shared/api` composes the
     // groups into one contract, and `Migrations.ts` is the one place migration order is decided.
     permitted: (path, specifier) => {
-      if (path.startsWith("packages/shared/api/")) return true
-      if (path === "packages/shared/tables/src/Database/Migrations.ts") return true
+      if (path.startsWith("packages/modules/shared/api/")) return true
+      if (path === "packages/modules/shared/tables/Database/Migrations.ts") return true
       const target = sliceOfSpecifier(specifier)
       return target === undefined || target === "shared" || target === sliceOf(path)
     }

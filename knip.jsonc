@@ -17,16 +17,9 @@
     "apps/worker": {
       "entry": ["test/**/*.ts"],
     },
-    // Tests are entry points, not dead code. Listed per workspace because knip resolves
-    // entries relative to each package root.
-    "packages/shared/api": {
-      "entry": ["test/**/*.ts"],
-    },
-    "packages/shared/tables": {
-      "entry": ["test/**/*.ts"],
-    },
-    "packages/intake/domain": {
-      "entry": ["test/**/*.ts"],
+    // Tests are entry points, not dead code.
+    "packages/modules": {
+      "entry": ["**/test/**/*.ts"],
     },
   },
 }

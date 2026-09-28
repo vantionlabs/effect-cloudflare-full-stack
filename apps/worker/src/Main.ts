@@ -24,13 +24,13 @@
  *
  * `dispose` from `toWebHandler` is dropped on purpose: Workers offers no hook to call it.
  */
-import { SessionHttp, SessionLive, SessionStore } from "@ea/iam-server/Session"
-import { IdentityRpc } from "@ea/iam-use-cases/Identity"
-import { DocumentParserText } from "@ea/intake-domain/Document"
-import { BlobsR2, DocumentBucket } from "@ea/intake-server/Document"
-import { IntakeRpc } from "@ea/intake-use-cases/Intake"
-import { ApiV1 } from "@ea/shared-api/V1"
-import { Db } from "@ea/shared-tables/Database"
+import { SessionHttp, SessionLive, SessionStore } from "@ea/modules/iam/server/Session"
+import { IdentityRpc } from "@ea/modules/iam/use-cases/Identity"
+import { DocumentParserText } from "@ea/modules/intake/domain/Document"
+import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
+import { IntakeRpc } from "@ea/modules/intake/use-cases/Intake"
+import { ApiV1 } from "@ea/modules/shared/api/V1"
+import { Db } from "@ea/modules/shared/tables/Database"
 import { Layer } from "effect"
 import { HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
@@ -44,7 +44,7 @@ import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
  * The bindings each slice actually needs, narrowed from `Env`.
  *
  * A slice asks for one bucket or one connection string, never the whole environment — so
- * `@ea/intake-server` cannot reach Hyperdrive and `@ea/iam-server` cannot reach the bucket. This
+ * `@ea/modules/intake/server` cannot reach Hyperdrive and `@ea/modules/iam/server` cannot reach the bucket. This
  * is the only file that holds the wide `Env` and hands out the narrow pieces.
  */
 const SliceBindings = (env: Env) =>

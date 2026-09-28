@@ -4,7 +4,7 @@
  * The valuable assertions here are the *refusals*. A test that only proves a signed-in user can
  * read their own identity would pass on an implementation that authenticates nobody correctly.
  */
-import { MeV1 } from "@ea/iam-domain/Identity"
+import { MeV1 } from "@ea/modules/iam/domain/Identity"
 import { Schema } from "effect"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { cookiesFrom, type Harness, startHarness } from "./Harness.ts"

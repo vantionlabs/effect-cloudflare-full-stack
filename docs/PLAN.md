@@ -122,14 +122,17 @@ facet suffix:
 has no `server`. Ceremony scales with the slice.
 
 ```
-packages/<slice>/<role>/src/<Concept>/<Concept>.<facet>.ts     one facet of a concept
-packages/<slice>/<role>/src/<Concept>/<Operation>.ts           one business operation
+packages/modules/<slice>/<role>/<Concept>/<Concept>.<facet>.ts     one facet of a concept
+packages/modules/<slice>/<role>/<Concept>/<Operation>.ts           one business operation
 ```
 
-Rings are lowercase, concepts are PascalCase. As built at milestone 4 (see ADR-0010):
+Rings are lowercase, concepts are PascalCase. **One package**, `@ea/modules` — this is one
+deployable, not a set of services, so a package per ring bought a compile-time guarantee that
+`bun run dep:check` already provides and charged per-directory bureaucracy for it (ADR-0011,
+superseding ADR-0010's granularity). As built at milestone 4:
 
 ```
-packages/
+packages/modules/
   shared/
     domain/      Identity/Identity.model.ts  Identity/Identity.middleware.ts
                  Verbatim/Verbatim.ts        Ids/Ids.ts
@@ -152,6 +155,9 @@ apps/worker/
   src/Health/{GetHealth,Health.rpc}.ts
   src/platform/{Bindings,CloudflareSocket,HyperdriveConnect,Ids,WorkerPlatform}.ts
 ```
+
+No `"."` export: importing `@ea/modules` bare would pull every ring of every slice into one module
+graph, `server/` included. Call sites name the ring — `@ea/modules/intake/domain/Document`.
 
 Three places the layout bends, each recorded in **ADR-0010**: `Identity`/`Authenticated` are in
 `shared/domain` because every slice's stores carry `CurrentUser` in `R`; `api` is a fourth role

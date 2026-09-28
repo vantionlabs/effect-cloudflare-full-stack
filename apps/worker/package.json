@@ -10,15 +10,7 @@
     "types": "wrangler types"
   },
   "dependencies": {
-    "@ea/iam-domain": "workspace:*",
-    "@ea/iam-server": "workspace:*",
-    "@ea/iam-use-cases": "workspace:*",
-    "@ea/intake-domain": "workspace:*",
-    "@ea/intake-server": "workspace:*",
-    "@ea/intake-use-cases": "workspace:*",
-    "@ea/shared-api": "workspace:*",
-    "@ea/shared-domain": "workspace:*",
-    "@ea/shared-tables": "workspace:*",
+    "@ea/modules": "workspace:*",
     "@effect/sql-pg": "catalog:",
     "effect": "catalog:",
     "uuid": "^14.0.2"

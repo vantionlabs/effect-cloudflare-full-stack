@@ -16,7 +16,10 @@ export default defineConfig({
         // This is where most of the value is, and it is fast enough to run on every save.
         test: {
           name: "domain",
-          include: ["packages/*/domain/test/**/*.test.ts", "packages/shared/api/test/**/*.test.ts"],
+          include: [
+            "packages/modules/*/domain/test/**/*.test.ts",
+            "packages/modules/shared/api/test/**/*.test.ts"
+          ],
           environment: "node"
         }
       },
@@ -25,7 +28,7 @@ export default defineConfig({
         // domain tests stay in the `domain` project, which needs no infrastructure at all.
         test: {
           name: "tables",
-          include: ["packages/*/tables/test/**/*.test.ts"],
+          include: ["packages/modules/*/tables/test/**/*.test.ts"],
           environment: "node",
           testTimeout: 30_000,
           hookTimeout: 30_000
