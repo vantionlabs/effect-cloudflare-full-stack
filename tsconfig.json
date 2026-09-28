@@ -3,6 +3,9 @@
   "include": [],
   "references": [
     {
+      "path": "./packages/shared/domain"
+    },
+    {
       "path": "./apps/worker"
     }
   ]

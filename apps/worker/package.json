@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "effect": "catalog:",
-    "@effect/sql-pg": "catalog:"
+    "@effect/sql-pg": "catalog:",
+    "@ea/shared-domain": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260926.1",

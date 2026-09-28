@@ -1,0 +1,14 @@
+{
+  "name": "@ea/shared-domain",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*/index.ts",
+    "./internal/*": null,
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "effect": "catalog:"
+  }
+}

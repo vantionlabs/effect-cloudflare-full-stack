@@ -25,6 +25,7 @@
     "apps/worker": {
       "name": "@ea/worker",
       "dependencies": {
+        "@ea/shared-domain": "workspace:*",
         "@effect/sql-pg": "catalog:",
         "effect": "catalog:",
       },
@@ -38,6 +39,12 @@
       "name": "@ea/evals",
       "dependencies": {
         "@effect/platform-bun": "catalog:",
+        "effect": "catalog:",
+      },
+    },
+    "packages/shared/domain": {
+      "name": "@ea/shared-domain",
+      "dependencies": {
         "effect": "catalog:",
       },
     },
@@ -123,6 +130,8 @@
     "@ea/evals": ["@ea/evals@workspace:evals"],
 
     "@ea/scripts": ["@ea/scripts@workspace:scripts"],
+
+    "@ea/shared-domain": ["@ea/shared-domain@workspace:packages/shared/domain"],
 
     "@ea/worker": ["@ea/worker@workspace:apps/worker"],
 

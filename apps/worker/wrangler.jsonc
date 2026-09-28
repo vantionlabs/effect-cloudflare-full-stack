@@ -3,14 +3,19 @@
   "name": "effect-ai",
   "main": "src/Main.ts",
   "compatibility_date": "2026-09-26",
-  "compatibility_flags": ["nodejs_compat"],
+  // enable_request_signal lets toWebHandler's built-in interruptibility work: it
+  // listens for request.signal abort and interrupts the fiber, so a client that
+  // disconnects mid-request stops the work instead of paying for it.
+  // nodejs_compat is on by default from 2026-08-04 but stays explicit to document
+  // that node:stream (Duplex.fromWeb) is load-bearing here.
+  "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
   "observability": { "enabled": true },
   // alchemy.run.ts is the source of truth for infrastructure; this file exists so
   // `wrangler dev` works locally and as the documented fallback if Alchemy (pre-1.0)
   // ever blocks a deploy.
   //
   // Local dev reads the Postgres connection string from
-  // WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE in .env (gitignored), so no
+  // CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE in .env (gitignored), so no
   // credential is ever committed and nothing needs provisioning on Cloudflare.
   "hyperdrive": [
     {
