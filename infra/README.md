@@ -10,6 +10,20 @@ every RC churn — exactly what blocked Alchemy. `effect-pulumi` exists but decl
 `effect: ^3.0.0`, so adopting it would recreate the problem on purpose. A boundary rule in
 `scripts/boundaries.ts` enforces this.
 
+## State and secrets
+
+Currently the **local file backend** (`pulumi login --local`), so nothing depends on an
+external service yet. Two consequences worth knowing:
+
+- `Pulumi.<stack>.yaml` is **gitignored**, which is _not_ Pulumi's usual convention. Normally
+  those files are committed because their secrets are encrypted — but with the local backend
+  and a passphrase-less stack the encryption is weak, so committing them would put real
+  credentials in git under a thin wrapper.
+- That means **CI cannot read stack config**. It does not need to yet (CI deploys the Worker
+  with wrangler; it does not run `pulumi up`). When that changes, move to Pulumi Cloud
+  (`pulumi login`, free for individuals) or R2 with a real `PULUMI_CONFIG_PASSPHRASE`, then
+  commit the stack files and drop them from `.gitignore`.
+
 ## One-time setup
 
 **1. Install the Pulumi CLI** (a binary, not an npm package):
@@ -18,14 +32,20 @@ every RC churn — exactly what blocked Alchemy. `effect-pulumi` exists but decl
 brew install pulumi           # or: curl -fsSL https://get.pulumi.com | sh
 ```
 
-**2. Choose a state backend.** Pulumi Cloud is free for individuals and needs no setup:
+**2. Choose a state backend.** Local is already configured and needs no account:
 
 ```bash
-pulumi login
+pulumi login --local
 ```
 
-Or keep state on Cloudflare with R2 (S3-compatible). Chicken-and-egg: the bucket must exist
-first, so create it once by hand and never manage it here.
+Pulumi Cloud (`pulumi login`) is free for individuals and is what to move to when CI needs
+stack config. R2 also works (S3-compatible), with the chicken-and-egg that the bucket must
+exist first — so create that one by hand and never manage it here.
+
+**Note on the runtime:** `Pulumi.yaml` sets `typescript: false` with `entrypoint: index.ts`
+on purpose. Pulumi's `typescript: true` path uses a vendored `ts-node@7.0.1` that crashes on
+modern Node (`Cannot read properties of undefined (reading 'readFile')`); Node 23+ strips
+types natively, so no transpiler is needed.
 
 **3. Create the PlanetScale Postgres cluster.** _Not managed by this program_ — there is no
 Pulumi provider for PlanetScale, and the Cloudflare partnership flow is what puts the cluster

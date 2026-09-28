@@ -2,20 +2,27 @@ name: effect-ai
 runtime:
   name: nodejs
   options:
-    # Bun is the repo's package manager, but the Pulumi language host is Node-targeted —
-    # same split as wrangler and the vitest worker project.
+    # Bun is the repo's package manager, but Pulumi's language host is Node-targeted —
+    # the same split as wrangler and the vitest worker project.
     packagemanager: npm
-    typescript: true
+    # `typescript: false` disables Pulumi's vendored ts-node@7.0.1, which is ancient and
+    # crashes on modern Node ("Cannot read properties of undefined (reading 'readFile')").
+    # Node 23+ strips types natively, so the .ts entry point runs without any transpiler.
+    typescript: false
+    entrypoint: index.ts
 description: Cloudflare infrastructure for effect-ai
 
+# Keys here are namespaced to the project automatically, so `accountId` is read as
+# `effect-ai:accountId`. Provider credentials (cloudflare:apiToken) are deliberately NOT
+# declared here — they are set per stack, so a token never lands in a committed file.
 config:
-  cloudflare:apiToken:
-    secret: true
-  effect-ai:accountId:
+  accountId:
+    type: string
     description: Cloudflare account id
-  effect-ai:postgresUrl:
-    description: >-
-      Direct (NOT pooled) Postgres connection string for the PlanetScale cluster that
-      Hyperdrive fronts. Pooled/transaction-mode strings break @effect/sql-pg's named
-      prepared statements, and Hyperdrive does the pooling itself.
+  postgresUrl:
+    type: string
     secret: true
+    description: >-
+      Direct (NOT pooled) Postgres connection string for the PlanetScale cluster Hyperdrive
+      fronts. Pooled or transaction-mode strings break @effect/sql-pg's named prepared
+      statements, and Hyperdrive does the pooling itself.
