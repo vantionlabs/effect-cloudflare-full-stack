@@ -21,60 +21,79 @@
  */
 import {
   Authenticated,
+  AuthenticatedRpc,
   CurrentUser,
   Identity,
   type MemberRole,
   OrgId,
+  Unauthenticated,
   UserId
 } from "@ea/modules/shared/domain/Identity"
 import { Effect, Layer } from "effect"
 import { HttpServerRequest } from "effect/http"
 import { HttpApiError } from "effect/http-api"
+import type { AuthConfig } from "./Session.betterauth.ts"
 import { acquireAuth, authSettings } from "./Session.service.ts"
 
+/**
+ * Resolves the caller's identity from request headers, or returns null.
+ *
+ * Takes headers rather than reaching for `HttpServerRequest`, which is what makes it genuinely
+ * transport-agnostic: the RPC middleware is handed `options.headers` and never sees an HTTP request.
+ * Extracted so the two middlewares below are provably **one** authorization seam rather than two
+ * implementations that happen to agree today — every decision about who the caller is lives here, and
+ * each layer contributes only its transport's way of refusing.
+ */
+const resolveIdentity = (config: AuthConfig, headers: Headers) =>
+  Effect.gen(function*() {
+    // The POOL is acquired inside the per-request effect and released with the request scope.
+    // Capturing it at layer-build time is the bug this shape prevents — it cost two debugging
+    // sessions, once for the SQL client and once for better-auth's own pool.
+    const auth = yield* acquireAuth(config)
+
+    const session = yield* auth.session(headers)
+    if (session === null) return null
+
+    // (2) above: no default organization, ever.
+    const organizationId = session.activeOrganizationId
+    if (organizationId === null) return null
+
+    // (3): membership is re-read, and asked of better-auth rather than queried directly.
+    const role = yield* auth.activeRole(headers)
+    if (role === null) return null
+
+    return new Identity({
+      userId: UserId.make(session.userId),
+      orgId: OrgId.make(organizationId),
+      email: session.email,
+      role: role as MemberRole
+    })
+  }).pipe(Effect.scoped)
+
 export const SessionLive = Layer.effect(Authenticated)(
-  // Settings are read once, when the layer is built: the binding and secret are stable.
+  // Settings are read once, when the layer is built: the binding and the secret are stable for an
+  // isolate's lifetime. Only the pool is per request.
   Effect.map(authSettings, (config) => (httpEffect) =>
     Effect.gen(function*() {
-      // The POOL is acquired inside the per-request function and released with the request
-      // scope. Capturing it at layer-build time is the bug this shape prevents.
-      const auth = yield* acquireAuth(config)
       const request = yield* HttpServerRequest.HttpServerRequest
-      const session = yield* auth.session(new Headers(request.headers as Record<string, string>))
+      const identity = yield* resolveIdentity(config, new Headers(request.headers as Record<string, string>))
+      if (identity === null) return yield* Effect.fail(new HttpApiError.Unauthorized())
+      return yield* Effect.provideService(httpEffect, CurrentUser, identity)
+    }))
+)
 
-      if (session === null) {
-        return yield* Effect.fail(new HttpApiError.Unauthorized())
-      }
-
-      // (2) above: no default organization, ever.
-      const organizationId = session.activeOrganizationId
-      if (organizationId === null) {
-        return yield* Effect.fail(new HttpApiError.Unauthorized())
-      }
-
-      // (3): membership is re-read, and asked of better-auth rather than queried directly.
-      // It owns the `member` table, so it is the authority — and keeping SqlClient out of here
-      // matters because the middleware is declared in the domain package, which must not know
-      // about SQL at all.
-      const role = yield* auth.activeRole(
-        new Headers(request.headers as Record<string, string>)
-      )
-
-      if (role === null) {
-        // Authenticated, but not a member of the organization the session names: a revoked
-        // membership or a stale session. Nothing to explain, just no access.
-        return yield* Effect.fail(new HttpApiError.Unauthorized())
-      }
-
-      return yield* Effect.provideService(
-        httpEffect,
-        CurrentUser,
-        new Identity({
-          userId: UserId.make(session.userId),
-          orgId: OrgId.make(organizationId),
-          email: session.email,
-          role: role as MemberRole
-        })
-      )
-    }).pipe(Effect.scoped))
+/**
+ * The same seam for RPC.
+ *
+ * Gets its headers from the middleware options rather than from an `HttpServerRequest`, so it would
+ * work unchanged over a WebSocket or a worker protocol. The refusal is a plain tagged error: RPC has
+ * no status codes, and an RPC client's remedy for "not signed in" does not vary by reason.
+ */
+export const SessionRpcLive = Layer.effect(AuthenticatedRpc)(
+  Effect.map(authSettings, (config) => (rpcEffect, options) =>
+    Effect.gen(function*() {
+      const identity = yield* resolveIdentity(config, new Headers(options.headers as Record<string, string>))
+      if (identity === null) return yield* Effect.fail(new Unauthenticated())
+      return yield* Effect.provideService(rpcEffect, CurrentUser, identity)
+    }))
 )

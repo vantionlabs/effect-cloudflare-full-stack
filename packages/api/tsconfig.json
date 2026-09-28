@@ -1,0 +1,13 @@
+{
+  // The API manifest. Its own package rather than a ring inside `modules`, for two reasons: it is
+  // versioned on a different clock from the features it exposes (a v1 endpoint outlives the domain
+  // shape behind it), and it is the one thing a third-party or first-party CLIENT imports — so a
+  // client should be able to depend on the contract without pulling every module into its graph.
+  "extends": "../../tsconfig.base.json",
+  "include": ["**/*.ts"],
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": []
+  }
+}

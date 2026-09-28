@@ -6,13 +6,13 @@
  * header — see the endpoint declaration for why the header is fixed to `application/octet-stream`.
  */
 import { UnsupportedDocumentV1, UploadAcceptedV1 } from "@ea/modules/intake/domain/Intake"
-import { ApiV1 } from "@ea/modules/shared/api/V1"
+import { IngestUpload } from "@ea/modules/intake/use-cases/Intake"
 import { withDatabase } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
-import { IngestUpload } from "./IngestUpload.ts"
+import { ApiV1 } from "../V1.api.ts"
 
-export const IntakeRpc = HttpApiBuilder.group(
+export const IntakeHttp = HttpApiBuilder.group(
   ApiV1,
   "intake",
   (handlers) =>

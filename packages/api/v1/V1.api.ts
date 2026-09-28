@@ -12,7 +12,7 @@
 import { MeGroup } from "@ea/modules/iam/domain/Identity"
 import { IntakeGroup } from "@ea/modules/intake/domain/Intake"
 import { HttpApi } from "effect/http-api"
-import { HealthGroup } from "./Health.wire.ts"
+import { HealthGroup } from "./Health/Health.wire.ts"
 
 export const ApiV1 = HttpApi.make("effect-ai-v1")
   .add(HealthGroup)

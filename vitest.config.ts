@@ -19,7 +19,7 @@ export default defineConfig({
           include: [
             "packages/modules/*/domain/test/**/*.test.ts",
             "packages/modules/*/use-cases/test/**/*.test.ts",
-            "packages/modules/shared/api/test/**/*.test.ts"
+            "packages/api/test/**/*.test.ts"
           ],
           environment: "node"
         }

@@ -6,13 +6,13 @@
  * SSR loader or the eval harness without going through HTTP. That is the property that
  * makes adding a transport additive rather than a rewrite.
  */
-import { ApiV1, HealthV1 } from "@ea/modules/shared/api/V1"
+import { ApiV1, HealthV1 } from "@ea/api/v1"
 import { withDatabase } from "@ea/modules/shared/tables/Database"
 import { Config, Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { GetHealth } from "./GetHealth.ts"
 
-export const HealthRpc = HttpApiBuilder.group(
+export const HealthHttp = HttpApiBuilder.group(
   ApiV1,
   "health",
   (handlers) =>

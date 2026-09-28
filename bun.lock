@@ -24,6 +24,7 @@
       "name": "@ea/worker",
       "version": "0.0.0",
       "dependencies": {
+        "@ea/api": "workspace:*",
         "@ea/modules": "workspace:*",
         "@effect/sql-pg": "catalog:",
         "effect": "catalog:",
@@ -48,6 +49,17 @@
       },
       "devDependencies": {
         "@types/node": "catalog:",
+      },
+    },
+    "packages/api": {
+      "name": "@ea/api",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ea/modules": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "vitest": "catalog:",
       },
     },
     "packages/modules": {
@@ -153,6 +165,8 @@
     "@dprint/win32-arm64": ["@dprint/win32-arm64@0.57.4", "", { "os": "win32", "cpu": "arm64" }, "sha512-bGEtcSjl6T4xjwr9nUF5kgd3174NP7yb338+Ulqq5DMYcSN4ibI62eVQKBTuyLWByz56aVOL06dj8pKTUzn+yQ=="],
 
     "@dprint/win32-x64": ["@dprint/win32-x64@0.57.4", "", { "os": "win32", "cpu": "x64" }, "sha512-P91JJG2sDvK+SvZHdqjKygy7fYABbMH1KYop+WCowyjZUin09977qltdXwJ1vb77Cbi2OD0GWUuAlqO0PjNmaw=="],
+
+    "@ea/api": ["@ea/api@workspace:packages/api"],
 
     "@ea/evals": ["@ea/evals@workspace:evals"],
 

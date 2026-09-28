@@ -66,6 +66,18 @@ const withOrg = <A, E>(
     const sql = yield* SqlClient.SqlClient
     return yield* sql.withTransaction(
       Effect.gen(function*() {
+        /*
+         * Drop to the non-superuser role for the life of this transaction.
+         *
+         * Not belt-and-braces: **a superuser bypasses row-level security entirely, FORCE or not.**
+         * Locally the Worker connects as the bootstrap user, so without this every policy in the
+         * database is decoration and the app-layer predicate is the only thing standing between two
+         * tenants. That is exactly how `Intake.list` came to return another organization's rows.
+         *
+         * `local` so it reverts with the transaction — the connection must not be left as a
+         * different role for whatever runs next on it.
+         */
+        yield* sql`set local role effect_ai_app`
         // `true` scopes the setting to this transaction, so it cannot leak to the next user of
         // a pooled connection — which would attribute one tenant's queries to another.
         yield* sql`select set_config('app.current_org', ${orgId}, true)`

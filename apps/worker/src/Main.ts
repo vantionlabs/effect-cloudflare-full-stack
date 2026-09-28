@@ -13,7 +13,7 @@
  * failing at runtime. Two consequences worth internalising:
  *
  * 1. A handler's requirements are request-scoped, so they must be satisfied *on the handlers layer
- *    itself* (`Layer.provide(HealthRpc)`), not merely somewhere further down the pipe.
+ *    itself* (`Layer.provide(HealthHttp)`), not merely somewhere further down the pipe.
  * 2. `WorkerCtx` is deliberately left in `ReqR`, because `ExecutionContext` genuinely differs per
  *    invocation and caching it would make `waitUntil` write into a dead request.
  *
@@ -24,17 +24,16 @@
  *
  * `dispose` from `toWebHandler` is dropped on purpose: Workers offers no hook to call it.
  */
-import { SessionHttp, SessionLive, SessionStore } from "@ea/modules/iam/server/Session"
-import { IdentityRpc } from "@ea/modules/iam/use-cases/Identity"
+import { ApiV1, IdentityHttp, IdentityRpcLive, IntakeHttp, IntakeRpcLive, RPC_V1_PATH, RpcV1 } from "@ea/api/v1"
+import { SessionHttp, SessionLive, SessionRpcLive, SessionStore } from "@ea/modules/iam/server/Session"
 import { DocumentParserText } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
-import { IntakeRpc } from "@ea/modules/intake/use-cases/Intake"
-import { ApiV1 } from "@ea/modules/shared/api/V1"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Layer } from "effect"
 import { HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
-import { HealthRpc } from "./Health/Health.rpc.ts"
+import { RpcSerialization, RpcServer } from "effect/rpc"
+import { HealthHttp } from "./Health/Health.http.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
 import { ConnectHyperdrive, ReactivityLive } from "./platform/HyperdriveConnect.ts"
 import { IdsUuid } from "./platform/Ids.ts"
@@ -63,13 +62,41 @@ const SliceBindings = (env: Env) =>
 const AppLayer = (env: Env) =>
   Layer.mergeAll(
     HttpApiBuilder.layer(ApiV1, { openapiPath: "/api/v1/openapi.json" }),
+    /*
+     * The RPC surface, on the SAME router as the HTTP API.
+     *
+     * One origin, one auth seam, one deploy — and the reason both transports are cheap to keep: they
+     * resolve to the same `CurrentUser` and call the same use cases, so the second transport adds a
+     * door rather than a parallel implementation. HTTP stays frozen and snake_case for callers we do
+     * not control; RPC carries domain types for the console, which ships with the server.
+     */
+    RpcServer.layerHttp({
+      group: RpcV1,
+      path: RPC_V1_PATH,
+      /*
+       * `protocol` is NOT optional in practice. Despite the name, `layerHttp` mounts a **WebSocket**
+       * endpoint when this is omitted (`protocol === "http" ? layerProtocolHttp : layerProtocolWebsocket`),
+       * so a plain POST gets a 404 with nothing in the logs to explain it.
+       *
+       * Request/response rather than a socket because the console's calls are discrete queries, and a
+       * Worker billed on wall-clock time should not hold an idle socket open per viewer. A socket
+       * becomes right when the queue needs live updates, and that is a one-word change here.
+       */
+      protocol: "http"
+    }),
     // better-auth's own routes, mounted on the same router so there is one origin and no CORS.
     SessionHttp
   ).pipe(
-    Layer.provide(HealthRpc),
-    Layer.provide(IdentityRpc),
-    Layer.provide(IntakeRpc),
+    Layer.provide(HealthHttp),
+    Layer.provide(IdentityHttp),
+    Layer.provide(IntakeHttp),
+    Layer.provide(IdentityRpcLive),
+    Layer.provide(IntakeRpcLive),
+    // JSON rather than msgpack: the console is a browser, the payloads are small, and a wire format
+    // a human can read in devtools is worth more here than a few bytes.
+    Layer.provide(RpcSerialization.layerJson),
     Layer.provide(SessionLive),
+    Layer.provide(SessionRpcLive),
     // The org-scoping seam. Safe to memoise: Db itself is stateless, and its methods require
     // SqlClient at call time — which `withDatabase` supplies per request.
     Layer.provideMerge(Db.layer),

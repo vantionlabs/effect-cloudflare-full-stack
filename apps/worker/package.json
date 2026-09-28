@@ -10,6 +10,7 @@
     "types": "wrangler types"
   },
   "dependencies": {
+    "@ea/api": "workspace:*",
     "@ea/modules": "workspace:*",
     "@effect/sql-pg": "catalog:",
     "effect": "catalog:",

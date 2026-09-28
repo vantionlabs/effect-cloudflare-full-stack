@@ -94,6 +94,7 @@ const rules: ReadonlyArray<Rule> = [
     label: "nothing but the composition root may reach into a server ring",
     appliesTo: (p) =>
       p.startsWith(MODULES) ||
+      p.startsWith("packages/api/") ||
       (p.startsWith("apps/worker/src/") && p !== "apps/worker/src/Main.ts"),
     forbidden: [
       {
@@ -101,6 +102,31 @@ const rules: ReadonlyArray<Rule> = [
         because: "an adapter may only be named by the composition root. A use case or another " +
           "slice that imports one has bound itself to a platform, and the fakes-only test tier " +
           "stops being possible"
+      }
+    ]
+  },
+  {
+    label: "modules never depend on the api package",
+    appliesTo: (p) => p.startsWith(MODULES),
+    forbidden: [
+      {
+        pattern: /^@ea\/api(\/|$)/,
+        because: "the api package COLLECTS the modules' groups, so the dependency runs api -> " +
+          "modules and only that way. The reverse is a cycle, and it does not fail loudly: the " +
+          "barrel re-exports the handler files, so `ApiV1` arrives undefined and every request " +
+          "dies with `Cannot read properties of undefined (reading 'groups')`. Reach the manifest " +
+          "by relative path from inside packages/api instead"
+      }
+    ]
+  },
+  {
+    label: "the api package imports contracts and use cases, never adapters",
+    appliesTo: (p) => p.startsWith("packages/api/"),
+    forbidden: [
+      {
+        pattern: /^@effect\/sql-|^cloudflare:|^pg$/,
+        because: "the transport edge calls use cases; it does not own connections or bindings. " +
+          "Those belong to apps/worker/src/platform"
       }
     ]
   },

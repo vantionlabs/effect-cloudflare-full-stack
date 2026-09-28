@@ -19,6 +19,8 @@ import { ExtractionTable } from "@ea/modules/decision/tables/Extraction"
 import { SessionTable } from "@ea/modules/iam/tables/Session"
 import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
+import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
+import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
 import { Migrator } from "effect/sql"
 import { TenancyTable } from "../Tenancy/Tenancy.table.ts"
 
@@ -28,7 +30,11 @@ export const migrations = {
   // Generated from the installed better-auth by `bun scripts/auth-schema.ts`.
   "0003_auth": SessionTable,
   "0004_intake": IntakeTable,
-  "0005_extraction": ExtractionTable
+  "0005_extraction": ExtractionTable,
+  "0006_policy": ChunkTable,
+  // The retrieval function is its own migration: it is replaced whenever the fusion changes,
+  // and keeping it separate means that change is one reviewable diff rather than a table edit.
+  "0007_retrieval": RetrievalTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

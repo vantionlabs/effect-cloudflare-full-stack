@@ -12,7 +12,7 @@
  * Stemming is proven by asking Postgres whether the two forms stem alike, not by reading
  * `pg_ts_config` — a config row says the dictionary is installed, not that it works.
  */
-import { DatabaseHealthV1, HealthV1 } from "@ea/modules/shared/api/V1"
+import { DatabaseHealthV1, HealthV1 } from "@ea/api/v1"
 import { Effect } from "effect"
 import { SqlClient } from "effect/sql"
 

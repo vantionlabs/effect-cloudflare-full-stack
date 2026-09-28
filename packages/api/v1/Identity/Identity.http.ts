@@ -6,12 +6,12 @@
  * provided. A handler that tried to authenticate itself would be a second seam.
  */
 import { MeV1 } from "@ea/modules/iam/domain/Identity"
-import { ApiV1 } from "@ea/modules/shared/api/V1"
 import { CurrentUser } from "@ea/modules/shared/domain/Identity"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
+import { ApiV1 } from "../V1.api.ts"
 
-export const IdentityRpc = HttpApiBuilder.group(
+export const IdentityHttp = HttpApiBuilder.group(
   ApiV1,
   "me",
   (handlers) =>

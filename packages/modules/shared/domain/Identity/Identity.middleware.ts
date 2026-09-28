@@ -1,16 +1,16 @@
 /**
- * The authentication middleware.
+ * The authentication contract, in both transports.
  *
- * In `shared/domain` rather than the `iam` slice, and paired with `Identity.model.ts` on purpose:
- * it is the declaration that *provides* `CurrentUser`, so every protected group in every slice
- * needs it. Putting it in `iam/domain` would make `@ea/modules/intake/domain` depend on `@ea/modules/iam/domain`
- * just to mark an endpoint authenticated — a cross-slice dependency for a cross-slice contract.
+ * In `shared/domain` rather than the `iam` slice, and paired with `Identity.model.ts` on purpose: it
+ * is the declaration that *provides* `CurrentUser`, so every protected group in every slice needs it.
+ * Putting it in `iam/domain` would make `@ea/modules/intake/domain` depend on
+ * `@ea/modules/iam/domain` just to mark an endpoint authenticated — a cross-slice dependency for a
+ * cross-slice contract. Only the declaration is here; the implementation is the iam slice's
+ * (`@ea/modules/iam/server`).
  *
- * The IMPLEMENTATION is the iam slice's (`@ea/modules/iam/server`). Only the contract is here *declaration*.
- *
- * It lives in the domain package alongside the `HttpApi` contract, because whether an endpoint
- * requires a session is part of the contract a client compiles against — not a server
- * implementation detail. The implementation (`AuthenticatedLive`) stays in the Worker.
+ * Whether an endpoint requires a session is part of the contract a client compiles against, not a
+ * server implementation detail — which is why this sits beside the `HttpApi` and `RpcGroup`
+ * declarations rather than with the handlers.
  *
  * `provides: CurrentUser` is the load-bearing part. A handler on an annotated endpoint has
  * `CurrentUser` available; one without the annotation does not — so reaching for the current
@@ -18,7 +18,9 @@
  * because every store method requires `CurrentUser` too, an unauthenticated endpoint *cannot
  * compile* against a tenant-scoped query.
  */
+import { Schema } from "effect"
 import { HttpApiError, HttpApiMiddleware } from "effect/http-api"
+import { RpcMiddleware } from "effect/rpc"
 import type { CurrentUser } from "./Identity.model.ts"
 
 /**
@@ -32,3 +34,21 @@ import type { CurrentUser } from "./Identity.model.ts"
 export class Authenticated extends HttpApiMiddleware.Service<Authenticated, {
   provides: CurrentUser
 }>()("iam/Authenticated", { error: HttpApiError.Unauthorized }) {}
+
+/**
+ * The same requirement for the RPC transport.
+ *
+ * Two declarations rather than one because `HttpApiMiddleware` and `RpcMiddleware` are different
+ * mechanisms, and a single abstraction over them would hide the one thing worth seeing: **both
+ * transports resolve to the same `CurrentUser`**, so there is exactly one authorization seam no
+ * matter which door a caller came through. `Session.live.ts` implements both from one session lookup,
+ * and `bun run dep:check` can enumerate every provider of `CurrentUser` by grepping for these two.
+ *
+ * The error is a plain tagged failure rather than `HttpApiError.Unauthorized`: RPC has no status
+ * codes, and the transport's own 401 is not something an RPC client can act on differently.
+ */
+export class Unauthenticated extends Schema.TaggedError<Unauthenticated>()("Unauthenticated", {}) {}
+
+export class AuthenticatedRpc extends RpcMiddleware.Service<AuthenticatedRpc, {
+  provides: CurrentUser
+}>()("iam/AuthenticatedRpc", { error: Unauthenticated }) {}

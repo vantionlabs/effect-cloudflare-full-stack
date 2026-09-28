@@ -21,5 +21,8 @@
     "packages/modules": {
       "entry": ["**/test/**/*.ts"],
     },
+    "packages/api": {
+      "entry": ["**/test/**/*.ts"],
+    },
   },
 }
