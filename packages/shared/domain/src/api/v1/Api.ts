@@ -6,7 +6,9 @@
  * frozen: endpoints may be added, never changed in place.
  */
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
+import { Authenticated } from "../../iam/Authenticated.ts"
 import { HealthV1 } from "./Health.ts"
+import { MeV1 } from "./Me.ts"
 
 /** Liveness and capability reporting. Unauthenticated by design. */
 export const HealthGroup = HttpApiGroup.make("health").add(
@@ -15,4 +17,17 @@ export const HealthGroup = HttpApiGroup.make("health").add(
   HttpApiEndpoint.get("get", "/health", { success: HealthV1 })
 )
 
-export const ApiV1 = HttpApi.make("effect-ai-v1").add(HealthGroup).prefix("/api/v1")
+/**
+ * Endpoints requiring a session.
+ *
+ * `.middleware(Authenticated)` applies to the whole group, so adding an endpoint here cannot
+ * accidentally be public — the default for this group is protected.
+ */
+export const MeGroup = HttpApiGroup.make("me")
+  .add(HttpApiEndpoint.get("get", "/me", { success: MeV1 }))
+  .middleware(Authenticated)
+
+export const ApiV1 = HttpApi.make("effect-ai-v1")
+  .add(HealthGroup)
+  .add(MeGroup)
+  .prefix("/api/v1")

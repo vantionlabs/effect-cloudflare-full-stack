@@ -22,6 +22,8 @@ export interface Env {
     readonly user: string
     readonly password: string
     readonly database: string
+    /** Assembled by the binding. Used by `pg` for better-auth; the Effect driver takes parts. */
+    readonly connectionString: string
   }
   readonly VERSION?: string | undefined
 }

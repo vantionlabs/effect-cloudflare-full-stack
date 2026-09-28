@@ -33,6 +33,10 @@ jobs:
       PGPASSWORD: ci_only
       PGDATABASE: effect_ai
       PGPORT: "55433"
+      # Auth tests boot a real Worker, so the secret must be present. A throwaway value is
+      # correct here: CI has no real sessions to protect, and a committed secret would be worse.
+      BETTER_AUTH_SECRET: ci-only-secret-at-least-32-characters-long
+      BASE_URL: http://localhost:8799
     steps:
       - uses: actions/checkout@v5
         with:

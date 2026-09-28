@@ -52,9 +52,26 @@ export const makeAuth = (config: AuthConfig) =>
     ],
 
     session: {
-      // The session is read on every authenticated request, so it is cached in KV rather than
-      // hitting Postgres each time. Eventual consistency is correct for a session and wrong for
-      // the review queue, which is why only this is cached.
+      // A signed cookie cache avoids a session read on most requests without introducing a
+      // second store. `maxAge` is the window in which a revoked session still works, so it stays
+      // short: revocation should be near-immediate, and membership is re-checked every request
+      // regardless (see AuthenticatedLive).
       cookieCache: { enabled: true, maxAge: 60 }
     }
+    // NOT using `secondaryStorage` (better-auth's Redis-style session store), deliberately.
+    // Its interface requires ATOMIC operations:
+    //
+    //   getAndDelete(key)      -- atomically get and delete
+    //   increment(key, ttl)    -- atomic counter, documented as "required so
+    //                             secondary-storage-backed rate limiting can enforce the limit
+    //                             in one distributed-safe operation"
+    //
+    // Cloudflare KV can do neither: it is eventually consistent with no atomic primitives, so
+    // two concurrent requests both read N and write N+1. Backing secondaryStorage with KV would
+    // therefore SILENTLY break rate limiting -- and a 6-digit OTP is only as strong as its
+    // attempt counter.
+    //
+    // A Durable Object can (single-threaded, so atomic by construction), which is the documented
+    // path when session reads become a measured bottleneck. Until then Postgres holds sessions:
+    // correct, atomic, and one fewer store.
   })

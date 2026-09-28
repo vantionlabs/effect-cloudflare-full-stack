@@ -13,7 +13,9 @@
     "@ea/shared-domain": "workspace:*",
     "@effect/sql-pg": "catalog:",
     "effect": "catalog:",
-    "pg": "^8.16.3"
+    "pg": "^8.23.0",
+    "@ea/shared-database": "workspace:*",
+    "better-auth": "1.7.6"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260926.1",

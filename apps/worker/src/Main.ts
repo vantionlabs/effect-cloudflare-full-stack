@@ -20,11 +20,15 @@
  *
  * `dispose` from `toWebHandler` is dropped on purpose: Workers offers no hook to call it.
  */
+import { Db } from "@ea/shared-database"
 import { ApiV1 } from "@ea/shared-domain/api"
 import { Layer } from "effect"
 import { HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { HealthHandlers } from "./health/HealthHandlers.ts"
+import { AuthenticatedLive } from "./iam/AuthenticatedLive.ts"
+import { AuthHttp } from "./iam/AuthHttp.ts"
+import { MeHandlers } from "./iam/MeHandlers.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
 import { ReactivityLive } from "./platform/Database.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
@@ -37,8 +41,17 @@ import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
  * `Bindings` is here because `env` genuinely is stable for an isolate's lifetime.
  */
 const AppLayer = (env: Env) =>
-  HttpApiBuilder.layer(ApiV1, { openapiPath: "/api/v1/openapi.json" }).pipe(
+  Layer.mergeAll(
+    HttpApiBuilder.layer(ApiV1, { openapiPath: "/api/v1/openapi.json" }),
+    // better-auth's own routes, mounted on the same router so there is one origin and no CORS.
+    AuthHttp
+  ).pipe(
     Layer.provide(HealthHandlers),
+    Layer.provide(MeHandlers),
+    Layer.provide(AuthenticatedLive),
+    // The org-scoping seam. Safe to memoise: Db itself is stateless, and its methods require
+    // SqlClient at call time — which `withDatabase` supplies per request.
+    Layer.provideMerge(Db.layer),
     Layer.provideMerge(Layer.succeed(Bindings)(env)),
     Layer.provideMerge(ReactivityLive),
     Layer.provide(WorkerPlatform),
