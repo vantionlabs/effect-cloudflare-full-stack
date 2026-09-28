@@ -5,10 +5,10 @@
  * stores a best-effort parse would pass a happy-path test and quietly break the product's central
  * claim, which is that a `source_span` is checked against exactly the bytes we read.
  */
-import { UnsupportedDocumentV1, UploadAcceptedV1 } from "@ea/shared-domain/api"
+import { UnsupportedDocumentV1, UploadAcceptedV1 } from "@ea/intake-domain/Intake"
 import { Schema } from "effect"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { type Harness, startHarness } from "./harness.ts"
+import { type Harness, startHarness } from "./Harness.ts"
 
 let harness: Harness
 

@@ -1,0 +1,10 @@
+{
+  // tables ring. Generated from the installed better-auth by
+  // `bun scripts/auth-schema.ts`; never hand-edited.
+  "extends": "../../../tsconfig.base.json",
+  "include": ["src/**/*.ts"],
+  "compilerOptions": {
+    "noEmit": true,
+    "types": []
+  }
+}

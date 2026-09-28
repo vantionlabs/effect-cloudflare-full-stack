@@ -1,0 +1,15 @@
+{
+  "name": "@ea/intake-tables",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*/index.ts",
+    "./internal/*": null,
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "effect": "catalog:"
+  }
+}

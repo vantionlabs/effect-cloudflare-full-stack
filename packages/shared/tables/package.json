@@ -1,0 +1,22 @@
+{
+  "name": "@ea/shared-tables",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*/index.ts",
+    "./internal/*": null,
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@ea/iam-tables": "workspace:*",
+    "@ea/intake-tables": "workspace:*",
+    "@ea/shared-domain": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/sql-pg": "catalog:",
+    "vitest": "catalog:"
+  }
+}

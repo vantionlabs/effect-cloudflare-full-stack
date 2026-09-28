@@ -3,64 +3,83 @@
  *
  * The `env`-to-Layer problem, and how it is solved here:
  *
- * `HttpRouter.toWebHandler` builds its layer **exactly once, lazily, on the first request**
- * and caches it in a module closure for the isolate's life, so per-request cost is a couple
- * of `Context.add` calls rather than a layer build.
+ * `HttpRouter.toWebHandler` builds its layer **exactly once, lazily, on the first request** and
+ * caches it in a module closure for the isolate's life, so per-request cost is a couple of
+ * `Context.add` calls rather than a layer build.
  *
- * Its second parameter is typed `Context<ReqR>` where `ReqR` is whatever the *handlers*
- * require that the layer does not provide. That is real type pressure, not decoration: a
- * store whose dependency is unsatisfied shows up as a mandatory per-request argument rather
- * than compiling and failing at runtime. Two consequences worth internalising:
+ * Its second parameter is typed `Context<ReqR>` where `ReqR` is whatever the *handlers* require
+ * that the layer does not provide. That is real type pressure, not decoration: a store whose
+ * dependency is unsatisfied shows up as a mandatory per-request argument rather than compiling and
+ * failing at runtime. Two consequences worth internalising:
  *
- * 1. A handler's requirements are request-scoped, so they must be satisfied *on the handlers
- *    layer itself* (`HealthHandlers.pipe(Layer.provide(Pg))`), not merely somewhere further
- *    down the pipe.
- * 2. `WorkerCtx` is deliberately left in `ReqR`, because `ExecutionContext` genuinely differs
- *    per invocation and caching it would make `waitUntil` write into a dead request.
+ * 1. A handler's requirements are request-scoped, so they must be satisfied *on the handlers layer
+ *    itself* (`Layer.provide(HealthRpc)`), not merely somewhere further down the pipe.
+ * 2. `WorkerCtx` is deliberately left in `ReqR`, because `ExecutionContext` genuinely differs per
+ *    invocation and caching it would make `waitUntil` write into a dead request.
+ *
+ * Note what this file is and is not. It maps each slice's ports to adapters and nothing else —
+ * there is no business logic here, and every import is either a slice's public surface or this
+ * app's own `platform/`. That is the property that makes a second deployment target (Node, for an
+ * air-gapped client) a different composition root rather than a rewrite.
  *
  * `dispose` from `toWebHandler` is dropped on purpose: Workers offers no hook to call it.
  */
-import { Db } from "@ea/shared-database"
-import { ApiV1 } from "@ea/shared-domain/api"
+import { SessionHttp, SessionLive, SessionStore } from "@ea/iam-server/Session"
+import { IdentityRpc } from "@ea/iam-use-cases/Identity"
+import { DocumentParserText } from "@ea/intake-domain/Document"
+import { BlobsR2, DocumentBucket } from "@ea/intake-server/Document"
+import { IntakeRpc } from "@ea/intake-use-cases/Intake"
+import { ApiV1 } from "@ea/shared-api/V1"
+import { Db } from "@ea/shared-tables/Database"
 import { Layer } from "effect"
 import { HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
-import { HealthHandlers } from "./health/HealthHandlers.ts"
-import { AuthenticatedLive } from "./iam/AuthenticatedLive.ts"
-import { AuthHttp } from "./iam/AuthHttp.ts"
-import { MeHandlers } from "./iam/MeHandlers.ts"
-import { BlobsLive } from "./intake/Blobs.ts"
-import { DocumentParserLive } from "./intake/DocumentParserLive.ts"
-import { IntakeHandlers } from "./intake/IntakeHandlers.ts"
+import { HealthRpc } from "./Health/Health.rpc.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
-import { ReactivityLive } from "./platform/Database.ts"
-import { IdsLive } from "./platform/Ids.ts"
+import { ConnectHyperdrive, ReactivityLive } from "./platform/HyperdriveConnect.ts"
+import { IdsUuid } from "./platform/Ids.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
+
+/**
+ * The bindings each slice actually needs, narrowed from `Env`.
+ *
+ * A slice asks for one bucket or one connection string, never the whole environment — so
+ * `@ea/intake-server` cannot reach Hyperdrive and `@ea/iam-server` cannot reach the bucket. This
+ * is the only file that holds the wide `Env` and hands out the narrow pieces.
+ */
+const SliceBindings = (env: Env) =>
+  Layer.mergeAll(
+    Layer.succeed(DocumentBucket)(env.DOCUMENTS),
+    Layer.succeed(SessionStore)({ connectionString: env.HYPERDRIVE.connectionString })
+  )
 
 /**
  * Everything STATELESS, built once per isolate.
  *
- * The database is deliberately absent: a TCP socket cannot outlive the request that opened it
- * on Workers, so `withDatabase` builds a client per request instead (see platform/Database.ts).
- * `Bindings` is here because `env` genuinely is stable for an isolate's lifetime.
+ * The connection is deliberately absent: a TCP socket cannot outlive the request that opened it on
+ * Workers, so `Connect.open` is called inside each request's scope instead. `Bindings` is here
+ * because `env` genuinely is stable for an isolate's lifetime.
  */
 const AppLayer = (env: Env) =>
   Layer.mergeAll(
     HttpApiBuilder.layer(ApiV1, { openapiPath: "/api/v1/openapi.json" }),
     // better-auth's own routes, mounted on the same router so there is one origin and no CORS.
-    AuthHttp
+    SessionHttp
   ).pipe(
-    Layer.provide(HealthHandlers),
-    Layer.provide(MeHandlers),
-    Layer.provide(IntakeHandlers),
-    Layer.provide(AuthenticatedLive),
+    Layer.provide(HealthRpc),
+    Layer.provide(IdentityRpc),
+    Layer.provide(IntakeRpc),
+    Layer.provide(SessionLive),
     // The org-scoping seam. Safe to memoise: Db itself is stateless, and its methods require
     // SqlClient at call time — which `withDatabase` supplies per request.
     Layer.provideMerge(Db.layer),
-    // Stateless: safe to memoise. Only the connection and better-auth pool are per-request.
-    Layer.provideMerge(DocumentParserLive),
-    Layer.provideMerge(IdsLive),
-    Layer.provideMerge(BlobsLive),
+    // Stateless adapters: safe to memoise. Only the SQL connection and better-auth's pool are
+    // per-request, and both are acquired inside a request scope.
+    Layer.provideMerge(ConnectHyperdrive),
+    Layer.provideMerge(DocumentParserText),
+    Layer.provideMerge(IdsUuid),
+    Layer.provideMerge(BlobsR2),
+    Layer.provideMerge(SliceBindings(env)),
     Layer.provideMerge(Layer.succeed(Bindings)(env)),
     Layer.provideMerge(ReactivityLive),
     Layer.provide(WorkerPlatform),
@@ -68,8 +87,7 @@ const AppLayer = (env: Env) =>
   )
 
 /**
- * One shared MemoMap so `fetch`, `queue` and `scheduled` share a single layer graph —
- * one PgClient and one prepared-statement cache per isolate rather than three.
+ * One shared MemoMap so `fetch`, `queue` and `scheduled` share a single layer graph.
  */
 const memoMap = Layer.makeMemoMapUnsafe()
 
@@ -78,8 +96,8 @@ let webHandler: ReturnType<typeof makeHandler> | undefined
 const makeHandler = (env: Env) => HttpRouter.toWebHandler(AppLayer(env), { memoMap }).handler
 
 /**
- * Binding objects are stable for an isolate's lifetime, so memoising on the first invocation
- * is correct. `ExecutionContext` is not, which is why it travels per request instead.
+ * Binding objects are stable for an isolate's lifetime, so memoising on the first invocation is
+ * correct. `ExecutionContext` is not, which is why it travels per request instead.
  */
 const getHandler = (env: Env) => (webHandler ??= makeHandler(env))
 

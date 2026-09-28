@@ -7,7 +7,7 @@
  *
  * Requires `docker compose up -d` (see compose.yaml) and apps/worker/.env.
  */
-import { HealthV1 } from "@ea/shared-domain/api"
+import { HealthV1 } from "@ea/shared-api/V1"
 import { Schema } from "effect"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { createTestHarness } from "wrangler"

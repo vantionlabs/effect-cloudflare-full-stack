@@ -21,7 +21,16 @@ interface Rule {
   readonly appliesTo: (path: string) => boolean
   /** Import specifiers that must not appear. */
   readonly forbidden: ReadonlyArray<{ readonly pattern: RegExp; readonly because: string }>
+  /** Escape hatch for rules that depend on the importer as well as the specifier. */
+  readonly permitted?: (path: string, specifier: string) => boolean
 }
+
+/** `packages/<slice>/<role>/...` → `<slice>`, or undefined outside a slice package. */
+const sliceOf = (path: string): string | undefined => path.startsWith("packages/") ? path.split("/")[1] : undefined
+
+/** `@ea/<slice>-<role>` → `<slice>`, for the slices that exist as packages. */
+const sliceOfSpecifier = (specifier: string): string | undefined =>
+  /^@ea\/(iam|intake|decision|policy|shared)-/.exec(specifier)?.[1]
 
 const rules: ReadonlyArray<Rule> = [
   {
@@ -71,6 +80,54 @@ const rules: ReadonlyArray<Rule> = [
     ]
   },
   {
+    label: "nothing but the composition root may reach into a server ring",
+    appliesTo: (p) =>
+      p.startsWith("packages/") ||
+      (p.startsWith("apps/worker/src/") && p !== "apps/worker/src/Main.ts"),
+    forbidden: [
+      {
+        pattern: /^@ea\/[a-z-]+-server(\/|$)/,
+        because: "an adapter may only be named by the composition root. A use case or another " +
+          "slice that imports one has bound itself to a platform, and the fakes-only test tier " +
+          "stops being possible"
+      }
+    ]
+  },
+  {
+    label: "tables rings stay driver-free",
+    appliesTo: (p) => p.startsWith("packages/") && p.includes("/tables/src/"),
+    forbidden: [
+      {
+        pattern: /^@effect\/sql-/,
+        because: "a migration must run against whatever client the caller has — the Worker's " +
+          "Hyperdrive one in production, a plain one in the eval harness. Naming a driver here " +
+          "would tie the schema to the deployment"
+      },
+      { pattern: /^cloudflare:/, because: "migrations must be runnable from Node" }
+    ]
+  },
+  {
+    label: "a slice never reaches into another slice",
+    appliesTo: (p) => p.startsWith("packages/"),
+    forbidden: [
+      {
+        pattern: /^@ea\//,
+        because: "slices compose through `shared`, never directly. A genuinely cross-slice type " +
+          "belongs in shared/domain (as Identity and Authenticated do); anything else is a " +
+          "boundary that has not been thought about yet"
+      }
+    ],
+    // Permitted: within your own slice, and anything depending on `shared`. Plus the two
+    // composition points, which exist precisely to name every slice — `shared/api` composes the
+    // groups into one contract, and `Migrations.ts` is the one place migration order is decided.
+    permitted: (path, specifier) => {
+      if (path.startsWith("packages/shared/api/")) return true
+      if (path === "packages/shared/tables/src/Database/Migrations.ts") return true
+      const target = sliceOfSpecifier(specifier)
+      return target === undefined || target === "shared" || target === sliceOf(path)
+    }
+  },
+  {
     label: "only the platform directory may open sockets or touch the driver",
     appliesTo: (p) => p.startsWith("apps/worker/src/") && !p.includes("/platform/"),
     forbidden: [
@@ -80,7 +137,7 @@ const rules: ReadonlyArray<Rule> = [
       },
       {
         pattern: /^@effect\/sql-pg$/,
-        because: "the Postgres driver belongs in platform/Database.ts, which owns connection lifetime"
+        because: "the Postgres driver belongs in platform/HyperdriveConnect.ts, which owns connection lifetime"
       }
     ]
   }
@@ -113,6 +170,7 @@ for (const dir of ["packages", "apps", "infra"]) {
       if (!rule.appliesTo(path)) continue
       checked++
       for (const specifier of specifiers) {
+        if (rule.permitted?.(path, specifier) === true) continue
         for (const { pattern, because } of rule.forbidden) {
           if (pattern.test(specifier)) {
             failures.push(`${path}\n    imports "${specifier}"\n    ${because}\n    rule: ${rule.label}`)

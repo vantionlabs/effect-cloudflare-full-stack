@@ -16,16 +16,16 @@ export default defineConfig({
         // This is where most of the value is, and it is fast enough to run on every save.
         test: {
           name: "domain",
-          include: ["packages/shared/domain/test/**/*.test.ts"],
+          include: ["packages/*/domain/test/**/*.test.ts", "packages/shared/api/test/**/*.test.ts"],
           environment: "node"
         }
       },
       {
-        // Database tests: real Postgres, real RLS policies, real non-superuser role. Pure
+        // Table tests: real Postgres, real RLS policies, real non-superuser role. Pure
         // domain tests stay in the `domain` project, which needs no infrastructure at all.
         test: {
-          name: "database",
-          include: ["packages/shared/database/test/**/*.test.ts"],
+          name: "tables",
+          include: ["packages/*/tables/test/**/*.test.ts"],
           environment: "node",
           testTimeout: 30_000,
           hookTimeout: 30_000

@@ -1,0 +1,19 @@
+{
+  "name": "@ea/intake-use-cases",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*/index.ts",
+    "./internal/*": null,
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@ea/intake-domain": "workspace:*",
+    "@ea/shared-api": "workspace:*",
+    "@ea/shared-domain": "workspace:*",
+    "@ea/shared-tables": "workspace:*",
+    "effect": "catalog:"
+  }
+}

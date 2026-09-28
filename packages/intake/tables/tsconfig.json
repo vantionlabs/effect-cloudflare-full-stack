@@ -1,0 +1,9 @@
+{
+  // tables ring: the migrations for this slice's tables.
+  "extends": "../../../tsconfig.base.json",
+  "include": ["src/**/*.ts"],
+  "compilerOptions": {
+    "noEmit": true,
+    "types": []
+  }
+}

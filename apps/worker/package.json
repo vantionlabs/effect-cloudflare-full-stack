@@ -10,18 +10,22 @@
     "types": "wrangler types"
   },
   "dependencies": {
-    "@ea/shared-database": "workspace:*",
+    "@ea/iam-domain": "workspace:*",
+    "@ea/iam-server": "workspace:*",
+    "@ea/iam-use-cases": "workspace:*",
+    "@ea/intake-domain": "workspace:*",
+    "@ea/intake-server": "workspace:*",
+    "@ea/intake-use-cases": "workspace:*",
+    "@ea/shared-api": "workspace:*",
     "@ea/shared-domain": "workspace:*",
+    "@ea/shared-tables": "workspace:*",
     "@effect/sql-pg": "catalog:",
-    "better-auth": "1.7.6",
     "effect": "catalog:",
-    "pg": "^8.23.0",
     "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260926.1",
     "@types/node": "catalog:",
-    "@types/pg": "^8.23.1",
     "wrangler": "catalog:"
   }
 }

@@ -24,18 +24,22 @@
       "name": "@ea/worker",
       "version": "0.0.0",
       "dependencies": {
-        "@ea/shared-database": "workspace:*",
+        "@ea/iam-domain": "workspace:*",
+        "@ea/iam-server": "workspace:*",
+        "@ea/iam-use-cases": "workspace:*",
+        "@ea/intake-domain": "workspace:*",
+        "@ea/intake-server": "workspace:*",
+        "@ea/intake-use-cases": "workspace:*",
+        "@ea/shared-api": "workspace:*",
         "@ea/shared-domain": "workspace:*",
+        "@ea/shared-tables": "workspace:*",
         "@effect/sql-pg": "catalog:",
-        "better-auth": "1.7.6",
         "effect": "catalog:",
-        "pg": "^8.23.0",
         "uuid": "^14.0.2",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "^5.20260926.1",
         "@types/node": "catalog:",
-        "@types/pg": "^8.23.1",
         "wrangler": "catalog:",
       },
     },
@@ -54,15 +58,93 @@
         "@types/node": "catalog:",
       },
     },
-    "packages/shared/database": {
-      "name": "@ea/shared-database",
+    "packages/iam/domain": {
+      "name": "@ea/iam-domain",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ea/shared-domain": "workspace:*",
+        "effect": "catalog:",
+      },
+    },
+    "packages/iam/server": {
+      "name": "@ea/iam-server",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ea/shared-domain": "workspace:*",
+        "better-auth": "1.7.6",
+        "effect": "catalog:",
+        "pg": "^8.23.0",
+      },
+      "devDependencies": {
+        "@types/pg": "^8.23.1",
+      },
+    },
+    "packages/iam/tables": {
+      "name": "@ea/iam-tables",
+      "version": "0.0.0",
+      "dependencies": {
+        "effect": "catalog:",
+      },
+    },
+    "packages/iam/use-cases": {
+      "name": "@ea/iam-use-cases",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ea/iam-domain": "workspace:*",
+        "@ea/shared-api": "workspace:*",
+        "@ea/shared-domain": "workspace:*",
+        "effect": "catalog:",
+      },
+    },
+    "packages/intake/domain": {
+      "name": "@ea/intake-domain",
       "version": "0.0.0",
       "dependencies": {
         "@ea/shared-domain": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
-        "@effect/sql-pg": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
+    "packages/intake/server": {
+      "name": "@ea/intake-server",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ea/intake-domain": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@cloudflare/workers-types": "^5.20260926.1",
+      },
+    },
+    "packages/intake/tables": {
+      "name": "@ea/intake-tables",
+      "version": "0.0.0",
+      "dependencies": {
+        "effect": "catalog:",
+      },
+    },
+    "packages/intake/use-cases": {
+      "name": "@ea/intake-use-cases",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ea/intake-domain": "workspace:*",
+        "@ea/shared-api": "workspace:*",
+        "@ea/shared-domain": "workspace:*",
+        "@ea/shared-tables": "workspace:*",
+        "effect": "catalog:",
+      },
+    },
+    "packages/shared/api": {
+      "name": "@ea/shared-api",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ea/iam-domain": "workspace:*",
+        "@ea/intake-domain": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
         "vitest": "catalog:",
       },
     },
@@ -71,6 +153,20 @@
       "version": "0.0.0",
       "dependencies": {
         "effect": "catalog:",
+      },
+    },
+    "packages/shared/tables": {
+      "name": "@ea/shared-tables",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ea/iam-tables": "workspace:*",
+        "@ea/intake-tables": "workspace:*",
+        "@ea/shared-domain": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@effect/sql-pg": "catalog:",
+        "vitest": "catalog:",
       },
     },
     "scripts": {
@@ -165,13 +261,31 @@
 
     "@ea/evals": ["@ea/evals@workspace:evals"],
 
+    "@ea/iam-domain": ["@ea/iam-domain@workspace:packages/iam/domain"],
+
+    "@ea/iam-server": ["@ea/iam-server@workspace:packages/iam/server"],
+
+    "@ea/iam-tables": ["@ea/iam-tables@workspace:packages/iam/tables"],
+
+    "@ea/iam-use-cases": ["@ea/iam-use-cases@workspace:packages/iam/use-cases"],
+
     "@ea/infra": ["@ea/infra@workspace:infra"],
+
+    "@ea/intake-domain": ["@ea/intake-domain@workspace:packages/intake/domain"],
+
+    "@ea/intake-server": ["@ea/intake-server@workspace:packages/intake/server"],
+
+    "@ea/intake-tables": ["@ea/intake-tables@workspace:packages/intake/tables"],
+
+    "@ea/intake-use-cases": ["@ea/intake-use-cases@workspace:packages/intake/use-cases"],
 
     "@ea/scripts": ["@ea/scripts@workspace:scripts"],
 
-    "@ea/shared-database": ["@ea/shared-database@workspace:packages/shared/database"],
+    "@ea/shared-api": ["@ea/shared-api@workspace:packages/shared/api"],
 
     "@ea/shared-domain": ["@ea/shared-domain@workspace:packages/shared/domain"],
+
+    "@ea/shared-tables": ["@ea/shared-tables@workspace:packages/shared/tables"],
 
     "@ea/worker": ["@ea/worker@workspace:apps/worker"],
 
