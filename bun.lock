@@ -48,6 +48,18 @@
         "@types/node": "catalog:",
       },
     },
+    "packages/shared/database": {
+      "name": "@ea/shared-database",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ea/shared-domain": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@effect/sql-pg": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "packages/shared/domain": {
       "name": "@ea/shared-domain",
       "version": "0.0.0",
@@ -132,6 +144,8 @@
     "@ea/infra": ["@ea/infra@workspace:infra"],
 
     "@ea/scripts": ["@ea/scripts@workspace:scripts"],
+
+    "@ea/shared-database": ["@ea/shared-database@workspace:packages/shared/database"],
 
     "@ea/shared-domain": ["@ea/shared-domain@workspace:packages/shared/domain"],
 

@@ -6,6 +6,9 @@
       "path": "./packages/shared/domain"
     },
     {
+      "path": "./packages/shared/database"
+    },
+    {
       "path": "./apps/worker"
     }
   ]

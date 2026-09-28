@@ -29,7 +29,8 @@
     "no-console": "warn",
     "typescript/no-explicit-any": "warn",
     "typescript/consistent-type-imports": "error",
-    "no-await-in-loop": "off"
+    "no-await-in-loop": "off",
+    "no-underscore-dangle": "off"
   },
   "overrides": [
     {
