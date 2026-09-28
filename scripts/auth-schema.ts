@@ -26,9 +26,18 @@ const auth = makeAuth({
 
 const tables = getAuthTables(auth.options)
 
-/** better-auth field types → Postgres column types. */
-const columnType = (type: string, isBigint: boolean): string => {
+/**
+ * better-auth field types → Postgres column types.
+ *
+ * Verified against `organization + twoFactor + admin + jwt`, `rateLimit: { storage: "database" }`
+ * and custom `user.additionalFields`, which between them emit only string/number/boolean/date.
+ * An unmapped type **throws** rather than defaulting to text: a wrong column type surfaces as a
+ * runtime coercion bug far from its cause, so failing the build is cheaper.
+ */
+const columnType = (type: string | ReadonlyArray<string>, isBigint: boolean): string => {
   if (isBigint) return "bigint"
+  // A plugin may declare an enum as an array of literals.
+  if (Array.isArray(type)) return "text"
   switch (type) {
     case "string":
       return "text"
@@ -38,11 +47,23 @@ const columnType = (type: string, isBigint: boolean): string => {
       return "boolean"
     case "date":
       return "timestamptz"
+    case "string[]":
+    case "number[]":
+      return "jsonb"
     default:
-      // An unmapped type must stop the build rather than silently become text: a wrong column
-      // type surfaces as a runtime coercion bug far from its cause.
-      throw new Error(`Unmapped better-auth field type "${type}" — extend columnType()`)
+      throw new Error(
+        `Unmapped better-auth field type "${String(type)}" — extend columnType(). This means a ` +
+          `plugin introduced a type this generator has not seen; guessing would be worse.`
+      )
   }
+}
+
+/** A literal SQL default, or undefined when better-auth computes the value in application code. */
+const sqlDefault = (value: unknown): string | undefined => {
+  if (typeof value === "function" || value === undefined) return undefined
+  if (typeof value === "string") return `'${value.replace(/'/g, "''")}'`
+  if (typeof value === "boolean" || typeof value === "number") return String(value)
+  return undefined
 }
 
 /**
@@ -56,16 +77,21 @@ const columnType = (type: string, isBigint: boolean): string => {
 const q = (identifier: string) => `"${identifier}"`
 
 const statements: Array<string> = []
+/** Columns better-auth explicitly asks to be indexed, plus every foreign key. */
+const indexed: Array<{ table: string; column: string }> = []
 
 for (const [, table] of Object.entries(tables)) {
   const columns: Array<string> = [`  ${q("id")} text primary key`]
 
   for (const [fieldName, field] of Object.entries(table.fields)) {
     const f = field as {
-      type: string
+      type: string | ReadonlyArray<string>
       required?: boolean
       unique?: boolean
       bigint?: boolean
+      index?: boolean
+      defaultValue?: unknown
+      onUpdate?: unknown
       references?: { model: string; field: string; onDelete?: string }
       fieldName?: string
     }
@@ -73,6 +99,17 @@ for (const [, table] of Object.entries(tables)) {
     const parts = [`  ${q(name)} ${columnType(f.type, f.bigint === true)}`]
     if (f.required === true) parts.push("not null")
     if (f.unique === true) parts.push("unique")
+    // An enum declared as literals becomes text plus a CHECK, so the database rejects a value
+    // better-auth would never produce rather than storing it.
+    if (Array.isArray(f.type)) {
+      parts.push(`check (${q(name)} in (${f.type.map((v) => `'${v}'`).join(", ")}))`)
+    }
+    const literal = sqlDefault(f.defaultValue)
+    if (literal !== undefined) parts.push(`default ${literal}`)
+    // `onUpdate` is applied by better-auth in application code (it writes updatedAt itself), so
+    // it needs no trigger here. Recorded so a future reader does not assume it was missed.
+    if (f.index === true) indexed.push({ table: table.modelName, column: name })
+    if (f.references !== undefined) indexed.push({ table: table.modelName, column: name })
     if (f.references !== undefined) {
       // References BETWEEN better-auth's own tables are kept: they are internally consistent
       // and upgraded together. What we never add is a FK from OUR tables into theirs.
@@ -87,17 +124,17 @@ for (const [, table] of Object.entries(tables)) {
   )
 }
 
-// Index every foreign key: better-auth queries sessions by userId and members by
-// organizationId on the hot authentication path.
-for (const [, table] of Object.entries(tables)) {
-  for (const [fieldName, field] of Object.entries(table.fields)) {
-    const f = field as { references?: unknown; fieldName?: string }
-    if (f.references === undefined) continue
-    const name = f.fieldName ?? fieldName
-    statements.push(
-      `create index if not exists ${q(`${table.modelName}_${name}_idx`)} on ${q(table.modelName)} (${q(name)})`
-    )
-  }
+// Indexes come from better-auth's own `index` metadata plus every foreign key — it knows which
+// columns are on the hot authentication path (sessions by userId, members by organizationId)
+// better than a guess would. Deduplicated because a field can be both indexed and a reference.
+const seen = new Set<string>()
+for (const { table, column } of indexed) {
+  const key = `${table}.${column}`
+  if (seen.has(key)) continue
+  seen.add(key)
+  statements.push(
+    `create index if not exists ${q(`${table}_${column}_idx`)} on ${q(table)} (${q(column)})`
+  )
 }
 
 // better-auth reads and writes these itself, so the app role needs full access.

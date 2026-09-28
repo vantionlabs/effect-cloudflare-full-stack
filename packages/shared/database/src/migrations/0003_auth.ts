@@ -22,7 +22,7 @@ export default Effect.gen(function*() {
       "id" text primary key,
       "name" text not null,
       "email" text not null unique,
-      "emailVerified" boolean not null,
+      "emailVerified" boolean not null default false,
       "image" text,
       "createdAt" timestamptz not null,
       "updatedAt" timestamptz not null
@@ -88,7 +88,7 @@ export default Effect.gen(function*() {
       "id" text primary key,
       "organizationId" text not null references "organization"("id") on delete cascade,
       "userId" text not null references "user"("id") on delete cascade,
-      "role" text not null,
+      "role" text not null default 'member',
       "createdAt" timestamptz not null
     )
   `
@@ -99,7 +99,7 @@ export default Effect.gen(function*() {
       "organizationId" text not null references "organization"("id") on delete cascade,
       "email" text not null,
       "role" text,
-      "status" text not null,
+      "status" text not null default 'pending',
       "expiresAt" timestamptz not null,
       "createdAt" timestamptz not null,
       "inviterId" text not null references "user"("id") on delete cascade
@@ -115,6 +115,14 @@ export default Effect.gen(function*() {
   `
 
   yield* sql`
+    create index if not exists "verification_identifier_idx" on "verification" ("identifier")
+  `
+
+  yield* sql`
+    create index if not exists "organization_slug_idx" on "organization" ("slug")
+  `
+
+  yield* sql`
     create index if not exists "member_organizationId_idx" on "member" ("organizationId")
   `
 
@@ -124,6 +132,10 @@ export default Effect.gen(function*() {
 
   yield* sql`
     create index if not exists "invitation_organizationId_idx" on "invitation" ("organizationId")
+  `
+
+  yield* sql`
+    create index if not exists "invitation_email_idx" on "invitation" ("email")
   `
 
   yield* sql`
