@@ -5,8 +5,8 @@
  * named by the caller. There is deliberately no `organizationId` parameter — if a caller could pass
  * one, the seam would be decoration.
  */
-import type { Collection } from "@ea/modules/intake/domain/Document"
 import { IntakeListItem } from "@ea/modules/intake/domain/Intake"
+import type { Collection } from "@ea/modules/shared/domain/Corpus"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect, Schema } from "effect"
 

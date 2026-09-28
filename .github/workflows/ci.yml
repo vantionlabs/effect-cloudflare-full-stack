@@ -65,3 +65,7 @@ jobs:
       - run: bun run lint
       - run: bun run hygiene
       - run: bun run test
+      # The retrieval gate. Separate from `test` because it is a THRESHOLD, not an assertion: it can
+      # regress without any test failing, and a decide pipeline built on retrieval that cannot find
+      # the applicable clause produces a review queue full of needs_human with nothing to explain why.
+      - run: bun run evals:retrieval

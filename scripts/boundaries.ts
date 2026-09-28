@@ -101,7 +101,8 @@ const rules: ReadonlyArray<Rule> = [
         pattern: /^@ea\/modules\/[a-z-]+\/server(\/|$)/,
         because: "an adapter may only be named by the composition root. A use case or another " +
           "slice that imports one has bound itself to a platform, and the fakes-only test tier " +
-          "stops being possible"
+          "stops being possible. `evals/` is deliberately outside this rule: it is a composition " +
+          "root of its own, and naming the deterministic embedder is the whole point of it"
       }
     ]
   },

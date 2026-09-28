@@ -65,7 +65,27 @@ export const RetrievalTable = Effect.gen(function*() {
     security invoker
     as $$
       with query as (
-        select websearch_to_tsquery('dutch', p_query) as tsq
+        /*
+         * The query as an OR of its lexemes, lexed with the SAME Dutch configuration as the column.
+         *
+         * Not websearch_to_tsquery, and this is the single most consequential line in the file.
+         * That function ANDs every term, so one word absent from a clause means no match at all:
+         * "wie mag verplichtingen aangaan namens de organisatie" fails against a clause containing
+         * "namens de organisatie verplichtingen aangaan", because "mag" is not a Dutch stopword and
+         * does not appear in it. Measured cost of the AND form on the gold set: lexical recall@8
+         * fell from 92% to 31%, and nothing downstream would have reported it — the review queue
+         * would simply have been full.
+         *
+         * OR semantics with ts_rank_cd is what retrieval wants: matching more terms, and matching
+         * them closer together, ranks higher, while matching only some still ranks at all.
+         */
+        select nullif(
+                 array_to_string(
+                   tsvector_to_array(to_tsvector('dutch', p_query)),
+                   ' | '
+                 ),
+                 ''
+               )::tsquery as tsq
       ),
       semantic as (
         select

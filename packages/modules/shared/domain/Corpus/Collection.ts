@@ -1,0 +1,19 @@
+/**
+ * Which corpus a document belongs to.
+ *
+ * In `shared/domain` because two slices both need it and neither owns it: `intake` writes it when a
+ * document arrives, and `policy` filters on it inside the retrieval function. It started in
+ * `intake/domain/Document` and `dep:check` caught the cross-slice import — correctly, because a type
+ * two slices depend on is a shared type whether or not anyone decided that.
+ *
+ * The separation it expresses is the product's most important structural guarantee: **the policy
+ * corpus is what decisions are justified against, and a transactional document must never be citable
+ * as policy.** A supplier who can get an invoice indexed as policy can write their own approval rule.
+ * So it is enforced three times over — a CHECK constraint on both tables, a filter inside
+ * `retrieve_policy` (which is the only way to query the corpus), and this closed literal union, which
+ * makes an unrecognised value a compile error rather than a row.
+ */
+import { Schema } from "effect"
+
+export const Collection = Schema.Literals(["policy", "transactional"])
+export type Collection = typeof Collection.Type

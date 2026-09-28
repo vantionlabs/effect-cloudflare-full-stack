@@ -54,7 +54,8 @@
     "deploy:staging": "bun run --filter @ea/worker deploy:staging",
     "deploy:production": "bun run --filter @ea/worker deploy:production",
     "auth:schema": "bun scripts/auth-schema.ts",
-    "auth:check": "bun scripts/auth-schema.ts --check"
+    "auth:check": "bun scripts/auth-schema.ts --check",
+    "evals:retrieval": "bun evals/RetrievalRecall.ts"
   },
   "devDependencies": {
     "@effect/tsgo": "0.46.1",

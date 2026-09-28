@@ -1,4 +1,4 @@
 // The concept's curated public surface. `"./*": "./*/index.ts"` in package.json makes
 // this the only way in, and `"./internal/*": null` makes anything else unresolvable.
-export * from "./Chunk.model.ts"
-export * from "./ChunkDocument.ts"
+export * from "./EmbedderDeterministic.ts"
+export * from "./EmbedderOpenAiCompatible.ts"

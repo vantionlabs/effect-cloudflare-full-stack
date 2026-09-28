@@ -39,6 +39,14 @@
     "evals": {
       "name": "@ea/evals",
       "version": "0.0.0",
+      "dependencies": {
+        "@ea/modules": "workspace:*",
+        "@effect/sql-pg": "catalog:",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+      },
     },
     "infra": {
       "name": "@ea/infra",

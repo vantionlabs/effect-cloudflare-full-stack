@@ -1,0 +1,41 @@
+{
+  "note": "Each query names the clause(s) a reviewer would expect to see. Written from the DECISIONS the pipeline has to make, not from the corpus text, so a query that shares no vocabulary with its clause is a deliberate part of the set rather than an oversight.",
+  "cases": [
+    {
+      "query": "factuur van 8.000 euro, hoeveel goedkeuringen zijn nodig",
+      "expect": ["Artikel 3"],
+      "lexicalOverlap": "partial"
+    },
+    { "query": "goedkeuringsgrenzen budgethouder", "expect": ["Artikel 3"], "lexicalOverlap": "high" },
+    { "query": "wanneer moet deze factuur betaald zijn", "expect": ["Artikel 4"], "lexicalOverlap": "partial" },
+    { "query": "betalingstermijn leveranciers dertig dagen", "expect": ["Artikel 4"], "lexicalOverlap": "high" },
+    {
+      "query": "mag een spoedopdracht door één persoon worden goedgekeurd",
+      "expect": ["Artikel 5", "Artikel 3"],
+      "lexicalOverlap": "high"
+    },
+    { "query": "is 13% een toegestaan BTW-tarief", "expect": ["Artikel 6"], "lexicalOverlap": "partial" },
+    { "query": "factuur in dollars ontvangen", "expect": ["Artikel 7"], "lexicalOverlap": "none" },
+    {
+      "query": "deze leverancier heeft dit factuurnummer al eerder gebruikt",
+      "expect": ["Artikel 8"],
+      "lexicalOverlap": "high"
+    },
+    {
+      "query": "leverancier vraagt om betaling op een nieuw rekeningnummer",
+      "expect": ["Artikel 9"],
+      "lexicalOverlap": "partial"
+    },
+    {
+      "query": "moet dit contract opnieuw worden beoordeeld voor verlenging",
+      "expect": ["Artikel 10"],
+      "lexicalOverlap": "high"
+    },
+    { "query": "factuur zonder inkoopordernummer", "expect": ["Artikel 2"], "lexicalOverlap": "high" },
+    {
+      "query": "wie mag verplichtingen aangaan namens de organisatie",
+      "expect": ["Artikel 1"],
+      "lexicalOverlap": "high"
+    }
+  ]
+}

@@ -4,22 +4,14 @@
  * Deliberately free of the parsing contract and of the refusal — those are `Document.parser.ts`
  * and `Document.errors.ts`. A table, a wire schema and a queue payload all need these ids and
  * enums without needing to know how a PDF is read.
+ *
+ * `Collection` is deliberately NOT here: `policy` filters on it too, so it lives in
+ * `shared/domain/Corpus`. See that file for why a type two slices need is a shared type.
  */
 import { Schema } from "effect"
 
 export const DocumentId = Schema.String.pipe(Schema.brand("DocumentId"))
 export type DocumentId = typeof DocumentId.Type
-
-/**
- * Which corpus a document belongs to.
- *
- * The separation is the product's most important structural guarantee: the policy corpus is what
- * decisions are justified *against*, and a transactional document must never be citable as
- * policy. Enforced by a CHECK constraint plus a filter inside the retrieval function, so it
- * cannot be forgotten at a call site.
- */
-export const Collection = Schema.Literals(["policy", "transactional"])
-export type Collection = typeof Collection.Type
 
 export const DocumentStatus = Schema.Literals([
   "pending_upload",

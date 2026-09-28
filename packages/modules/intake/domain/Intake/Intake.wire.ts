@@ -4,10 +4,10 @@
  * Multipart rather than JSON-with-base64: a base64 body inflates a document by a third and forces
  * the whole thing through a string, which for a 10 MB scan is wasteful in a Worker's memory.
  */
+import { Collection } from "@ea/modules/shared/domain/Corpus"
 import { Authenticated } from "@ea/modules/shared/domain/Identity"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
-import { Collection } from "../Document/Document.model.ts"
 
 export class UploadAcceptedV1 extends Schema.Class<UploadAcceptedV1>("UploadAcceptedV1")({
   document_id: Schema.String,
