@@ -102,7 +102,15 @@ export const WorkflowEnginePg: Layer.Layer<
      * outlive the request that opened it on Workers, and an engine memoised per isolate would capture a
      * dead one. `DecideDocument` therefore provides it inside `withDatabase`.
      */
-    const sql = yield* SqlClient.SqlClient
+    /*
+     * Named `connection`, not `sql`, on purpose.
+     *
+     * Every callback below receives its own transaction-scoped `sql` — the one with
+     * `set local role effect_ai_app` and `app.current_org` applied. Shadowing would make the two
+     * indistinguishable at a glance, and using this one inside a scoped block would bypass the org GUC
+     * while looking identical. That is a tenancy bug the compiler cannot see.
+     */
+    const connection = yield* SqlClient.SqlClient
     const identity = yield* CurrentUser
 
     /** `Db.scoped` with this request's connection and identity closed over, so methods are self-contained. */
@@ -110,7 +118,7 @@ export const WorkflowEnginePg: Layer.Layer<
       f: (sql: SqlClient.SqlClient, orgId: typeof identity.orgId) => Effect.Effect<A, E>
     ) =>
       db.scoped(f).pipe(
-        Effect.provideService(SqlClient.SqlClient, sql),
+        Effect.provideService(SqlClient.SqlClient, connection),
         Effect.provideService(CurrentUser, identity)
       )
 

@@ -124,7 +124,9 @@ export const PolicySearchLive: Layer.Layer<
      */
     const db = yield* Db
     const model = yield* EmbeddingModel.EmbeddingModel
-    const sql = yield* SqlClient.SqlClient
+    // Named for what it is: the raw request connection. The transaction-scoped one arrives per
+    // callback inside RetrievePolicy, and confusing the two would bypass the org GUC.
+    const connection = yield* SqlClient.SqlClient
     const identity = yield* CurrentUser
 
     return {
@@ -133,7 +135,7 @@ export const PolicySearchLive: Layer.Layer<
           RetrievePolicy(input).pipe(
             Effect.provideService(Db, db),
             Effect.provideService(EmbeddingModel.EmbeddingModel, model),
-            Effect.provideService(SqlClient.SqlClient, sql),
+            Effect.provideService(SqlClient.SqlClient, connection),
             Effect.provideService(CurrentUser, identity)
           )
         )
