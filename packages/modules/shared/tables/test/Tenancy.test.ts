@@ -167,3 +167,59 @@ describe("row-level security", () => {
     expect(rows).toEqual([])
   })
 })
+
+/**
+ * The structural check, which is the one that keeps working as tables are added.
+ *
+ * The behavioural tests above cover `source_documents` because someone wrote them for it. The failure
+ * mode the plan actually warns about is different: a new table ships, nobody remembers to add a
+ * policy, and no test notices because no test knows the table exists.
+ *
+ * So this asks Postgres instead of a list. Every table carrying an `organization_id` is by definition
+ * tenant-scoped, and must have RLS enabled, **forced** (or the owner bypasses it), and a policy. A
+ * migration that forgets any of the three fails here without anyone having extended this file.
+ */
+describe("every tenant-scoped table is protected", () => {
+  it("has RLS enabled, forced, and a policy wherever organization_id appears", async () => {
+    const tables = await Effect.runPromise(
+      Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) =>
+          sql<{
+            table_name: string
+            enabled: boolean
+            forced: boolean
+            policies: number
+          }>`
+            select
+              c.relname                                             as table_name,
+              c.relrowsecurity                                      as enabled,
+              c.relforcerowsecurity                                 as forced,
+              (select count(*) from pg_policies p
+                where p.tablename = c.relname and p.schemaname = 'public')::int as policies
+            from pg_class c
+            join pg_namespace n on n.oid = c.relnamespace
+            where c.relkind = 'r'
+              and n.nspname = 'public'
+              and exists (
+                select 1 from information_schema.columns col
+                where col.table_schema = 'public'
+                  and col.table_name = c.relname
+                  and col.column_name = 'organization_id'
+              )
+            order by c.relname
+          `
+      ).pipe(Effect.provide(Admin))
+    )
+
+    // Guards the guard: if the query matched nothing, the assertions below would vacuously pass.
+    expect(tables.length).toBeGreaterThanOrEqual(3)
+
+    for (const table of tables) {
+      expect(table.enabled, `${table.table_name}: row level security not enabled`).toBe(true)
+      expect(table.forced, `${table.table_name}: RLS not FORCED, so the owner bypasses it`).toBe(true)
+      expect(table.policies, `${table.table_name}: no policy, so RLS denies everything`)
+        .toBeGreaterThan(0)
+    }
+  })
+})

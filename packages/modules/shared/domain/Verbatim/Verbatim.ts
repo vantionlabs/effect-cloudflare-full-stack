@@ -8,6 +8,13 @@
  *
  * The reviewer console highlights a span with this same function, so a highlight cannot disagree
  * with the rail that decided whether the span verified.
+ *
+ * **What this check cannot do**, stated because it bounds the grounding claim: matching is by
+ * substring, so a *truncation* of real text verifies. `1.210` occurs inside a printed `1.210,00` and
+ * passes — while being off by a factor of a thousand. Tightening to token boundaries would not fix it
+ * and would reject legitimate spans, which start and end mid-line all the time. Truncated amounts are
+ * caught by the arithmetic check instead, and that is the concrete reason the pipeline runs two
+ * independent model-free checks rather than one good one.
  */
 
 /** Collapse whitespace and case-fold, so re-wrapping is not a mismatch. */

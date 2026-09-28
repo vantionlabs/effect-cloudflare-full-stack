@@ -978,7 +978,13 @@ generated-schema drift check in CI. Verify a second user in a second org sees no
 **4. Intake.** Upload → R2 → `source_documents` + `intakes` in one transaction → `DocumentParser`
 (text only). A `.pdf` returns a typed `UnsupportedDocument` naming supported types.
 
-**5. Extraction + the two model-free checks**, against the **scripted** model first so it lands in CI
+**5. Extraction + the two model-free checks** — done. Two findings worth carrying forward: a
+**truncated** amount (`1.210` quoted from a printed `1.210,00`) passes the substring span check, so
+grounding alone cannot catch it and the arithmetic check is the net — which is the concrete argument
+for two independent checks rather than one good one. And `source_span` before `value` remains the
+**unmeasured** half of ADR-0008; the A/B is still the harness's first job.
+
+**5 (original wording).** Extraction + the two model-free checks, against the **scripted** model first so it lands in CI
 green with no API key. Then flip to a real profile and compare. `CheckRule` gates from here on.
 
 **6. Policy corpus + hybrid retrieval.** Chunk-by-heading + the contextual prefix; the RRF SQL

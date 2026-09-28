@@ -18,6 +18,7 @@ export default defineConfig({
           name: "domain",
           include: [
             "packages/modules/*/domain/test/**/*.test.ts",
+            "packages/modules/*/use-cases/test/**/*.test.ts",
             "packages/modules/shared/api/test/**/*.test.ts"
           ],
           environment: "node"

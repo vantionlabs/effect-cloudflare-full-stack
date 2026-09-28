@@ -15,6 +15,7 @@
  * **every** table including better-auth's — one migration system, one database — so
  * `better-auth migrate` is never run (plan risk R9).
  */
+import { ExtractionTable } from "@ea/modules/decision/tables/Extraction"
 import { SessionTable } from "@ea/modules/iam/tables/Session"
 import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
@@ -26,7 +27,8 @@ export const migrations = {
   "0002_intake": DocumentTable,
   // Generated from the installed better-auth by `bun scripts/auth-schema.ts`.
   "0003_auth": SessionTable,
-  "0004_intake": IntakeTable
+  "0004_intake": IntakeTable,
+  "0005_extraction": ExtractionTable
 }
 
 export const loader = Migrator.fromRecord(migrations)
