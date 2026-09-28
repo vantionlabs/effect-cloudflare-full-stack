@@ -1,6 +1,7 @@
 {
   "name": "@ea/scripts",
   "private": true,
+  "version": "0.0.0",
   "type": "module",
   "dependencies": {
     "effect": "catalog:"

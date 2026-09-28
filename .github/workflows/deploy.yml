@@ -1,0 +1,55 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# Deploys are serialised and never cancelled: interrupting a half-applied deploy is worse
+# than waiting for the previous one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Only on a green CI run for main. A red CI run must never reach production.
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          submodules: recursive
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - run: bun install --frozen-lockfile
+
+      - name: Deploy Worker
+        working-directory: apps/worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # --var VERSION surfaces the deployed commit on /api/v1/health, so a response can
+          # always be tied back to a specific build.
+          bunx wrangler deploy --var VERSION:"${{ github.event.workflow_run.head_sha }}"
+
+      - name: Smoke test the deployment
+        run: |
+          # A deploy that returns 200 but reports `degraded` has lost pgvector or Dutch
+          # stemming, which silently breaks retrieval. Fail loudly instead.
+          for attempt in 1 2 3 4 5; do
+            body=$(curl -fsS --max-time 20 "${{ vars.PRODUCTION_URL }}/api/v1/health") && break
+            echo "attempt $attempt failed, retrying"; sleep 5
+          done
+          echo "$body"
+          echo "$body" | grep -q '"status":"ok"' || { echo "health is not ok"; exit 1; }

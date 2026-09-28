@@ -12,7 +12,7 @@
  * Both are `Context.Service` with no default rather than `Context.Reference`: a default
  * value for "the database bindings" is a bug that compiles. Absence must be a type error.
  */
-import { ConfigProvider, Context, Effect, type Layer } from "effect"
+import { ConfigProvider, Context, type Layer } from "effect"
 
 /** Bindings and vars this Worker declares. Extended as alchemy.run.ts provisions more. */
 export interface Env {
@@ -48,7 +48,7 @@ export class WorkerCtx extends Context.Service<WorkerCtx, ExecutionContext>()("a
  * Only string-valued entries become config: a binding stub is an object and is reached
  * through `Bindings`, not through `Config`.
  */
-export const configProviderFrom = (env: Env): ConfigProvider.ConfigProvider => {
+const configProviderFrom = (env: Env): ConfigProvider.ConfigProvider => {
   const record: Record<string, string | undefined> = { ...process.env }
   for (const [key, value] of Object.entries(env)) {
     if (typeof value === "string") record[key] = value
@@ -57,31 +57,3 @@ export const configProviderFrom = (env: Env): ConfigProvider.ConfigProvider => {
 }
 
 export const layerConfigProvider = (env: Env): Layer.Layer<never> => ConfigProvider.layer(configProviderFrom(env))
-
-/**
- * Runs an effect as fire-and-forget work that outlives the response.
- *
- * Without `ctx.waitUntil` a Worker may be torn down the moment the response is returned,
- * silently dropping in-flight work.
- *
- * `R` is deliberately `never`: the caller must provide every service the task needs
- * *before* handing it over, rather than the task inheriting the request's context. Ambient
- * inheritance would let background work capture request-scoped services that die with the
- * request — precisely the bug `waitUntil` exists to avoid.
- *
- * Failures are logged rather than swallowed: a dropped background task that reports nothing
- * is worse than a slow one.
- */
-export const runFireAndForget = <A, E>(
-  effect: Effect.Effect<A, E>
-): Effect.Effect<void, never, WorkerCtx> =>
-  Effect.flatMap(WorkerCtx, (ctx) =>
-    Effect.sync(() => {
-      ctx.waitUntil(
-        Effect.runPromiseExit(
-          effect.pipe(
-            Effect.tapCause((cause) => Effect.logError("Fire-and-forget task failed", cause))
-          )
-        )
-      )
-    }))

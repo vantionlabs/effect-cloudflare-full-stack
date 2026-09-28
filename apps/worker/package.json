@@ -1,10 +1,12 @@
 {
   "name": "@ea/worker",
   "private": true,
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "probe": "wrangler dev --port 8799"
+    "deploy": "wrangler deploy",
+    "types": "wrangler types"
   },
   "dependencies": {
     "effect": "catalog:",

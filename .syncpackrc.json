@@ -1,7 +1,6 @@
 {
   "source": [
     "package.json",
-    "packages/*/package.json",
     "packages/*/*/package.json",
     "apps/*/package.json",
     "evals/package.json",
@@ -9,9 +8,14 @@
   ],
   "versionGroups": [
     {
-      "label": "Effect ecosystem is pinned in lockstep via the catalog",
-      "dependencies": ["effect", "@effect/**"],
-      "policy": "sameRange"
+      "label": "Bun's catalog is the single source of truth for shared versions; syncpack cannot range-compare `catalog:`",
+      "dependencies": [
+        "**"
+      ],
+      "specifierTypes": [
+        "alias"
+      ],
+      "isIgnored": true
     }
   ]
 }

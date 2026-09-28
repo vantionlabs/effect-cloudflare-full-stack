@@ -6,9 +6,10 @@
  * SSR loader or the eval harness without going through HTTP. That is the property that
  * makes adding a transport additive rather than a rewrite.
  */
-import { ApiV1 } from "@ea/shared-domain/api"
+import { ApiV1, HealthV1 } from "@ea/shared-domain/api"
 import { Config, Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
+import { withDatabase } from "../platform/Database.ts"
 import { GetHealth } from "./GetHealth.ts"
 
 export const HealthHandlers = HttpApiBuilder.group(
@@ -25,6 +26,17 @@ export const HealthHandlers = HttpApiBuilder.group(
         // VERSION is a deploy-time mistake, not a runtime condition the endpoint's declared
         // error channel should carry.
         const version = yield* Effect.orDie(Config.String("VERSION").pipe(Config.withDefault("dev")))
-        return yield* GetHealth(version)
+        // Connection lifetime is per request; see platform/Database.ts.
+        // A connection failure is reported as degraded rather than surfacing as an
+        // undeclared error: the endpoint's contract promises a HealthV1 either way, and a
+        // monitor needs the body more than it needs a 500.
+        return yield* withDatabase(GetHealth(version)).pipe(
+          Effect.catchCause((cause) =>
+            Effect.as(
+              Effect.logError("Health check could not open a database connection", cause),
+              new HealthV1({ status: "degraded", version, database: null })
+            )
+          )
+        )
       }))
 )

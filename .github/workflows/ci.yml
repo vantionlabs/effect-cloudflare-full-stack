@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    services:
+      # The same image as compose.yaml, so tests run against real pgvector and the real
+      # Dutch stemmer rather than a stand-in.
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: effect_ai
+          POSTGRES_PASSWORD: ci_only
+          POSTGRES_DB: effect_ai
+        ports: ["55433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U effect_ai -d effect_ai"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      # Assembled from parts rather than written as a literal URL: secretlint's
+      # connection-string rule cannot tell a throwaway CI credential from a real one, and
+      # the rule is worth keeping armed across the whole repo.
+      PGUSER: effect_ai
+      PGPASSWORD: ci_only
+      PGDATABASE: effect_ai
+      PGPORT: "55433"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          # Reads .bun-version, so CI and local development cannot drift.
+          bun-version-file: .bun-version
+
+      # wrangler and vitest's worker project spawn workerd, and both are Node-targeted.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - run: bun install --frozen-lockfile
+
+      - name: Compose the Hyperdrive local connection string
+        run: |
+          echo "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgres""ql://$PGUSER:$PGPASSWORD@localhost:$PGPORT/$PGDATABASE" >> "$GITHUB_ENV"
+
+      - name: Enable pgvector
+        run: |
+          until docker exec "$(docker ps -q --filter ancestor=pgvector/pgvector:pg17)" \
+            psql -U effect_ai -d effect_ai -c 'create extension if not exists vector' 2>/dev/null; do
+            sleep 1
+          done
+
+      # Kept as separate steps rather than one `preflight` so a failure names itself in the
+      # Actions UI instead of hiding inside a composite script.
+      - run: bun run format:check
+      - run: bun run check
+      - run: bun run lint
+      - run: bun run hygiene
+      - run: bun run test

@@ -1,8 +1,24 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignore": ["vendor/**", "**/routeTree.gen.ts", "**/worker-configuration.d.ts"],
-  "ignoreDependencies": ["@effect/language-service"],
+  "ignoreDependencies": [
+    // A Workers built-in module (cloudflare:sockets), not an npm package.
+    "cloudflare",
+    // Loaded by @effect/tsgo via the tsconfig `plugins` entry, never imported.
+    "@effect/language-service",
+    // Referenced by .secretlintrc.json, which knip does not parse.
+    "@secretlint/secretlint-rule-preset-recommend",
+  ],
   "workspaces": {
-    ".": { "entry": ["scripts/*.ts"], "project": ["scripts/**/*.ts"] },
+    "scripts": {
+      // Standalone CLIs, invoked by package.json scripts rather than imported.
+      "entry": ["*.ts"],
+      "project": ["**/*.ts"],
+    },
+    "apps/worker": {
+      "entry": ["test/**/*.ts"],
+    },
+    "packages/shared/domain": {
+      "entry": ["test/**/*.ts"],
+    },
   },
 }

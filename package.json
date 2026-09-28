@@ -1,6 +1,7 @@
 {
   "name": "@ea/root",
   "private": true,
+  "version": "0.0.0",
   "type": "module",
   "packageManager": "bun@1.4.2",
   "engines": {
@@ -16,15 +17,8 @@
     ],
     "catalog": {
       "effect": "4.0.0-rc.118",
-      "@effect/vitest": "4.0.0-rc.118",
       "@effect/sql-pg": "4.0.0-rc.118",
-      "@effect/ai-openrouter": "4.0.0-rc.118",
-      "@effect/ai-openai": "4.0.0-rc.118",
-      "@effect/platform-bun": "4.0.0-rc.118",
-      "@effect/atom-react": "4.0.0-rc.118",
-      "better-auth": "1.7.6",
       "wrangler": "4.143.0",
-      "@cloudflare/vite-plugin": "1.62.0",
       "vitest": "5.0.2",
       "@types/node": "25.1.0"
     }
@@ -50,18 +44,17 @@
     "preflight": "bun run format && bun run check && bun run lint && bun run hygiene && bun run test",
     "effect:verify": "bun scripts/verify-effect-api.ts",
     "evals": "bun run --filter @ea/evals evals",
-    "evals:rule": "bun run --filter @ea/evals evals:rule"
+    "evals:rule": "bun run --filter @ea/evals evals:rule",
+    "infra:plan": "./scripts/infra.sh plan",
+    "infra:apply": "./scripts/infra.sh apply",
+    "deploy": "bun run --filter @ea/worker deploy",
+    "dev": "bun run --filter @ea/worker dev"
   },
   "devDependencies": {
-    "@effect/platform-bun": "catalog:",
-    "@effect/platform-node": "4.0.0-rc.118",
-    "@effect/sql-pg": "catalog:",
     "@effect/tsgo": "0.46.1",
-    "@effect/vitest": "catalog:",
     "@secretlint/secretlint-rule-preset-recommend": "13.0.6",
     "@types/node": "catalog:",
     "dprint": "0.57.4",
-    "effect": "catalog:",
     "knip": "6.38.0",
     "lefthook": "2.1.14",
     "oxlint": "1.85.0",

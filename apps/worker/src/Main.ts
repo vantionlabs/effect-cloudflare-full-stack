@@ -21,32 +21,29 @@
  * `dispose` from `toWebHandler` is dropped on purpose: Workers offers no hook to call it.
  */
 import { ApiV1 } from "@ea/shared-domain/api"
-import { PgClient } from "@effect/sql-pg"
 import { Layer } from "effect"
 import { HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { HealthHandlers } from "./health/HealthHandlers.ts"
-import { type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
-import { pgConfigFor } from "./platform/CloudflareSocket.ts"
+import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
+import { ReactivityLive } from "./platform/Database.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
 
-/** Everything reachable from the bindings. Built once per isolate. */
-const AppLayer = (env: Env) => {
-  // One PgClient per isolate. The prepared-statement cache inside it is the thing being
-  // kept: rebuilding per request would discard it on every invocation.
-  const Database = PgClient.layer(pgConfigFor(env.HYPERDRIVE))
-
-  // `provideMerge`, not `provide`: `toWebHandler` computes the per-request context as
-  // whatever the handlers require MINUS what the layer *outputs*. A plain `provide`
-  // satisfies the dependency but drops SqlClient from the output, so it reappears as a
-  // mandatory per-request argument. Merging keeps it in the output where it belongs.
-  return HttpApiBuilder.layer(ApiV1, { openapiPath: "/api/v1/openapi.json" }).pipe(
+/**
+ * Everything STATELESS, built once per isolate.
+ *
+ * The database is deliberately absent: a TCP socket cannot outlive the request that opened it
+ * on Workers, so `withDatabase` builds a client per request instead (see platform/Database.ts).
+ * `Bindings` is here because `env` genuinely is stable for an isolate's lifetime.
+ */
+const AppLayer = (env: Env) =>
+  HttpApiBuilder.layer(ApiV1, { openapiPath: "/api/v1/openapi.json" }).pipe(
     Layer.provide(HealthHandlers),
-    Layer.provideMerge(Database),
+    Layer.provideMerge(Layer.succeed(Bindings)(env)),
+    Layer.provideMerge(ReactivityLive),
     Layer.provide(WorkerPlatform),
     Layer.provide(layerConfigProvider(env))
   )
-}
 
 /**
  * One shared MemoMap so `fetch`, `queue` and `scheduled` share a single layer graph —

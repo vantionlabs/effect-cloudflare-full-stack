@@ -40,7 +40,7 @@ export interface HyperdriveLike {
  * Hyperdrive is the TLS terminator, so encrypting this hop would be redundant work
  * inside Cloudflare's own network.
  */
-export const cloudflareDuplex = (options: {
+const cloudflareDuplex = (options: {
   readonly host: string
   readonly port: number
 }): Duplex => {
