@@ -10,17 +10,41 @@
   // that node:stream (Duplex.fromWeb) is load-bearing here.
   "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
   "observability": { "enabled": true },
-  // alchemy.run.ts is the source of truth for infrastructure; this file exists so
-  // `wrangler dev` works locally and as the documented fallback if Alchemy (pre-1.0)
-  // ever blocks a deploy.
+
+  // ───────────────────────────────────────────────────────────────────────────────────────
+  // ⚠ BINDINGS ARE NOT INHERITED BY ENVIRONMENTS.
   //
-  // Local dev reads the Postgres connection string from
-  // CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE in .env (gitignored), so no
-  // credential is ever committed and nothing needs provisioning on Cloudflare.
+  // Cloudflare: "Non-inheritable keys are configurable at the top-level, but cannot be
+  // inherited by environments and must be specified for each environment."
+  //
+  // Every binding below MUST therefore be repeated in each `env.*` block. Forgetting one
+  // deploys successfully and fails at runtime, so `bun run bindings:check` asserts that
+  // each environment declares the same binding names as the top level. It runs in preflight.
+  //
+  // Resource ids come from `bun run infra:outputs` (Pulumi), never hand-invented.
+  // ───────────────────────────────────────────────────────────────────────────────────────
+
+  // The top level is LOCAL DEVELOPMENT. `wrangler dev` takes the Postgres connection string
+  // from CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE in .env (gitignored), so
+  // nothing needs provisioning on Cloudflare to run or test locally.
   "hyperdrive": [
-    {
-      "binding": "HYPERDRIVE",
-      "id": "placeholder-replaced-by-alchemy-at-deploy",
-    },
+    { "binding": "HYPERDRIVE", "id": "local-dev-overridden-by-dotenv" },
   ],
+
+  // Each environment deploys as its own Worker: effect-ai-staging, effect-ai-production.
+  // Separate bindings, separate secrets, separate logs.
+  "env": {
+    "staging": {
+      "vars": { "ENVIRONMENT": "staging" },
+      "hyperdrive": [
+        { "binding": "HYPERDRIVE", "id": "PULUMI_hyperdriveId" },
+      ],
+    },
+    "production": {
+      "vars": { "ENVIRONMENT": "production" },
+      "hyperdrive": [
+        { "binding": "HYPERDRIVE", "id": "PULUMI_hyperdriveId" },
+      ],
+    },
+  },
 }

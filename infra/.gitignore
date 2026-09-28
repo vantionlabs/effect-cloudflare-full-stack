@@ -1,0 +1,4 @@
+# Local stack state when using the file backend; never commit credentials or state.
+.pulumi/
+Pulumi.*.yaml
+!Pulumi.yaml

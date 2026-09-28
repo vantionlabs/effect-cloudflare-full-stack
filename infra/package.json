@@ -1,0 +1,19 @@
+{
+  "name": "@ea/infra",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "preview": "pulumi preview",
+    "up": "pulumi up",
+    "destroy": "pulumi destroy",
+    "outputs": "pulumi stack output --json"
+  },
+  "dependencies": {
+    "@pulumi/pulumi": "^3.265.0",
+    "@pulumi/cloudflare": "^6.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}

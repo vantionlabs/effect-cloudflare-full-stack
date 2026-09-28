@@ -1,0 +1,21 @@
+name: effect-ai
+runtime:
+  name: nodejs
+  options:
+    # Bun is the repo's package manager, but the Pulumi language host is Node-targeted —
+    # same split as wrangler and the vitest worker project.
+    packagemanager: npm
+    typescript: true
+description: Cloudflare infrastructure for effect-ai
+
+config:
+  cloudflare:apiToken:
+    secret: true
+  effect-ai:accountId:
+    description: Cloudflare account id
+  effect-ai:postgresUrl:
+    description: >-
+      Direct (NOT pooled) Postgres connection string for the PlanetScale cluster that
+      Hyperdrive fronts. Pooled/transaction-mode strings break @effect/sql-pg's named
+      prepared statements, and Hyperdrive does the pooling itself.
+    secret: true

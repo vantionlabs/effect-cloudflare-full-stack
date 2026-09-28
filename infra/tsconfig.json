@@ -1,0 +1,15 @@
+{
+  // Deliberately NOT extending tsconfig.base.json: this program has no Effect dependency,
+  // so it should not inherit the Effect language-service plugin or the repo's strictness
+  // tuned for Effect code. Keeping it standalone is the point.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["*.ts"]
+}

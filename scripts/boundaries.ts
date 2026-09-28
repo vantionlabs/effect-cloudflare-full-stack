@@ -25,6 +25,18 @@ interface Rule {
 
 const rules: ReadonlyArray<Rule> = [
   {
+    label: "infra stays free of Effect",
+    appliesTo: (p) => p.startsWith("infra/"),
+    forbidden: [
+      {
+        pattern: /^effect$|^effect\/|^@effect\//,
+        because: "the Pulumi program shares nothing with the Worker, so depending on Effect would " +
+          "buy no composition while exposing infrastructure to every RC churn — which is " +
+          "precisely what blocked Alchemy"
+      }
+    ]
+  },
+  {
     label: "domain packages stay platform-free",
     appliesTo: (p) => p.startsWith("packages/") && p.includes("/domain/src/"),
     forbidden: [
@@ -90,7 +102,7 @@ const importPattern = /(?:from|import)\s+"([^"]+)"/g
 const failures: Array<string> = []
 let checked = 0
 
-for (const dir of ["packages", "apps"]) {
+for (const dir of ["packages", "apps", "infra"]) {
   for (const absolute of walk(join(root, dir))) {
     const path = relative(root, absolute)
     if (path.includes("/test/")) continue
