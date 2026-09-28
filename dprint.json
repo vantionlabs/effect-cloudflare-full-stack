@@ -1,0 +1,33 @@
+{
+  "lineWidth": 120,
+  "indentWidth": 2,
+  "newLineKind": "lf",
+  "typescript": {
+    "semiColons": "asi",
+    "quoteStyle": "alwaysDouble",
+    "trailingCommas": "never",
+    "operatorPosition": "maintain",
+    "arrowFunction.useParentheses": "force"
+  },
+  "json": {},
+  "markdown": {},
+  "excludes": [
+    "**/node_modules",
+    "**/dist",
+    "**/build",
+    "**/.output",
+    "**/*.tsbuildinfo",
+    "**/coverage",
+    "vendor/",
+    ".wrangler/",
+    ".alchemy/",
+    "**/worker-configuration.d.ts",
+    "**/routeTree.gen.ts",
+    "bun.lock"
+  ],
+  "plugins": [
+    "https://plugins.dprint.dev/typescript-0.93.4.wasm",
+    "https://plugins.dprint.dev/json-0.21.1.wasm",
+    "https://plugins.dprint.dev/markdown-0.20.0.wasm"
+  ]
+}

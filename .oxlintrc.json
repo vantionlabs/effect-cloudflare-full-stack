@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "import",
+    "typescript",
+    "unicorn"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "env": {
+    "es2024": true
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.output/**",
+    "**/coverage/**",
+    "vendor/**",
+    ".wrangler/**",
+    ".alchemy/**",
+    "**/worker-configuration.d.ts",
+    "**/routeTree.gen.ts"
+  ],
+  "rules": {
+    "no-console": "warn",
+    "typescript/no-explicit-any": "warn",
+    "typescript/consistent-type-imports": "error"
+  },
+  "overrides": [
+    {
+      "files": [
+        "scripts/**/*.ts",
+        "evals/**/*.ts"
+      ],
+      "rules": {
+        "no-console": "off",
+        "unicorn/no-array-sort": "off"
+      }
+    }
+  ]
+}

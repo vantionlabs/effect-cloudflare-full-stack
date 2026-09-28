@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignore": ["vendor/**", "**/routeTree.gen.ts", "**/worker-configuration.d.ts"],
+  "ignoreDependencies": ["@effect/language-service"],
+  "workspaces": {
+    ".": { "entry": ["scripts/*.ts"], "project": ["scripts/**/*.ts"] },
+  },
+}

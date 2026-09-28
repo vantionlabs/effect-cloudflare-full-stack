@@ -1,0 +1,13 @@
+{
+  "name": "@ea/evals",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "evals": "bun src/RunDecisionEval.ts",
+    "evals:rule": "bun src/CheckRule.ts"
+  },
+  "dependencies": {
+    "effect": "catalog:",
+    "@effect/platform-bun": "catalog:"
+  }
+}

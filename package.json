@@ -1,0 +1,72 @@
+{
+  "name": "@ea/root",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "bun": ">=1.4.2"
+  },
+  "workspaces": {
+    "packages": [
+      "packages/*",
+      "packages/*/*",
+      "apps/*",
+      "evals",
+      "scripts"
+    ],
+    "catalog": {
+      "effect": "4.0.0-rc.118",
+      "@effect/vitest": "4.0.0-rc.118",
+      "@effect/sql-pg": "4.0.0-rc.118",
+      "@effect/ai-openrouter": "4.0.0-rc.118",
+      "@effect/ai-openai": "4.0.0-rc.118",
+      "@effect/platform-bun": "4.0.0-rc.118",
+      "@effect/atom-react": "4.0.0-rc.118",
+      "better-auth": "1.7.6",
+      "wrangler": "4.143.0",
+      "@cloudflare/vite-plugin": "1.62.0",
+      "alchemy": "2.0.0-beta.79",
+      "vitest": "5.0.2",
+      "@types/node": "25.1.0"
+    }
+  },
+  "scripts": {
+    "prepare": "effect-tsgo patch --oxlint && (git rev-parse --git-dir >/dev/null 2>&1 && lefthook install || true)",
+    "check": "tsc -b tsconfig.json",
+    "check:watch": "tsc -b tsconfig.json --watch",
+    "format": "dprint fmt",
+    "format:check": "dprint check",
+    "lint": "oxlint --disable-nested-config",
+    "lint:fix": "oxlint --disable-nested-config --fix",
+    "fix": "bun run format && bun run lint:fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "knip": "knip",
+    "secrets": "secretlint --secretlintignore .secretlintignore '**/*'",
+    "deps:check": "syncpack lint",
+    "deps:update": "syncpack update",
+    "dep:check": "bun scripts/boundaries.ts",
+    "hygiene": "bun run knip && bun run deps:check && bun run secrets && bun run dep:check",
+    "preflight": "bun run format && bun run check && bun run lint && bun run hygiene && bun run test",
+    "effect:verify": "bun scripts/verify-effect-api.ts",
+    "evals": "bun run --filter @ea/evals evals",
+    "evals:rule": "bun run --filter @ea/evals evals:rule"
+  },
+  "devDependencies": {
+    "@effect/tsgo": "0.46.1",
+    "@effect/vitest": "catalog:",
+    "@secretlint/secretlint-rule-preset-recommend": "13.0.6",
+    "@types/node": "catalog:",
+    "dprint": "0.57.4",
+    "effect": "catalog:",
+    "knip": "6.38.0",
+    "lefthook": "2.1.14",
+    "oxlint": "1.85.0",
+    "oxlint-tsgolint": "7.0.2003",
+    "secretlint": "13.0.6",
+    "syncpack": "15.3.3",
+    "typescript": "7.0.2",
+    "vitest": "catalog:"
+  }
+}

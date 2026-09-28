@@ -1,0 +1,17 @@
+{
+  "source": [
+    "package.json",
+    "packages/*/package.json",
+    "packages/*/*/package.json",
+    "apps/*/package.json",
+    "evals/package.json",
+    "scripts/package.json"
+  ],
+  "versionGroups": [
+    {
+      "label": "Effect ecosystem is pinned in lockstep via the catalog",
+      "dependencies": ["effect", "@effect/**"],
+      "policy": "sameRange"
+    }
+  ]
+}
