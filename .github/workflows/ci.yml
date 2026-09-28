@@ -54,13 +54,6 @@ jobs:
         run: |
           echo "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgres""ql://$PGUSER:$PGPASSWORD@localhost:$PGPORT/$PGDATABASE" >> "$GITHUB_ENV"
 
-      - name: Enable pgvector
-        run: |
-          until docker exec "$(docker ps -q --filter ancestor=pgvector/pgvector:pg17)" \
-            psql -U effect_ai -d effect_ai -c 'create extension if not exists vector' 2>/dev/null; do
-            sleep 1
-          done
-
       # Kept as separate steps rather than one `preflight` so a failure names itself in the
       # Actions UI instead of hiding inside a composite script.
       - run: bun run format:check

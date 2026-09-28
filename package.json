@@ -41,7 +41,7 @@
     "deps:check": "syncpack lint",
     "deps:update": "syncpack update",
     "dep:check": "bun scripts/boundaries.ts",
-    "hygiene": "bun run knip && bun run deps:check && bun run secrets && bun run dep:check && bun run bindings:check",
+    "hygiene": "bun run knip && bun run deps:check && bun run secrets && bun run dep:check && bun run bindings:check && bun run auth:check",
     "preflight": "bun run format && bun run check && bun run lint && bun run hygiene && bun run test",
     "effect:verify": "bun scripts/verify-effect-api.ts",
     "evals": "bun run --filter @ea/evals evals",
@@ -52,12 +52,15 @@
     "infra:outputs": "bun run --filter @ea/infra outputs",
     "bindings:check": "bun scripts/bindings-check.ts",
     "deploy:staging": "bun run --filter @ea/worker deploy:staging",
-    "deploy:production": "bun run --filter @ea/worker deploy:production"
+    "deploy:production": "bun run --filter @ea/worker deploy:production",
+    "auth:schema": "bun scripts/auth-schema.ts",
+    "auth:check": "bun scripts/auth-schema.ts --check"
   },
   "devDependencies": {
     "@effect/tsgo": "0.46.1",
     "@secretlint/secretlint-rule-preset-recommend": "13.0.6",
     "@types/node": "catalog:",
+    "better-auth": "1.7.6",
     "dprint": "0.57.4",
     "knip": "6.38.0",
     "lefthook": "2.1.14",

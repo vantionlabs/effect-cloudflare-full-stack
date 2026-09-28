@@ -6,17 +6,21 @@
  * iteration, and a migration that runs out of order against a real database is not recoverable
  * by re-running it.
  *
- * better-auth's generated schema is pasted in as `0003_auth` at build-order step 3. The Migrator
- * stays authoritative for **every** table including better-auth's — one migration system, one
- * database — so `better-auth migrate` is never run (plan risk R9).
+ * `0003_auth` is generated from the installed better-auth by `bun scripts/auth-schema.ts`, not
+ * by @better-auth/cli (which lags the library by three minors). The Migrator stays authoritative
+ * for **every** table including better-auth's — one migration system, one database — so
+ * `better-auth migrate` is never run (plan risk R9).
  */
 import { Migrator } from "effect/sql"
 import tenancy from "./migrations/0001_tenancy.ts"
 import intake from "./migrations/0002_intake.ts"
+import auth from "./migrations/0003_auth.ts"
 
 export const migrations = {
   "0001_tenancy": tenancy,
-  "0002_intake": intake
+  "0002_intake": intake,
+  // Generated from the installed better-auth by `bun scripts/auth-schema.ts`.
+  "0003_auth": auth
 }
 
 export const loader = Migrator.fromRecord(migrations)

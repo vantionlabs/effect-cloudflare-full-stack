@@ -22,6 +22,12 @@ import { SqlClient } from "effect/sql"
 export default Effect.gen(function*() {
   const sql = yield* SqlClient.SqlClient
 
+  // pgvector, as a migration rather than a manual step. This was originally created by hand in
+  // the local container, which meant a database built from scratch silently lacked it — the
+  // health check reported `degraded` and nothing explained why. Anything the application
+  // requires to be correct belongs in a migration.
+  yield* sql`create extension if not exists vector`
+
   /**
    * The tenant guard every RLS policy reads.
    *
@@ -54,4 +60,10 @@ export default Effect.gen(function*() {
     end
     $$
   `
+
+  // Without schema USAGE the role cannot see the tables at all, and Postgres reports
+  // "relation does not exist" (42P01) rather than a permission error — it declines to leak
+  // whether the object exists. That is a genuinely confusing failure to debug, so it is
+  // granted here next to the role that needs it.
+  yield* sql`grant usage on schema public to effect_ai_app`
 })
