@@ -1049,7 +1049,14 @@ ground until then (ADR-0007).
 | R14 | **Bun vs the Cloudflare toolchain.** `vitest-pool-workers` spawns `workerd`; `wrangler`/`alchemy` are Node-targeted.                                                                                                                                   | Run those under Node, the `node` vitest project under Bun. Verified at step 0. Bun stays the package manager and the runtime for everything it is good at.                                                                                                 |
 | R15 | **Effect is a small talent pool; v4 RC docs are thin.**                                                                                                                                                                                                | The vendored submodule, the ADRs, and `docs/effect-v4-api-notes.md`. Price handover into a retainer honestly.                                                                                                                                              |
 
-## ADRs to write at step 0
+## ADRs
+
+**Status:** 0009–0012 are written, as the decisions were actually made. 0003 was written out of order
+during step 7. **0001, 0002, 0004–0008 are still gaps** — the decisions were made and are recorded in
+this document, but not as ADRs with revisit triggers. Worth closing before the reviewer console, since
+each one is a decision someone will otherwise re-litigate from scratch.
+
+### The step-0 list
 
 Each with the trigger that would make us revisit it, so they are decisions with expiry dates rather
 than assertions.
