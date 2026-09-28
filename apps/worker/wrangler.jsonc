@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "effect-ai",
+  "main": "src/Main.ts",
+  "compatibility_date": "2026-09-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // alchemy.run.ts is the source of truth for infrastructure; this file exists so
+  // `wrangler dev` works locally and as the documented fallback if Alchemy (pre-1.0)
+  // ever blocks a deploy.
+  //
+  // Local dev reads the Postgres connection string from
+  // WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE in .env (gitignored), so no
+  // credential is ever committed and nothing needs provisioning on Cloudflare.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "placeholder-replaced-by-alchemy-at-deploy",
+    },
+  ],
+}

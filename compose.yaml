@@ -1,0 +1,24 @@
+# Local Postgres for development, tests and the eval harness.
+# Matches PlanetScale Postgres (17.x) and ships pgvector, so the RRF hybrid-search
+# function and HNSW indexes are exercised locally exactly as in production.
+# Port 55433 deliberately avoids docket's 55432.
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: effect-ai-postgres
+    environment:
+      POSTGRES_USER: effect_ai
+      POSTGRES_PASSWORD: local_dev_only
+      POSTGRES_DB: effect_ai
+    ports:
+      - "55433:5432"
+    volumes:
+      - effect-ai-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U effect_ai -d effect_ai"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  effect-ai-pgdata:

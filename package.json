@@ -54,6 +54,7 @@
     "evals:rule": "bun run --filter @ea/evals evals:rule"
   },
   "devDependencies": {
+    "@effect/sql-pg": "catalog:",
     "@effect/tsgo": "0.46.1",
     "@effect/vitest": "catalog:",
     "@secretlint/secretlint-rule-preset-recommend": "13.0.6",

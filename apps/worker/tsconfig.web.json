@@ -1,0 +1,14 @@
+{
+  // Browser-side code: DOM, and deliberately NO @cloudflare/workers-types.
+  // Kept a separate project precisely so the two never share a compilation.
+  "extends": "../../tsconfig.base.json",
+  "include": ["src/web/**/*.ts", "src/web/**/*.tsx"],
+  "compilerOptions": {
+    "rootDir": "src/web",
+    "outDir": "dist/web",
+    "noEmit": true,
+    "composite": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": []
+  }
+}

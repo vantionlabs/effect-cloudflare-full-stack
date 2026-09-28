@@ -1,0 +1,18 @@
+{
+  "name": "@ea/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "probe": "wrangler dev --port 8799"
+  },
+  "dependencies": {
+    "effect": "catalog:",
+    "@effect/sql-pg": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260926.1",
+    "@types/node": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

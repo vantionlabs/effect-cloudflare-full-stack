@@ -1,0 +1,18 @@
+{
+  // Worker-side code: Workers globals + Node builtins, and deliberately NO "DOM".
+  // Adding DOM here would make Request/Response ambiguous against workers-types.
+  "extends": "../../tsconfig.base.json",
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/web/**"],
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist/worker",
+    "noEmit": true,
+    "composite": true,
+    // tsconfig.base.json sets `types: []`, so ambient types must be listed
+    // explicitly — they are NOT picked up by `include`.
+    // - node: `node:stream` (Duplex.fromWeb) in CloudflareSocket.ts
+    // - @cloudflare/workers-types: `cloudflare:sockets`, ExportedHandler, bindings
+    "types": ["node", "@cloudflare/workers-types"]
+  }
+}
