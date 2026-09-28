@@ -8,7 +8,7 @@
  * needs no dependency.
  */
 import { applyRails, Citation, type Outcome, ProposedDecision, severity } from "@ea/modules/decision/domain/Decision"
-import type { RetrievalMode } from "@ea/modules/policy/domain/Chunk"
+import type { RetrievalMode } from "@ea/modules/shared/domain/Retrieval"
 import { describe, expect, it } from "vitest"
 
 const CHUNK = "chunk_1"

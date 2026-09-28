@@ -12,11 +12,20 @@
  * however the system is configured. Degraded retrieval that nobody can see is exactly the failure this
  * problem shape keeps producing.
  */
-import { ChunkId, Retrieval, type RetrievalMode, RetrievedChunk } from "@ea/modules/policy/domain/Chunk"
 import type { Collection } from "@ea/modules/shared/domain/Corpus"
+import { CurrentUser } from "@ea/modules/shared/domain/Identity"
+import {
+  ChunkId,
+  PolicySearch,
+  type PolicySearchService,
+  Retrieval,
+  type RetrievalMode,
+  RetrievedChunk
+} from "@ea/modules/shared/domain/Retrieval"
 import { Db } from "@ea/modules/shared/tables/Database"
-import { Effect } from "effect"
+import { Effect, Layer } from "effect"
 import { EmbeddingModel } from "effect/ai"
+import { SqlClient } from "effect/sql"
 
 export interface RetrievePolicyInput {
   readonly query: string
@@ -91,3 +100,43 @@ export const RetrievePolicy = (input: RetrievePolicyInput) =>
 
     return new Retrieval({ chunks, mode })
   })
+
+/**
+ * The `PolicySearch` implementation.
+ *
+ * `decision` asks for the port; this is the slice that answers. A database failure becomes a defect
+ * rather than part of the port's signature: a caller deciding an invoice can do nothing useful with
+ * "the corpus was unreachable" except fail, and the queue's retry is the right response.
+ */
+export const PolicySearchLive: Layer.Layer<
+  PolicySearch,
+  never,
+  Db | EmbeddingModel.EmbeddingModel | SqlClient.SqlClient | CurrentUser
+> = Layer.effect(PolicySearch)(
+  Effect.gen(function*() {
+    /*
+     * Everything is captured at layer build, so `search` has no requirements of its own.
+     *
+     * That is what a port costs: the caller asked for a capability, so the capability cannot turn
+     * round and ask the caller for a connection. The consequence is the same as the workflow engine's
+     * — **this layer is built inside the request scope, not in the memoised app layer** — because a
+     * socket cannot outlive the request that opened it on Workers.
+     */
+    const db = yield* Db
+    const model = yield* EmbeddingModel.EmbeddingModel
+    const sql = yield* SqlClient.SqlClient
+    const identity = yield* CurrentUser
+
+    return {
+      search: (input) =>
+        Effect.orDie(
+          RetrievePolicy(input).pipe(
+            Effect.provideService(Db, db),
+            Effect.provideService(EmbeddingModel.EmbeddingModel, model),
+            Effect.provideService(SqlClient.SqlClient, sql),
+            Effect.provideService(CurrentUser, identity)
+          )
+        )
+    } satisfies PolicySearchService
+  })
+)

@@ -26,7 +26,7 @@
  *
  * Every rail can only increase severity. That is checked exhaustively rather than asserted.
  */
-import type { RetrievalMode } from "@ea/modules/policy/domain/Chunk"
+import type { RetrievalMode } from "@ea/modules/shared/domain/Retrieval"
 import { containsVerbatim } from "@ea/modules/shared/domain/Verbatim"
 import type { Citation, Outcome, ProposedDecision } from "./Decision.model.ts"
 

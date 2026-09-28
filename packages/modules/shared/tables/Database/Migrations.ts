@@ -15,7 +15,10 @@
  * **every** table including better-auth's — one migration system, one database — so
  * `better-auth migrate` is never run (plan risk R9).
  */
+import { DecisionTable } from "@ea/modules/decision/tables/Decision"
 import { ExtractionTable } from "@ea/modules/decision/tables/Extraction"
+import { RuleTable } from "@ea/modules/decision/tables/Rule"
+import { WorkflowTable } from "@ea/modules/decision/tables/Workflow"
 import { SessionTable } from "@ea/modules/iam/tables/Session"
 import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
@@ -44,7 +47,10 @@ export const migrations = {
    * 0008 fixed the lexical half from AND to OR semantics. Measured: recall@8 31% -> 92%.
    */
   "0007_retrieval": RetrievalTable,
-  "0008_retrieval_or": RetrievalTable
+  "0008_retrieval_or": RetrievalTable,
+  "0009_workflow": WorkflowTable,
+  "0010_rule": RuleTable,
+  "0011_decision": DecisionTable
 }
 
 export const loader = Migrator.fromRecord(migrations)
