@@ -327,17 +327,22 @@ export default {
     env: Env,
     _ctx: ExecutionContext
   ): Promise<void> {
-    const result = await getQueueRuntime(env).runPromise(withDatabase(SweepEnqueueGap))
-    /*
-     * Logged unconditionally, including the zero.
-     *
-     * Zero is the healthy steady state, and a silent success is indistinguishable from a cron that is
-     * not running at all — which is the failure mode this whole handler exists to prevent. A persistent
-     * non-zero `resent` is the alarm: work is being re-sent and still not completing.
-     */
-    console.log(
-      `cron ${controller.cron}: re-sent ${result.resent} unenqueued event(s)` +
-        (result.more ? " — LIMIT HIT, a backlog remains for the next tick" : "")
+    await getQueueRuntime(env).runPromise(
+      Effect.flatMap(withDatabase(SweepEnqueueGap), (result) =>
+        /*
+         * `Effect.log`, not `console.log`: it goes through the logger the OTLP drain already consumes, so
+         * the cron's output lands in telemetry rather than only in stdout — which matters for the one
+         * thing here worth alerting on.
+         *
+         * Logged unconditionally, INCLUDING the zero. Zero is the healthy steady state, and a silent
+         * success is indistinguishable from a cron that is not running at all — the exact failure this
+         * handler exists to prevent. A persistently non-zero `resent` is the alarm: work is being
+         * re-sent and still not completing.
+         */
+        Effect.log(
+          `cron ${controller.cron}: re-sent ${result.resent} unenqueued event(s)` +
+            (result.more ? " — LIMIT HIT, a backlog remains for the next tick" : "")
+        ))
     )
   }
 } satisfies ExportedHandler<Env>
