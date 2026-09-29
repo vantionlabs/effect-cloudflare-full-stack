@@ -177,6 +177,50 @@ because it will recur, with `@pulumi/command` as the documented escape hatch.
 
 ---
 
+### Durable Objects — free plan, SQLite only, and what keeps one billable
+
+**Checked 2026-09-29**, <https://developers.cloudflare.com/durable-objects/platform/pricing/> and
+<https://developers.cloudflare.com/durable-objects/best-practices/websockets/>.
+
+| Fact                                                                                                                                                     | Consequence here                                                                                                  |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| DOs are on **Free and Paid**; free is **SQLite backend only**                                                                                            | no plan change needed to build chat                                                                               |
+| SQLite GA since 2025-04-07, **10 GB per object**                                                                                                         | storage is not a constraint at our scale                                                                          |
+| Free limits: **100,000 requests/day**, **13,000 GB-s/day**, reset 00:00 UTC                                                                              | exceeding one makes further operations of that type **fail**, so a chatty presence feature can take the demo down |
+| WebSocket **messages count as requests, at a 1/20 ratio**                                                                                                | a per-keystroke typing indicator is a billing decision, not a UI one                                              |
+| Hibernation: clients stay connected while the object leaves memory, and **no duration accrues**                                                          | the reason to use the Hibernation API rather than `accept()`                                                      |
+| `accept()` incurs duration **for the whole time the socket is connected**                                                                                | never use it for a room                                                                                           |
+| **An outbound `connect()` or outbound WebSocket keeps the object in memory and billable for up to 15 minutes per connection, with no incoming requests** | **the load-bearing one — see below**                                                                              |
+| Alarms, incoming requests, `setTimeout`/`setInterval` prevent hibernation                                                                                | no heartbeat timers inside a room                                                                                 |
+| `setWebSocketAutoResponse` answers a fixed ping **without waking** hibernating sockets                                                                   | this is how keepalive is done                                                                                     |
+
+**Why the 15-minute rule decides the architecture.** Our Postgres client dials through
+`cloudflare:sockets` `connect()` (ADR-0009). A Durable Object that touched the database would therefore
+stay in memory and billable for up to 15 minutes **after every write**, which defeats hibernation
+entirely — the one property that makes a room affordable. So a room must never hold a `PgClient`. That is
+not a style preference; it is the difference between $20 and $400 a month in Cloudflare's own worked
+examples (their Example 3 versus Example 4).
+
+### Effect v4 has WebSocket RPC, and the upgrade path is `HttpServerRequest.upgrade`
+
+**Checked 2026-09-29** by reading the vendored source at `repos/effect/packages/effect/src/rpc/RpcServer.ts`
+(rc.118), which is what the subtree is for.
+
+- `RpcServer.layerProtocolWebsocket({ path })` registers a **GET** route on the current `HttpRouter` that
+  upgrades the request and attaches the socket to the RPC protocol.
+- It is built on `makeProtocolWithHttpEffectWebsocket`, whose whole body is
+  `const socket = yield* Effect.orDie(request.upgrade)`.
+- Also present: `layerProtocolSocketServer`, `makeProtocolStdio`, `makeProtocolWorkerRunner`.
+
+**So the open question is not whether Effect supports it, but whether `request.upgrade` resolves under
+`workerd`**, where an upgrade is performed by returning a 101 response carrying a `webSocket` rather than
+by upgrading a request object in place. Unverified by execution — a step-0 item for the chat work, in the
+same class as ADR-0009's `cloudflare:sockets` question, and with the same shape of fallback (a hand-rolled
+`WebSocketPair` with Schema-encoded frames) if it does not hold.
+
+Related and already recorded above: `RpcServer.layerHttp` mounts a WebSocket when `protocol` is omitted,
+which is in `AGENTS.md` as a trap because a plain POST then 404s with nothing in the logs.
+
 ## PlanetScale
 
 ### Postgres 18.6, pgvector 0.8.5, and a non-superuser `CREATEROLE` role
