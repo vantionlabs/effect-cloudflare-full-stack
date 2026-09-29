@@ -13,7 +13,7 @@
  * auto-approval, and ADR-0013 turns that into a rule.
  */
 import { Context, type Effect, type Option } from "effect"
-import type { AdapterRequest, AdapterResponse } from "./Execution.model.ts"
+import type { AdapterRequest, AdapterResponse } from "./Execution.ts"
 
 export interface AdapterService {
   /** A name recorded on the execution row, so an audit says which adapter acted. */

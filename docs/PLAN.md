@@ -1013,16 +1013,59 @@ byte-identical `executions` row shape.
 
 ### Progress
 
-| Step                             | State                                                                                 |
-| -------------------------------- | ------------------------------------------------------------------------------------- |
-| 0 Prove the driver               | done — `@effect/sql-pg` over `cloudflare:sockets` verified in real workerd (ADR-0009) |
-| 1 One deploy, both halves        | partial — API + OpenAPI live; the SSR shell is not built yet                          |
-| 2 Migrations + `Db` seam + RLS   | done — 5 behavioural tenancy tests against real Postgres                              |
-| 3 better-auth on Postgres        | done — schema generated from the installed library, drift-checked in CI               |
-| 4 Intake                         | done — upload → R2 → two rows in one transaction; `.pdf` returns a typed 415          |
-| 4.5 Architecture restructure     | done — slice × role × concept enforced by `dep:check` (ADR-0010)                      |
-| 5 Extraction + model-free checks | next                                                                                  |
-| 6–11                             | not started                                                                           |
+Last updated 2026-09-29.
+
+| Step                             | State                                                                                                                                                      |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 Prove the driver               | done — `@effect/sql-pg` over `cloudflare:sockets` verified in real workerd (ADR-0009)                                                                      |
+| 1 One deploy, both halves        | partial — API + OpenAPI live; the console is built but has never run against a live Worker                                                                 |
+| 2 Migrations + `Db` seam         | done, then REVERSED on RLS — the seam stands, the policies are gone (ADR-0014)                                                                             |
+| 3 better-auth on Postgres        | done — schema generated from the installed library, drift-checked in CI                                                                                    |
+| 4 Intake                         | done — upload → R2 → two rows in one transaction; `.pdf` returns a typed 415                                                                               |
+| 4.5 Architecture restructure     | done — slice × role × concept enforced by `dep:check`, 502 checks (ADR-0010, 0011)                                                                         |
+| 5 Extraction + model-free checks | done — both checks pure and tested; the prompt was then fixed by step 11's findings                                                                        |
+| 6 Policy corpus + retrieval      | done — RRF in SQL, `bun run evals:retrieval` gates lexical ≥ 75% / hybrid ≥ 90%                                                                            |
+| 7 Decide → `pending_review`      | done — 4 activities on a ~200-line Postgres `WorkflowEngine` (ADR-0003), **reachable from the deployed Worker**                                            |
+| 8 Queues                         | done — batch semantics, classification, DLQ, **and the consumer now dispatches**: `document.decide` → the workflow, `decision.execute` → `ExecuteDecision` |
+| 9 The one execution path         | done — approve CAS → `EmitExecute` → claim → adapter, one emit call site asserted, auto-approve branch tested end to end, **wired into the queue**         |
+| 10 Reviewer console              | built, UNPROVEN — `vite dev` proxying `/api` to `wrangler dev` has never been run                                                                          |
+| 11 Evals on the real corpus      | **partial — see below**                                                                                                                                    |
+
+**Step 11, precisely.** Two halves, and only one of them has a number.
+
+- **`bun run evals:rule` — done, and it earned its keep.** Model-free, no database, no network,
+  milliseconds. It found rail 3 releasing **190 of 300** labelled invoices with the model assumed wrong,
+  because the rule's stored ceiling was read by nothing; after `evaluateRule` (ADR-0016) that is **1 of
+  300**, and the remaining one is a duplicate, held in a two-way-ratcheted `KNOWN_UNGATED` entry naming
+  `document_fingerprints` as the mechanism that closes it.
+- **`bun run evals` — built and exercised, but NOT measured at 99 cases.** The harness runs the real
+  corpus (8 Dutch documents including deliberate distractors: a superseded policy with the same article
+  numbers, a travel policy with its own thresholds) through the real pipeline against a real model, and
+  scores against docket's M5 table. The full run is blocked on the **Workers AI free tier: 10,000
+  neurons/day, exhausted.** Twelve-case runs gave 5–6/12 grounded against docket's 33/99, which is
+  indicative and is not the deliverable. Unblocking it needs the Workers Paid plan or an OpenRouter key.
+
+**The gap between the steps, found on 2026-09-29 and larger than any of them.** The deployed Worker
+**cannot decide a document**: `Env` declares no `AI` binding, no model layer is provided, the queue
+consumer's `work` callback is a constant `{ _tag: "Done" }`, `ConsumeEvent` has no caller outside tests,
+and there is no `scheduled` export or cron. Steps 5–9 are each genuinely finished as modules with real
+tests; nothing joins them to the runtime. `docs/services.md` §3.1 has the evidence and the five-step
+wiring list. **It outranks everything else outstanding**, including the rest of step 11 — an eval that
+measures a path production cannot run is measuring a library.
+
+**What step 11 found before it could even finish scoring** — each one invisible to every unit test,
+because the scripted model always returns well-formed output:
+
+| Finding                                                                                    | Consequence                                                                                                                         |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| The model put the whole printed line in `value` — `"**Totaal inclusief BTW: EUR 839,07**"` | `parseMoney` refused it, arithmetic failed, rail 1 fired on **every** case. Fixed with a worked example in the prompt.              |
+| `needs_human` on 12 of 12 with **zero citations**                                          | An unauditable refusal, dressed as caution. The prompt never said a refusal still has to point at something.                        |
+| `auto_approve` reached on 0 of 12                                                          | The policy authorises a _person_; the model was asked a question it could not answer. Same hole as docket's "gate never exercised". |
+| Optional fields silently skipped                                                           | A clean invoice was routed for breaching bounds it met — `payment_terms` fired falsely on 50% of cases.                             |
+| No `temperature` set                                                                       | Two identical 12-case runs scored 0/10 and 8/11. At 0 it is 6/12 and 5/12 — narrowed, not removed.                                  |
+| `clause_ref` is "Artikel 3" for **eight** different clauses across eight documents         | The obligations index (slice 1.5) fetches "by reference" and would return eight unrelated clauses. **Open.**                        |
+| Rail 1 reported arithmetic failures as "grounding"                                         | Sent reviewers to check provenance for an arithmetic problem. Fixed; the rail now names the cause.                                  |
+| The auto-approve branch had no test, and the test layer had no `EventBus`                  | The branch had never executed. Four tests added; it failed with `Service not found` the first time one armed a rule.                |
 
 Two things deferred rather than forgotten: the **SSR shell / reference client** from step 1, and
 Alchemy, which is re-checked on each release (`bun add -D alchemy@latest && bun scripts/audit-effect-imports.ts node_modules/alchemy`;
@@ -1051,10 +1094,12 @@ ground until then (ADR-0007).
 
 ## ADRs
 
-**Status:** 0009–0012 are written, as the decisions were actually made. 0003 was written out of order
-during step 7. **0001, 0002, 0004–0008 are still gaps** — the decisions were made and are recorded in
-this document, but not as ADRs with revisit triggers. Worth closing before the reviewer console, since
-each one is a decision someone will otherwise re-litigate from scratch.
+**Status:** 0003 and 0009–0016 are written, as the decisions were actually made — 0003 out of order
+during step 7, 0014 reversing the RLS decision 0005 would have recorded, 0015 and 0016 out of step 11.
+**0001, 0002, 0004, 0006, 0007 and 0008 are still gaps** — the decisions were made and are recorded in
+this document, but not as ADRs with revisit triggers. 0005 is superseded rather than missing. 0008 in
+particular is now answerable: the field-order hypothesis has a measurement waiting for it the moment
+`bun run evals` can complete a run.
 
 ### The step-0 list
 

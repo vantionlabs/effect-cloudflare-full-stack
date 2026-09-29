@@ -34,20 +34,26 @@ import {
   RPC_V1_PATH,
   RpcV1
 } from "@ea/api/v1"
+import { LanguageModelWorkersAiBinding, WORKERS_AI_MODEL } from "@ea/modules/decision/server/Extraction"
 import { SessionHttp, SessionLive, SessionRpcLive, SessionStore } from "@ea/modules/iam/server/Session"
 import { DocumentParserText } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
+import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
 import { Db } from "@ea/modules/shared/tables/Database"
-import { Effect, Layer, ManagedRuntime } from "effect"
+import { Layer, ManagedRuntime, Redacted } from "effect"
 import { HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { RpcSerialization, RpcServer } from "effect/rpc"
-import { HealthHttp } from "./Health/Health.http.ts"
+import { HealthHttp } from "./Health/HealthHttp.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
+import { CacheKv } from "./platform/CacheKv.ts"
+import { dispatchEvent } from "./platform/DispatchEvent.ts"
 import { ConnectHyperdrive, ReactivityLive } from "./platform/HyperdriveConnect.ts"
 import { IdsUuid } from "./platform/Ids.ts"
 import { EventQueue, QueueBus } from "./platform/QueueBus.ts"
 import { consumeBatch, type QueueBatchLike } from "./platform/QueueHandler.ts"
+import { TelemetryAnalytics } from "./platform/TelemetryAnalytics.ts"
+import { TelemetryOtlp } from "./platform/TelemetryOtlp.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
 
 /**
@@ -60,7 +66,9 @@ import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
 const SliceBindings = (env: Env) =>
   Layer.mergeAll(
     Layer.succeed(DocumentBucket)(env.DOCUMENTS),
-    Layer.succeed(SessionStore)({ connectionString: env.HYPERDRIVE.connectionString }),
+    Layer.succeed(SessionStore)({
+      connectionString: env.HYPERDRIVE.connectionString
+    }),
     Layer.succeed(EventQueue)(env.EVENTS)
   )
 
@@ -87,11 +95,47 @@ const ServicesLayer = (env: Env) =>
     DocumentParserText,
     IdsUuid,
     BlobsR2,
-    QueueBus
+    QueueBus,
+    /*
+     * The models, on the BINDING transport — no fetch, no URL, no token.
+     *
+     * This is the answer to "why does the adapter build a Cloudflare URL": it does not, here. The REST
+     * transport in those adapters exists for the eval harness, which runs in Node and cannot hold a
+     * binding. In the Worker the binding *is* the authorisation, and `env.AI` is the whole declaration.
+     *
+     * The gateway travels as a run option rather than a hostname, because a binding cannot be pointed at
+     * one. Absent means direct, unmetered and uncached — which is a real state worth being able to see,
+     * so it is logged at startup rather than left implicit.
+     */
+    CacheKv(env.CACHE),
+    /*
+     * The product's own numbers. Not spans — those already exist and are exported separately below.
+     *
+     * `Activity` wraps every workflow step in `Effect.withSpan`, `effect/sql` traces queries and
+     * `LanguageModel` traces model calls, so latency and causality come free. What none of them can report
+     * is how often this system refuses and whether its refusals are grounded, which is the number a client
+     * actually asks about — and per plan risk R1, a FALLING refusal rate is an alarm rather than a win.
+     */
+    TelemetryAnalytics(env.METRICS),
+    EmbedderWorkersAiBinding(env.AI),
+    LanguageModelWorkersAiBinding(env.AI, WORKERS_AI_MODEL, env.AI_GATEWAY)
   ).pipe(
     Layer.provideMerge(SliceBindings(env)),
     Layer.provideMerge(Layer.succeed(Bindings)(env)),
     Layer.provideMerge(ReactivityLive),
+    /*
+     * Span export, when an endpoint is configured.
+     *
+     * `Layer.empty` when it is not: a Worker that refused to start without an observability backend would
+     * make telemetry an availability dependency, which is the wrong trade for a drain.
+     */
+    Layer.provide(
+      env.OTLP_ENDPOINT === undefined ? Layer.empty : TelemetryOtlp({
+        endpoint: env.OTLP_ENDPOINT,
+        headers: env.OTLP_HEADERS === undefined ? undefined : Redacted.make(env.OTLP_HEADERS),
+        serviceVersion: env.VERSION
+      })
+    ),
     Layer.provide(layerConfigProvider(env))
   )
 
@@ -182,14 +226,16 @@ export default {
    * The queue consumer.
    *
    * Every message is acked or retried **individually** — see QueueHandler.ts for why `ackAll`/`retryAll`
-   * are never used. The work each message triggers is not wired yet: `document.decide` runs the decide
-   * pipeline at step 9, when the execute branch lands and both paths provably call one function. Until
-   * then a message is read, recorded and acked, which is enough to prove the plumbing and the batch
-   * semantics without pretending the pipeline is connected.
+   * are never used. What each message *does* is `dispatchEvent`, which is the piece that was missing:
+   * this handler used to pass a constant `Done`, so every message was acked unprocessed and the deployed
+   * Worker could not decide a document even though the pipeline was built and tested
+   * (docs/services.md §3.1).
    */
-  async queue(batch: QueueBatchLike, env: Env, _ctx: ExecutionContext): Promise<void> {
-    await getQueueRuntime(env).runPromise(
-      consumeBatch(batch, () => Effect.succeed({ _tag: "Done" as const }))
-    )
+  async queue(
+    batch: QueueBatchLike,
+    env: Env,
+    _ctx: ExecutionContext
+  ): Promise<void> {
+    await getQueueRuntime(env).runPromise(consumeBatch(batch, dispatchEvent))
   }
 } satisfies ExportedHandler<Env>

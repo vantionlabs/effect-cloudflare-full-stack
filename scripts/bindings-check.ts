@@ -14,6 +14,12 @@
  * It compares binding *names*, not ids: ids are expected to differ per environment (that is
  * the entire point), while a missing name is always a mistake.
  *
+ * **Second check: does every resource Pulumi creates actually get bound?** Different failure, same class of
+ * silence. `infra/index.ts` created a `WorkersKvNamespace` for the better-auth session cache and exported
+ * its id, while `wrangler.jsonc` had no `kv_namespaces` block and no code read one — so the namespace was
+ * billed, the plan described a cache, and every session lookup went to Postgres. Nothing objected, because
+ * the two files were each internally consistent. See docs/services.md §3.
+ *
  *   bun scripts/bindings-check.ts
  */
 import { readFileSync } from "node:fs"
@@ -180,4 +186,117 @@ if (failures.length > 0) {
 console.log(
   `✓ bindings consistent across ${environments.length} environment(s) ` +
     `(${expected.size} binding${expected.size === 1 ? "" : "s"}: ${[...expected].join(", ")})`
+)
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Check 2: Pulumi resources versus Wrangler bindings
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Pulumi resource type → the Wrangler key that binds it.
+ *
+ * Checked at the level of the KIND, not the individual resource, and that is deliberate: the DLQ is a real
+ * `Queue` with no binding of its own (it is referenced as `dead_letter_queue`), so a per-resource check
+ * would report it forever. "Pulumi creates queues, therefore Wrangler must bind a queue" is the invariant
+ * that holds.
+ */
+const RESOURCE_TO_BINDING: Record<string, string> = {
+  R2Bucket: "r2_buckets",
+  WorkersKvNamespace: "kv_namespaces",
+  Queue: "queues",
+  HyperdriveConfig: "hyperdrive",
+  D1Database: "d1_databases",
+  VectorizeIndex: "vectorize"
+}
+
+/**
+ * Pulumi resources that are legitimately NOT bindings, with the reason.
+ *
+ * Listed explicitly rather than left out of `RESOURCE_TO_BINDING`, because "absent from a map" is
+ * indistinguishable from "forgotten". A reader should be able to tell that a resource was considered.
+ */
+const RESOURCE_NEEDS_NO_BINDING: Record<string, string> = {
+  AiGateway: "reached through the `ai` binding's gateway option, or a gateway URL — not a binding of its own",
+  AiGatewayDynamicRouting: "configuration on a gateway",
+  R2CustomDomain: "configuration on a bucket"
+}
+
+/**
+ * Bindings that legitimately have no Pulumi resource, with the reason.
+ *
+ * `ai` is the interesting one and the shape to aim for: the binding IS the authorisation. No account id,
+ * no token, no resource — which is why adopting Workers AI for embeddings required no infrastructure
+ * change at all.
+ */
+const NEEDS_NO_RESOURCE: Record<string, string> = {
+  ai: "the binding is the authorisation; Workers AI has no resource to create",
+  durable_objects: "defined by the Worker's own exported class plus a migration, not by a resource",
+  services: "a reference to another Worker, which is deployed rather than provisioned",
+  analytics_engine_datasets: "a dataset is created implicitly on first write"
+}
+
+const infraPath = new URL("../infra/index.ts", import.meta.url).pathname
+const infraSource = readFileSync(infraPath, "utf8")
+
+/*
+ * Matches `new cloudflare.R2Bucket(` — a regex over source rather than evaluating the program, because
+ * evaluating it would need Pulumi's engine and credentials, and this check has to run in CI on a fork.
+ * The cost is that a resource created dynamically would be missed; there are none, and a comment is
+ * cheaper than a runtime.
+ */
+const declaredKinds = new Set(
+  [...infraSource.matchAll(/new\s+cloudflare\.([A-Za-z0-9_]+)\s*\(/g)].map((match) => match[1]!)
+)
+
+const boundKeys = new Set([...expected].map((name) => name.split(":")[0]!))
+const mismatches: Array<string> = []
+
+for (const kind of declaredKinds) {
+  if (kind in RESOURCE_NEEDS_NO_BINDING) continue
+  const key = RESOURCE_TO_BINDING[kind]
+  /*
+   * An unrecognised resource kind is REPORTED, not skipped.
+   *
+   * Skipping it is how this check would rot: someone adds a `VectorizeIndex` or a `D1Database`, the map
+   * has no entry, and the check quietly approves. Naming it forces a one-line decision — either it maps
+   * to a binding, or it is one of the kinds above that does not need one.
+   */
+  if (key === undefined) {
+    mismatches.push(
+      `infra/index.ts creates a ${kind}, which this check does not know about\n` +
+        `    Add it to RESOURCE_TO_BINDING (if it needs a binding) or to RESOURCE_NEEDS_NO_BINDING\n` +
+        `    (with the reason it does not). Silence here would mean an unbound resource passes.`
+    )
+    continue
+  }
+  if (!boundKeys.has(key)) {
+    mismatches.push(
+      `infra/index.ts creates a ${kind}, but wrangler.jsonc binds no "${key}"\n` +
+        `    The resource is provisioned and billed, and no code can reach it. Either add the binding\n` +
+        `    (and use it), or delete the resource — an unbound resource is a claim the code does not honour.`
+    )
+  }
+}
+
+for (const key of boundKeys) {
+  if (key in NEEDS_NO_RESOURCE) continue
+  const kinds = Object.entries(RESOURCE_TO_BINDING).filter(([, value]) => value === key).map(([kind]) => kind)
+  if (kinds.length > 0 && !kinds.some((kind) => declaredKinds.has(kind))) {
+    mismatches.push(
+      `wrangler.jsonc binds "${key}", but infra/index.ts creates none of ${kinds.join(", ")}\n` +
+        `    So the resource was made by hand and nobody can reproduce or review it. Declare it in Pulumi,\n` +
+        `    or add it to NEEDS_NO_RESOURCE with the reason.`
+    )
+  }
+}
+
+if (mismatches.length > 0) {
+  console.error(`\n✗ ${mismatches.length} infrastructure/binding mismatch(es):\n`)
+  for (const mismatch of mismatches) console.error(`  ${mismatch}\n`)
+  process.exit(1)
+}
+
+console.log(
+  `✓ every Pulumi resource kind is bound, and every binding has a resource or a reason ` +
+    `(${declaredKinds.size} resource kinds, ${boundKeys.size} binding kinds)`
 )

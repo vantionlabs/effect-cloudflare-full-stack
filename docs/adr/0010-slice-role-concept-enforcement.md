@@ -76,3 +76,40 @@ Both are allow-listed by path rather than by pattern, so adding a third is a vis
 
 A role directory has been empty for two slices running, or the package count starts costing more in
 `bun install` churn and manifest edits than the enforced boundaries return.
+
+---
+
+## Revision, 2026-09-29: the facet suffixes are dropped
+
+**Status of this ADR:** the slice × role × concept _structure_ stands and is enforced. The **facet suffix
+vocabulary is withdrawn.**
+
+Files are now plain PascalCase with the filename equal to the primary exported symbol, and no dots:
+`Decision.model.ts` → `Decision.ts`, `Decision.table.ts` → `DecisionTable.ts`, `Session.live.ts` →
+`SessionLive.ts`, `Identity.middleware.ts` → `Authenticated.ts`. 46 files renamed.
+
+**Why, and what the original argument got wrong.** The suffixes were justified by greppability — _"`rg
+--files -g '*.table.ts'` is every table; `-g '*.rpc.ts'` every transport surface"_. That was true and it
+was not load-bearing, because **nothing actually used it.** `scripts/boundaries.ts` keys on ring
+_directories_ (`/tables/`, `/domain/`, `/server/`), not on filename suffixes — which is strictly better,
+since a file cannot be in the wrong directory without the move being visible in a diff, while a suffix is
+a claim a file makes about itself.
+
+So the vocabulary was a second naming system to keep in step with the first, buying a search that a
+directory glob already answers. `rg --files packages/modules/*/tables` is every table.
+
+**What was verified before the rename, not after.** The concern was that dropping the suffixes would
+silently break the boundary rules. It did not — but checking produced a better finding: the tenant
+predicate rule matched `sql` templates with `/sql(?:<[^>]*>)?`/`, which stops the row-type annotation at
+the first`>`. A statement whose generic spans lines or nests never matched, and an unmatched statement is
+**silently skipped**. Measured on fixing it: **26 tenant statements seen before, 30 after.** The four it
+had never read included two reads of`decisions`in`ListQueue`and the`rules` read that rail 3's
+condition evaluation depends on.
+
+That bug was found by a negative test that kept passing — patching a statement to use a caller-supplied
+organization produced no failure, because the rule was not reading the statement at all. Which is the
+general lesson worth keeping from this revision: **a check that has never been seen to fail is not a
+check**, and that applies to the suffix convention too. It was never tested because nothing depended on it.
+
+**Revisit when** a tool genuinely needs to select files by role _within_ a directory — a codegen step, or a
+bundler rule that cannot express a path. Then reach for a directory, not a suffix.

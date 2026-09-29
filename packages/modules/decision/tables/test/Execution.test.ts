@@ -14,7 +14,7 @@ import { DryRunAdapter } from "@ea/modules/decision/server/Execution"
 import { ApproveDecision, RejectDecision } from "@ea/modules/decision/use-cases/Decision"
 import { ExecuteDecision, executionKey } from "@ea/modules/decision/use-cases/Execution"
 import { EventBus, type EventBusService } from "@ea/modules/shared/domain/Event"
-import { CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
+import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
 import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { PgClient } from "@effect/sql-pg"
@@ -59,6 +59,7 @@ const run = <A, E>(
   Effect.runPromise(
     effect.pipe(
       Effect.provideService(CurrentUser, identity(userId)),
+      Effect.provideService(CurrentOrg, ORG),
       Effect.provide(Layer.mergeAll(Db.layer, IdsLive, DryRunAdapter, extra as Layer.Layer<never>)),
       Effect.provide(Admin)
     ) as Effect.Effect<A, E, never>

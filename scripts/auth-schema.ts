@@ -15,7 +15,7 @@
  */
 import { getAuthTables } from "better-auth/db"
 import { readFileSync } from "node:fs"
-import { makeAuth } from "../packages/modules/iam/server/Session/Session.betterauth.ts"
+import { makeAuth } from "../packages/modules/iam/server/Session/BetterAuth.ts"
 
 /** A throwaway config: only the plugin list affects the emitted schema. */
 const auth = makeAuth({
@@ -175,7 +175,7 @@ ${statements.map((s) => `  yield* sql\`\n    ${s.split("\n").join("\n    ")}\n  
 `
 
 const target = new URL(
-  "../packages/modules/iam/tables/Session/Session.table.ts",
+  "../packages/modules/iam/tables/Session/SessionTable.ts",
   import.meta.url
 ).pathname
 
@@ -183,7 +183,7 @@ if (process.argv.includes("--check")) {
   const existing = readFileSync(target, "utf8")
   if (existing.trim() !== body.trim()) {
     console.error(
-      "✗ Session.table.ts has drifted from the installed better-auth schema.\n" +
+      "✗ SessionTable.ts has drifted from the installed better-auth schema.\n" +
         "  better-auth probably changed its tables. Run `bun scripts/auth-schema.ts`, review the\n" +
         "  diff, and commit it as a migration rather than editing the file by hand."
     )
@@ -192,5 +192,5 @@ if (process.argv.includes("--check")) {
   console.log(`✓ auth schema matches the installed better-auth (${tableNames.length} tables)`)
 } else {
   await Bun.write(target, body)
-  console.log(`wrote Session.table.ts — ${tableNames.length} tables: ${tableNames.join(", ")}`)
+  console.log(`wrote SessionTable.ts — ${tableNames.length} tables: ${tableNames.join(", ")}`)
 }

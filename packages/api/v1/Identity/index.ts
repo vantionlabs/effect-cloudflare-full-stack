@@ -1,3 +1,3 @@
 // The concept's curated public surface.
-export * from "./Identity.http.ts"
-export * from "./Identity.rpc.ts"
+export * from "./IdentityHttp.ts"
+export * from "./IdentityRpcLive.ts"

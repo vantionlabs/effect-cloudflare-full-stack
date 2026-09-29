@@ -1,20 +1,21 @@
 #!/usr/bin/env bun
 /**
- * Verifies the five things this design assumes about its Postgres, against a real database.
+ * Verifies the four things this design assumes about its Postgres, against a real database.
  *
- * Every one of them has only ever been tested against the local compose container, which is a
- * `pgvector/pgvector:pg17` image where the connecting user is a superuser. A managed provider is a different
- * situation on exactly the axes that matter here, and two of these assumptions are load-bearing:
+ * Every one of them was written when the only database was the local compose container. That container is
+ * now pinned to `pgvector/pgvector:0.8.5-pg18` to match this script's own reading of production (18.6 /
+ * pgvector 0.8.5), so the two agree — but the container's user is a superuser and a managed provider's is
+ * not, which is the axis that matters:
  *
  *   1. **pgvector** — no vector column, no semantic retrieval.
- *   2. **CREATE ROLE** — the whole tenancy model is `set local role effect_ai_app` plus RLS. Without the role,
- *      a superuser connection bypasses every policy and the app-layer predicate is all that separates
- *      tenants. This is the one most likely to be refused by a managed provider, and the most expensive to
- *      discover late.
- *   3. **SET ROLE** — creating the role is not enough; the connecting user must be able to become it.
- *   4. **The `dutch` text search configuration** — real Snowball stemming is a large part of why the corpus
+ *   2. **CREATE ROLE / SET ROLE** — no longer load-bearing. RLS was removed (ADR-0014), so nothing depends
+ *      on a separate app role. These two checks stay because they are what the ADR's own reasoning turned
+ *      on: this script is how we learned the branch role has `createrole=true, superuser=false`, which
+ *      falsified a claim that PlanetScale refuses it. Keeping them means a future "just turn RLS back on"
+ *      starts from a measurement rather than a guess.
+ *   3. **The `dutch` text search configuration** — real Snowball stemming is a large part of why the corpus
  *      lives in Postgres at all. Without it, hybrid retrieval loses its lexical half.
- *   5. **Generated columns calling `to_tsvector`** — `document_chunks.tsv` is generated, which requires the
+ *   4. **Generated columns calling `to_tsvector`** — `document_chunks.tsv` is generated, which requires the
  *      two-argument form to be IMMUTABLE. It is, but a provider could ship a patched catalogue.
  *
  *   bun run db:verify            # reads DATABASE_URL, or apps/worker/.env
@@ -87,9 +88,21 @@ const checks: ReadonlyArray<Check> = [
     )
   },
   {
-    name: "not connecting as a superuser",
+    /*
+     * Named for what it REPORTS, not for what it would like to be true.
+     *
+     * This was called "not connecting as a superuser" and passed on `rolcreaterole || rolsuper` — so it
+     * printed a green tick against `superuser=true`, asserting the opposite of what it had measured. Caught
+     * on the 17→18 bump, by reading output that had been green for weeks.
+     *
+     * It is informational and not a gate, because since ADR-0014 nothing depends on the answer. It is worth
+     * printing anyway: a superuser connection would silently bypass any RLS someone adds later, and the
+     * asymmetry between this container (superuser) and PlanetScale (not) is exactly the kind of difference
+     * that makes a tenancy test pass locally and mean nothing.
+     */
+    name: "role privileges (reported, not gated)",
     why:
-      "not fatal since RLS was removed (ADR-0014), but a superuser connection means any future RLS would be silently bypassed — and it is worth knowing which you have",
+      "nothing depends on this since RLS was removed (ADR-0014), but a superuser connection would silently bypass any future RLS — so which one you have is worth printing",
     run: query<{ rolcreaterole: boolean; rolsuper: boolean; usr: string }>((sql) =>
       sql`
         select rolcreaterole, rolsuper, current_user as usr from pg_roles where rolname = current_user
@@ -173,7 +186,7 @@ const main = async () => {
   if (failed > 0) {
     console.error(
       `\n✗ ${failed} assumption(s) do not hold. Do NOT migrate yet — read each one above: some are\n` +
-        "  survivable with a design change, and the role one is not."
+        "  survivable with a design change, and pgvector and the dutch configuration are not."
     )
     process.exit(1)
   }

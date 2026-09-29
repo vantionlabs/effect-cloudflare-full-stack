@@ -8,11 +8,11 @@
 // `HttpApiBuilder.group` needs the whole `HttpApi` value, so a handler living in a module would make
 // modules and api mutually dependent. Worth noting that RPC has no such constraint — `group.toLayer`
 // needs only the group — so the asymmetry belongs to the HTTP builder, not to this layout.
-export * from "./Decision/Decision.rpc.ts"
-export * from "./Health/Health.wire.ts"
-export * from "./Identity/Identity.http.ts"
-export * from "./Identity/Identity.rpc.ts"
-export * from "./Intake/Intake.http.ts"
-export * from "./Intake/Intake.rpc.ts"
-export * from "./V1.api.ts"
-export * from "./V1.rpc.ts"
+export * from "./ApiV1.ts"
+export * from "./Decision/DecisionRpcLive.ts"
+export * from "./Health/HealthWire.ts"
+export * from "./Identity/IdentityHttp.ts"
+export * from "./Identity/IdentityRpcLive.ts"
+export * from "./Intake/IntakeHttp.ts"
+export * from "./Intake/IntakeRpcLive.ts"
+export * from "./RpcV1.ts"

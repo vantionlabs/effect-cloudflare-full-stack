@@ -1,2 +1,2 @@
 // The concept's curated public surface.
-export * from "./Health.wire.ts"
+export * from "./HealthWire.ts"

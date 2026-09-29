@@ -19,9 +19,11 @@
 import { Blobs, DocumentId, DocumentParser } from "@ea/modules/intake/domain/Document"
 import { IntakeId } from "@ea/modules/intake/domain/Intake"
 import type { Collection } from "@ea/modules/shared/domain/Corpus"
+import { decideEventKey } from "@ea/modules/shared/domain/Event"
 import { CurrentUser } from "@ea/modules/shared/domain/Identity"
 import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
+import { EmitEvent } from "@ea/modules/shared/use-cases/Event"
 import { Effect } from "effect"
 
 export interface UploadInput {
@@ -37,6 +39,16 @@ interface UploadResult {
   /** Characters of extracted text. Lets a caller sanity-check the parse without a second request. */
   readonly textLength: number
 }
+
+/**
+ * The vertical an uploaded transactional document is decided as.
+ *
+ * Hardcoded because there is exactly one, and named rather than inlined so the day a second arrives the
+ * question "where is the vertical chosen?" has one answer. Choosing it will be a real decision — from the
+ * content type, a client's configuration, or a classifier — and it should not be discovered as a string
+ * literal buried in an insert.
+ */
+const INVOICE_VERTICAL = "invoice"
 
 export const IngestUpload = (input: UploadInput) =>
   Effect.gen(function*() {
@@ -81,6 +93,26 @@ export const IngestUpload = (input: UploadInput) =>
         `
       })
     )
+
+    /*
+     * (4) Emit `document.decide` — the link that makes the pipeline fire.
+     *
+     * Without this the decide workflow was wired and never triggered: a document was stored, rows were
+     * written, and nothing ever asked for a decision. Deliberately AFTER the transaction rather than inside
+     * it, which is the outbox shape the plan describes — `EmitEvent` writes its own `events` row and then
+     * sends, so a failed send leaves a recoverable `queued` row for the sweeper rather than losing the work.
+     *
+     * **Only transactional documents.** A policy document is corpus, not a case: deciding one would extract
+     * invoice fields from a procurement policy and route the nonsense to a human. The `collection` column
+     * is what separates the two everywhere else, and it is what separates them here.
+     */
+    if (input.collection === "transactional") {
+      yield* EmitEvent({
+        type: "document.decide",
+        idempotencyKey: decideEventKey(documentId, INVOICE_VERTICAL),
+        payload: { documentId, vertical: INVOICE_VERTICAL }
+      })
+    }
 
     return { documentId, intakeId, textLength: parsed.text.length } satisfies UploadResult
   })

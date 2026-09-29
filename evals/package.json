@@ -10,5 +10,10 @@
   },
   "devDependencies": {
     "@types/node": "catalog:"
+  },
+  "scripts": {
+    "evals": "bun Decisions.ts",
+    "evals:rule": "bun CheckRule.ts",
+    "evals:retrieval": "bun RetrievalRecall.ts"
   }
 }

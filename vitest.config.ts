@@ -25,8 +25,10 @@ export default defineConfig({
         }
       },
       {
-        // Table tests: real Postgres, real RLS policies, real non-superuser role. Pure
-        // domain tests stay in the `domain` project, which needs no infrastructure at all.
+        // Table tests: real Postgres, real pgvector, real Dutch stemming, real SQL. Pure domain
+        // tests stay in the `domain` project, which needs no infrastructure at all. (This used to
+        // say "real RLS policies, real non-superuser role"; RLS was removed in ADR-0014, and the
+        // tenant predicate is now enforced statically by `scripts/boundaries.ts` instead.)
         test: {
           name: "tables",
           include: ["packages/modules/*/tables/test/**/*.test.ts"],
@@ -36,6 +38,17 @@ export default defineConfig({
           environment: "node",
           testTimeout: 30_000,
           hookTimeout: 30_000
+        }
+      },
+      {
+        // The eval harness's own fixtures. The labelled set is generated code, and a generator whose
+        // spans do not occur in the document it printed would make every downstream number a
+        // measurement of that bug — so the properties the harness rests on are asserted here, where
+        // they cost milliseconds, rather than discovered as a suspiciously bad grounded rate.
+        test: {
+          name: "evals",
+          include: ["evals/test/**/*.test.ts"],
+          environment: "node"
         }
       },
       {

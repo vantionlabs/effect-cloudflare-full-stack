@@ -13,10 +13,10 @@ jobs:
   preflight:
     runs-on: ubuntu-latest
     services:
-      # The same image as compose.yaml, so tests run against real pgvector and the real
-      # Dutch stemmer rather than a stand-in.
+      # The same image as compose.yaml, pinned to match PlanetScale (18.x / pgvector 0.8.5), so
+      # tests run against real pgvector and the real Dutch stemmer rather than a stand-in.
       postgres:
-        image: pgvector/pgvector:pg17
+        image: pgvector/pgvector:0.8.5-pg18
         env:
           POSTGRES_USER: effect_ai
           POSTGRES_PASSWORD: ci_only

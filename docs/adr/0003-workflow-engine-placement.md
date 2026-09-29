@@ -92,8 +92,54 @@ get the same `UnsupportedDocument` wastes exactly the money the memo saves. A de
 
 ## Revisit when
 
-Approval chains need to be genuinely multi-step and durable — an escalation that waits three days for a
-second approver, say. At that point Cloudflare Workflows is the answer, not a bigger engine.
+**1. `@effect/platform-cloudflare` publishes its `CloudflareWorkflowEngine`.** This is new since the ADR
+was written and is now the most likely trigger, so it goes first.
+
+[Effect-TS/effect#7322](https://github.com/Effect-TS/effect/pull/7322) adds
+`CloudflareWorkflowEngine.ts` — an official `WorkflowEngine` backed by Durable Objects, with its own
+storage, runtime, registry and wire, plus unit and integration tests. Open since 2026-08-18, +14,344
+lines, several slices already merged. Not published to npm as of 2026-09-29 (`references.md` has the
+dated check), and the maintainers have asked for no feedback yet.
+
+Why it matters more than "a maintained alternative to 200 lines we own":
+
+- **It would lift both lint-enforced constraints.** Ours stubs `deferredResult` and `scheduleClock`, which
+  is _why_ `DurableDeferred` and `DurableClock.sleep > 60 s` are banned. A DO-backed engine has alarms, so
+  both become available — and that is precisely the durable-suspend capability trigger 2 below was
+  written for. The trigger it anticipated (Cloudflare Workflows) may arrive as an Effect-native engine
+  instead, which is a strictly better answer because the workflow body stays an Effect rather than
+  inverting into a `WorkflowEntrypoint` class.
+- **The forgeable-token objection does not go away.** A `DurableDeferred` token is still unsigned
+  base64url of `[workflowName, executionId, deferredName]`. Adopting the engine does not mean adopting
+  suspend for the approval boundary; docket's §6 argument for "the human pause is a database row" stands
+  on its own and should be re-argued, not assumed to have expired.
+- **The decision is cheap to reverse**, and that was designed in: `WorkflowEngine` is the seam, the
+  pipeline is four named activities, and `DecideDocument` never mentions Postgres. Swapping engines is a
+  layer change plus a data migration for in-flight executions.
+
+What to check when it lands: that it runs without `effect/cluster`'s sharding loops (the reason cluster
+itself was rejected), what it costs per execution in DO requests and storage against a Postgres row, and
+whether `activityExecute`'s memo is atomic under a Queues redelivery in the way a Postgres `ON CONFLICT`
+is.
+
+**2. Approval chains need to be genuinely multi-step and durable** — an escalation that waits three days
+for a second approver, say. At that point a durable suspend is required, and the answer is
+`CloudflareWorkflowEngine` if it has shipped, or Cloudflare Workflows if it has not. Not a bigger engine
+of our own.
+
+## What has since been confirmed
+
+Two of this ADR's load-bearing readings were made from the source and have since been stated outright by
+an Effect maintainer (office hours 2026-09-26, `references.md`):
+
+- **`effect/cluster` is for persistent servers, not serverless** — _"right now cluster is really designed
+  for persistent servers. So it's not really compatible with serverless architecture right now."_ That is
+  the conclusion this ADR reached by counting `sql.withTransaction` calls and reading the sharding loops.
+- **Writing an engine was the only option** — _"right now we only have a cluster workflow engine. We have
+  an in-memory one too, but that's not really durable."_ So this was not a wheel already available.
+
+Also confirmed: workflows are independent of cluster, and a third-party engine is an intended extension
+point. The parts of this ADR now dated by external work are the _alternatives_, not the analysis.
 
 ## Note on this ADR's number
 

@@ -1,6 +1,13 @@
 /**
  * Extraction: document text in, typed fields with provenance out, both model-free checks applied.
  *
+ * **The worked example in `INSTRUCTIONS` is there because a real model failed without it.** The first
+ * end-to-end eval run had every case escalate to `needs_human`, and the cause was that the model set
+ * `value` to the whole printed line — `"**Totaal inclusief BTW: EUR 839,07**"` — so `parseMoney` refused
+ * it, the arithmetic check failed, and rail 1 fired on all of them. "Copy it exactly as printed" reads, to
+ * a model, as an instruction to copy the line. The scripted double always returns clean values, so no unit
+ * test could see this; it took `bun run evals`.
+ *
  * Reachable with **no API key, no database and no network** — its only port is `LanguageModel`, so
  * the scripted double exercises the whole thing including both checks. That is where most of this
  * codebase's test value lives, and it exists only because nothing here knows about SQL or bindings.
@@ -25,12 +32,30 @@ import { arithmeticOk, type ArithmeticReport } from "../../domain/Invoice/CheckA
  */
 const INSTRUCTIONS = `You extract structured fields from a business document.
 
+Every field has TWO parts and they are not the same thing:
+
+- \`source_span\`: the surrounding text from the document, copied character for character, showing where
+  you read the value. It may include a label, a table cell, or formatting characters.
+- \`value\`: the field ITSELF and nothing else. No label, no currency code, no markdown \`**\`, no colon,
+  no surrounding words.
+
+Worked example. If the document contains the line:
+
+    **Totaal inclusief BTW: EUR 1.234,56**
+
+then the correct field is:
+
+    { "source_span": "**Totaal inclusief BTW: EUR 1.234,56**", "value": "1.234,56" }
+
+NOT \`"value": "**Totaal inclusief BTW: EUR 1.234,56**"\` and NOT \`"value": "EUR 1.234,56"\`. The same
+applies to a name: a span of \`**Acme Industrieel BV**\` has the value \`Acme Industrieel BV\`.
+
 Rules you must follow:
-- Every field carries a \`source_span\`: the verbatim text from the document that the value was read
-  from. Copy it character for character. Do not paraphrase it, reformat numbers or dates inside it,
-  or translate it.
-- Amounts and quantities are strings, copied exactly as printed, separators and all. Do not convert
-  them to plain numbers. \`1.234,56\` stays \`1.234,56\`.
+- Amounts and quantities are strings, with their separators exactly as printed. Do not convert them to
+  plain numbers and do not change the separators. \`1.234,56\` stays \`1.234,56\`.
+- \`source_span\` is NEVER empty. Every field you return must point at text you can actually see. If you
+  cannot find text to quote, omit the whole field rather than sending an empty span — an empty span
+  grounds nothing and the field will be rejected.
 - If the document does not state a field, omit it. Never guess a value, and never write a
   source_span for text that is not in the document.
 - Do not compute totals or sums. Read what is printed. Arithmetic is checked separately, and a

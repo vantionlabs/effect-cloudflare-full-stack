@@ -24,7 +24,7 @@ import {
   rateInPerMille
 } from "@ea/modules/shared/domain/Money"
 import { Result } from "effect"
-import type { Invoice } from "./Invoice.model.ts"
+import type { Invoice } from "./Invoice.ts"
 
 /**
  * Rounding slack, in cents. Invoices round per line, so a cent or two of drift on a multi-line total

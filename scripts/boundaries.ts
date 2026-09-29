@@ -25,6 +25,11 @@ interface Rule {
   readonly permitted?: (path: string, specifier: string) => boolean
 }
 
+const COMPOSITION_ROOT = new Set([
+  "apps/worker/src/Main.ts",
+  "apps/worker/src/platform/DispatchEvent.ts"
+])
+
 const MODULES = "packages/modules/"
 
 /** `packages/modules/<slice>/<role>/...` → `<slice>`, or undefined outside the modules package. */
@@ -90,12 +95,22 @@ const rules: ReadonlyArray<Rule> = [
       }
     ]
   },
+  /*
+   * The composition root is TWO files, not one, and the split is forced rather than chosen.
+   *
+   * `Main.ts` composes the HTTP half. `DispatchEvent.ts` composes the queue half, and it has to be a
+   * separate file because `WorkflowEnginePg` captures its connection and its tenant at layer build — so it
+   * cannot live in the memoised app graph, and cannot be built before `ConsumeEvent` has resolved the
+   * organization from the event row. Both name adapters; neither holds business logic beyond one `switch`.
+   *
+   * Kept as an explicit set rather than a prefix so that a third file cannot join by accident.
+   */
   {
     label: "nothing but the composition root may reach into a server ring",
     appliesTo: (p) =>
       p.startsWith(MODULES) ||
       p.startsWith("packages/api/") ||
-      (p.startsWith("apps/worker/src/") && p !== "apps/worker/src/Main.ts"),
+      (p.startsWith("apps/worker/src/") && !COMPOSITION_ROOT.has(p)),
     forbidden: [
       {
         pattern: /^@ea\/modules\/[a-z-]+\/server(\/|$)/,
@@ -271,15 +286,43 @@ const TENANT_TABLES = new Set([
   "workflow_activities"
 ])
 
-const unscopedTenantQueries = (): Array<string> => {
+/**
+ * The one legitimate exemption, and it has to be written INTO the SQL.
+ *
+ * Some reads cannot filter by tenant because the tenant is what they are asking for — resolving a session
+ * token, an API key by hash, or the organization that owns a queued event, which arrives as an id and
+ * nothing else (a message that named its own organization would be a hole in the seam).
+ *
+ * So the escape is an explicit marker inside the statement rather than a path or a wrapper this script
+ * tries to infer. Three properties follow, all of them wanted: the author has to write the claim down next
+ * to the query, `rg "tenant: the organization is the answer"` is the complete list, and the count is
+ * printed on every run so growth is visible rather than quiet.
+ */
+const TENANT_IS_THE_ANSWER = "tenant: the organization is the answer"
+
+const unscopedTenantQueries = (): { readonly found: Array<string>; readonly exempt: Array<string> } => {
   const found: Array<string> = []
+  const exempt: Array<string> = []
   for (const absolute of walk(join(root, "packages"))) {
     const path = relative(root, absolute)
     // Migrations legitimately touch these tables without a tenant: they create them.
     if (path.includes("/test/") || path.includes("/tables/") || path.endsWith("Db.ts")) continue
     const source = readFileSync(absolute, "utf8")
 
-    for (const match of source.matchAll(/sql(?:<[^>]*>)?`([^`]*)`/g)) {
+    /*
+     * `[\s\S]*?` for the generic annotation, NOT `[^>]*`.
+     *
+     * The first version stopped the annotation at the first `>`, so a statement whose row type spans
+     * multiple lines or contains a nested generic never matched — and an unmatched statement is **silently
+     * skipped**, which is the worst possible failure for a rule like this. Measured when it was fixed:
+     * 26 tenant statements seen before, **30 after**. The four it had never looked at included
+     * `ListQueue`'s two reads of `decisions` and the `rules` read added when rail 3 started evaluating
+     * conditions.
+     *
+     * Found by writing a negative test that kept passing: patching a statement to use a caller-supplied
+     * org produced no failure, because the statement was not being read at all.
+     */
+    for (const match of source.matchAll(/sql(?:<[\s\S]*?>)?\s*`([^`]*)`/g)) {
       const body = match[1]!
       const lower = body.toLowerCase()
       const tables = [...body.matchAll(/(?:from|into|update)\s+([a-z_]+)/g)]
@@ -289,22 +332,94 @@ const unscopedTenantQueries = (): Array<string> => {
 
       const isInsert = lower.includes("insert into")
       const scoped = isInsert
-        ? lower.includes("organization_id") && lower.includes("${orgid}")
-        : /organization_id\s*=\s*\$\{orgId\}/.test(body)
+        // Same reasoning as the read branch below: the identifier may be renamed, the intent may not.
+        ? lower.includes("organization_id") && /\$\{[a-z_]*orgid\}/.test(lower)
+        /*
+         * Any identifier ENDING in `orgId`, with no dots — so `${orgId}` and `${scopedOrgId}` both pass
+         * while `${input.orgId}` does not.
+         *
+         * It used to require the literal name `orgId`, and renaming a shadowed callback parameter in
+         * `WorkflowEnginePg` to `scopedOrgId` silently un-matched six statements and failed this check. A
+         * rule that mandates a variable name is checking spelling, not scoping. The no-dots part is what
+         * keeps the intent: the value has to be the one the seam handed the callback, not something reached
+         * through a caller-supplied object — which is the hole `Db` exists to close.
+         */
+        : /organization_id\s*=\s*\$\{[A-Za-z_]*[Oo]rgId\}/.test(body)
 
       if (!scoped) {
-        found.push(`${path}\n      touches ${[...new Set(tables)].join(", ")} without an organization filter`)
+        if (body.includes(TENANT_IS_THE_ANSWER)) {
+          exempt.push(`${path} — ${[...new Set(tables)].join(", ")}`)
+        } else {
+          found.push(`${path}\n      touches ${[...new Set(tables)].join(", ")} without an organization filter`)
+        }
       }
+    }
+  }
+  return { found, exempt }
+}
+
+const tenantQueries = unscopedTenantQueries()
+
+/*
+ * Printed even when empty, so the number is part of the check's output rather than something a reader has
+ * to go looking for. An exemption list that grows is the signal; one that grows silently is the problem.
+ */
+if (tenantQueries.exempt.length > 0) {
+  console.log(
+    `  ${tenantQueries.exempt.length} statement(s) exempt as "${TENANT_IS_THE_ANSWER}":`
+  )
+  for (const entry of tenantQueries.exempt) console.log(`    ${entry}`)
+}
+
+for (const unscoped of tenantQueries.found) {
+  failures.push(
+    `${unscoped}\n    Reads, updates and deletes need \`and organization_id = \${orgId}\`; inserts need the\n` +
+      "    column supplied. `Db.scoped` hands you orgId as the second argument — use it. There is no RLS\n" +
+      `    behind this any more (ADR-0014). If the tenant is genuinely what the query ASKS FOR, put\n` +
+      `    "-- ${TENANT_IS_THE_ANSWER}" inside the statement and keep it to a single point lookup.`
+  )
+}
+
+/*
+ * `ConsumeEvent` is privileged: it resolves the tenant from the event row with an unscoped lookup, so an
+ * ambient organization has no effect on it. That is correct for a queue consumer, which has no session —
+ * and it means anything that can call it with an event id acts as that event's organization.
+ *
+ * So it must not be reachable from a request path, and that is checked rather than trusted. The allow-list
+ * is exactly one file: the Worker's queue dispatch.
+ */
+const CONSUME_EVENT_ALLOWED = new Set([
+  "apps/worker/src/platform/DispatchEvent.ts",
+  "packages/modules/shared/use-cases/Event/index.ts"
+])
+
+const consumeEventImporters = (): Array<string> => {
+  const found: Array<string> = []
+  for (const dir of ["packages", "apps"]) {
+    for (const absolute of walk(join(root, dir))) {
+      const path = relative(root, absolute)
+      if (path.includes("/test/") || path.endsWith("ConsumeEvent.ts")) continue
+      if (CONSUME_EVENT_ALLOWED.has(path)) continue
+      const source = readFileSync(absolute, "utf8")
+      /*
+       * IMPORTS, not mentions. The first version matched the identifier anywhere and flagged
+       * `QueueHandler.ts` for naming `ConsumeEvent` in a docstring — a false positive that would have
+       * taught the next reader to weaken the rule rather than trust it.
+       */
+      const imports = [...source.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s+from/g)]
+        .some((match) => /\bConsumeEvent\b/.test(match[1]!))
+      if (imports) found.push(path)
     }
   }
   return found
 }
 
-for (const unscoped of unscopedTenantQueries()) {
+for (const importer of consumeEventImporters()) {
   failures.push(
-    `${unscoped}\n    Reads, updates and deletes need \`and organization_id = \${orgId}\`; inserts need the\n` +
-      "    column supplied. `Db.scoped` hands you orgId as the second argument — use it. There is no RLS\n" +
-      "    behind this any more (ADR-0014)."
+    `${importer}\n    imports ConsumeEvent, which is PRIVILEGED: it takes its tenant from the event row\n` +
+      "    rather than from the caller, so anything that can name an event id acts as that event's\n" +
+      "    organization. It belongs to the queue dispatch only. If a request path needs to trigger work,\n" +
+      "    emit an event instead — EmitEvent is scoped to the caller."
   )
 }
 

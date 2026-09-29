@@ -16,7 +16,8 @@
  */
 import { Context, type Effect } from "effect"
 import type { Collection } from "../Corpus/Collection.ts"
-import type { Retrieval } from "./Retrieval.model.ts"
+import type { CurrentOrg } from "../Identity/Identity.ts"
+import type { Retrieval } from "./Retrieval.ts"
 
 export interface PolicySearchService {
   readonly search: (input: {
@@ -24,7 +25,16 @@ export interface PolicySearchService {
     readonly limit?: number | undefined
     /** Defaults to the policy corpus. A transactional document must be asked for explicitly. */
     readonly collection?: Collection | undefined
-  }) => Effect.Effect<Retrieval>
+    /*
+     * `CurrentOrg` in the requirement, not `never`.
+     *
+     * Retrieval is tenant-scoped — the corpus belongs to an organization and `retrieve_policy` takes the
+     * organization as a parameter — so the port says so rather than letting an implementation close over a
+     * tenant at layer-build time. That difference is load-bearing here: the decide workflow's engine layer
+     * is built per message, and a port that hid the tenant would let a layer built for one organization
+     * serve another if it were ever memoised. Saying it in the type makes that unrepresentable.
+     */
+  }) => Effect.Effect<Retrieval, never, CurrentOrg>
 }
 
 export class PolicySearch extends Context.Service<PolicySearch, PolicySearchService>()(

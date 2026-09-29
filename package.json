@@ -50,8 +50,8 @@
     "hygiene": "bun run knip && bun run deps:check && bun run secrets && bun run dep:check && bun run bindings:check && bun run auth:check",
     "preflight": "bun run format && bun run check && bun run lint && bun run hygiene && bun run test",
     "effect:verify": "bun scripts/verify-effect-api.ts",
-    "evals": "bun run --filter @ea/evals evals",
-    "evals:rule": "bun run --filter @ea/evals evals:rule",
+    "evals": "bun evals/Decisions.ts",
+    "evals:rule": "bun evals/CheckRule.ts",
     "dev": "bun run --filter @ea/worker dev",
     "infra:preview": "bun run --filter @ea/infra preview",
     "infra:up": "bun run --filter @ea/infra up",
@@ -62,7 +62,8 @@
     "auth:schema": "bun scripts/auth-schema.ts",
     "auth:check": "bun scripts/auth-schema.ts --check",
     "evals:retrieval": "bun evals/RetrievalRecall.ts",
-    "db:verify": "bun scripts/verify-postgres.ts"
+    "db:verify": "bun scripts/verify-postgres.ts",
+    "db:migrate": "bun scripts/migrate.ts"
   },
   "devDependencies": {
     "@effect/tsgo": "0.46.1",

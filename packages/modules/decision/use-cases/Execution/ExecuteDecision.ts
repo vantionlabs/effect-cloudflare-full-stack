@@ -60,7 +60,7 @@ export const ExecuteDecision = (input: ExecuteDecisionInput) =>
     const executionId = ExecutionId.make(yield* ids.next)
 
     // (1) Claim. One statement, and its emptiness is the answer.
-    const claimed = yield* db.scoped((sql, orgId) =>
+    const claimed = yield* db.scopedForOrg((sql, orgId) =>
       sql<{ id: string }>`
         insert into executions (
           id, organization_id, decision_id, action, idempotency_key, provider_idempotency_key, approved_by
@@ -91,7 +91,7 @@ export const ExecuteDecision = (input: ExecuteDecisionInput) =>
     )
 
     if (result._tag === "Success") {
-      yield* db.scoped((sql, orgId) =>
+      yield* db.scopedForOrg((sql, orgId) =>
         sql`
           update executions
              set status = 'succeeded', response = ${JSON.stringify(result.success)}::jsonb,
@@ -110,7 +110,7 @@ export const ExecuteDecision = (input: ExecuteDecisionInput) =>
      * Either way the answer is a human, which is why `decisions.status` moves too.
      */
     const reason = result.failure.message
-    yield* db.scoped((sql, orgId) =>
+    yield* db.scopedForOrg((sql, orgId) =>
       Effect.gen(function*() {
         yield* sql`
           update executions

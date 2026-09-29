@@ -9,8 +9,22 @@
  * The message carried only an id, so the first thing this does is read the row. That is the point: by the
  * time a redelivery arrives, the document may have been decided, superseded or deleted, and the *current*
  * answer is the right one — not whatever was true when the message was written.
+ *
+ * ## This is where the queue's tenant is established
+ *
+ * A queue message is `{ eventId, type }` and nothing else, deliberately — a message that named its own
+ * organization would be a hole in the scoping seam, because the organization would then come from a
+ * parameter instead of from stored state. So the tenant has to be *discovered*, and that is the one read
+ * here that cannot filter by tenant: it is asking which tenant. It is marked as such in the SQL and
+ * `dep:check` counts it.
+ *
+ * Everything after that point runs with `CurrentOrg` provided and uses `scopedForOrg`. This function and
+ * the cron are the only places in the system that provide `CurrentOrg` directly rather than deriving it
+ * from a session — which is the list a tenancy audit wants.
  */
-import { type EventId, EventNotFound, isTerminal } from "@ea/modules/shared/domain/Event"
+import { EventNotFound, isTerminal } from "@ea/modules/shared/domain/Errors"
+import { type EventId } from "@ea/modules/shared/domain/Event"
+import { CurrentOrg, OrgId } from "@ea/modules/shared/domain/Identity"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 
@@ -54,14 +68,52 @@ const describe = (failure: unknown): string => {
  * an unrecognised failure is to RETRY — the safe direction, because paying twice beats silently dropping
  * a document.
  */
-export const ConsumeEvent = (
+export const ConsumeEvent = <R>(
   eventId: EventId,
-  work: (row: EventRow) => Effect.Effect<void, unknown>
+  /**
+   * The work. Generic in `R`, and `CurrentOrg` is **excluded from the result** because this function
+   * supplies it — so a caller may require the tenant without having to know it, which is the whole point
+   * of resolving it from the row.
+   */
+  work: (row: EventRow) => Effect.Effect<void, unknown, R>
 ) =>
   Effect.gen(function*() {
     const db = yield* Db
 
-    const rows = yield* db.scoped((sql, orgId) =>
+    /*
+     * The tenant lookup, and the only unscoped statement on this path.
+     *
+     * A point lookup by primary key that returns the organization: it cannot filter on the thing it is
+     * asking for. Kept to exactly this — id and organization_id, nothing else — so that the row's contents
+     * are read again below *with* the tenant in the predicate, and a bug in this statement cannot leak a
+     * payload.
+     */
+    const owners = yield* db.unscopedForAuth((sql) =>
+      sql<{ organization_id: string }>`
+        -- tenant: the organization is the answer
+        select organization_id from events where id = ${eventId}
+      `
+    )
+    const owner = owners[0]
+    if (owner === undefined) {
+      // Nothing to read state from and nothing to record against. Acked: a redelivery cannot help.
+      return { _tag: "Terminal", reason: new EventNotFound({ eventId }).message } satisfies Disposition
+    }
+
+    return yield* handle(eventId, work).pipe(
+      Effect.provideService(CurrentOrg, OrgId.make(owner.organization_id))
+    )
+  })
+
+/** The rest of the work, with the tenant established. Split out so `CurrentOrg` is provided exactly once. */
+const handle = <R>(
+  eventId: EventId,
+  work: (row: EventRow) => Effect.Effect<void, unknown, R>
+) =>
+  Effect.gen(function*() {
+    const db = yield* Db
+
+    const rows = yield* db.scopedForOrg((sql, orgId) =>
       sql<EventRow>`
         select id, type, idempotency_key, status, payload from events
          where id = ${eventId} and organization_id = ${orgId}
@@ -69,7 +121,7 @@ export const ConsumeEvent = (
     )
     const row = rows[0]
     if (row === undefined) {
-      // Nothing to read state from and nothing to record against. Acked: a redelivery cannot help.
+      // Raced with a delete between the two reads. Same answer: acked, because a retry cannot help.
       return { _tag: "Terminal", reason: new EventNotFound({ eventId }).message } satisfies Disposition
     }
 
@@ -83,7 +135,7 @@ export const ConsumeEvent = (
       return { _tag: "Done" } satisfies Disposition
     }
 
-    yield* db.scoped((sql, orgId) =>
+    yield* db.scopedForOrg((sql, orgId) =>
       sql`
         update events
            set status = 'processing', started_at = coalesce(started_at, now()), deliveries = deliveries + 1
@@ -94,7 +146,7 @@ export const ConsumeEvent = (
     const result = yield* Effect.result(work(row))
 
     if (result._tag === "Success") {
-      yield* db.scoped((sql, orgId) =>
+      yield* db.scopedForOrg((sql, orgId) =>
         sql`
           update events set status = 'done', finished_at = now()
            where id = ${eventId} and organization_id = ${orgId}
@@ -109,7 +161,7 @@ export const ConsumeEvent = (
     if (isTerminal(failure)) {
       // Recorded in the product, not just in a dashboard: `failed` rows are queryable beside the
       // documents they concern, which is the whole reason this table exists.
-      yield* db.scoped((sql, orgId) =>
+      yield* db.scopedForOrg((sql, orgId) =>
         sql`
           update events set status = 'failed', error = ${reason}, finished_at = now()
            where id = ${eventId} and organization_id = ${orgId}

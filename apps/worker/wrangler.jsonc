@@ -11,6 +11,25 @@
   "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
   "observability": { "enabled": true },
 
+  /*
+   * Smart placement, and it is motivated by a measurement rather than by a feeling.
+   *
+   * Postgres lives in `us-east-5`. A round trip from this machine measured ~120 ms against ~0.20 ms to a
+   * local container (docs/adr/0015), and a Worker running at the edge nearest the *user* pays that latency
+   * on every query. A decide workflow is many queries — the decide_key short circuit, the rule row, the
+   * retrieval function, the decision and its citations, plus the workflow engine's memo reads and writes.
+   *
+   * Smart placement moves the Worker to a location near the origin instead of near the user, which is the
+   * right trade for exactly this shape: several sequential round trips to one backend, where the request and
+   * response are small. It is a hint, not a guarantee — Cloudflare decides per-Worker from observed traffic.
+   *
+   * Safe alongside the console: static assets are served BEFORE the Worker runs, so they keep being served
+   * from the edge regardless of where the Worker is placed.
+   *
+   * `placement` is one of the few INHERITABLE keys, so it belongs here once rather than per environment.
+   */
+  "placement": { "mode": "smart" },
+
   // ───────────────────────────────────────────────────────────────────────────────────────
   // ⚠ BINDINGS ARE NOT INHERITED BY ENVIRONMENTS.
   //
@@ -72,6 +91,32 @@
    * one package could only approximate.
    */
   "assets": { "directory": "../console/dist", "binding": "ASSETS" },
+  /*
+   * The read-through cache. `wrangler dev` emulates KV locally, so nothing needs provisioning to develop
+   * or test.
+   *
+   * What lives here is constrained by what KV is: eventually consistent, no atomic primitives, eviction at
+   * the platform's discretion. `shared/domain/Cache/Cache.ts` carries the rule — the key must make
+   * staleness impossible — and the list of things that therefore may NOT be cached, including better-auth
+   * sessions (`secondaryStorage` needs atomic `getAndDelete`/`increment`, so KV would silently break rate
+   * limiting) and the armed auto-approve rule (disarming must be immediate).
+   *
+   * Today it holds exactly one thing: parsed document text, keyed by document id AND parser version.
+   */
+  "kv_namespaces": [
+    { "binding": "CACHE", "id": "PULUMI_cacheNamespaceId" },
+  ],
+  /*
+   * Analytics Engine, for the product's own rates. No resource to provision: a dataset is created on first
+   * write, which is the same property that made Workers AI free to adopt.
+   *
+   * `writeDataPoint`'s arrays are POSITIONAL — there are no field names on the wire, so a query reads
+   * `blob1`/`double2`. Inserting a value in the middle silently reinterprets every historical row. Append
+   * only; the mapping is documented in `platform/TelemetryAnalytics.ts`.
+   */
+  "analytics_engine_datasets": [
+    { "binding": "METRICS", "dataset": "effect_ai_decisions_dev" },
+  ],
   "ai": { "binding": "AI" },
   /*
    * One queue carrying a tagged union, not a queue per event type.
@@ -110,6 +155,12 @@
       "r2_buckets": [
         { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-staging" },
       ],
+      "kv_namespaces": [
+        { "binding": "CACHE", "id": "PULUMI_cacheNamespaceId" },
+      ],
+      "analytics_engine_datasets": [
+        { "binding": "METRICS", "dataset": "effect_ai_decisions_staging" },
+      ],
       "ai": { "binding": "AI" },
       "queues": {
         "producers": [
@@ -132,6 +183,12 @@
       ],
       "r2_buckets": [
         { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-production" },
+      ],
+      "kv_namespaces": [
+        { "binding": "CACHE", "id": "PULUMI_cacheNamespaceId" },
+      ],
+      "analytics_engine_datasets": [
+        { "binding": "METRICS", "dataset": "effect_ai_decisions_staging" },
       ],
       "ai": { "binding": "AI" },
       "queues": {

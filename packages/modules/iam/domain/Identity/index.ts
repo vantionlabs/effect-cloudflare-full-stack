@@ -1,4 +1,4 @@
 // The concept's curated public surface. `"./*": "./*/index.ts"` in package.json makes
 // this the only way in, and `"./internal/*": null` makes anything else unresolvable.
-export * from "./Identity.rpc.ts"
-export * from "./Identity.wire.ts"
+export * from "./IdentityRpcs.ts"
+export * from "./IdentityWire.ts"

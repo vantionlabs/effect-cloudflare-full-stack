@@ -22,13 +22,14 @@
  *
  * ## Tenancy
  *
- * Reads and writes go through `Db.scoped`, so RLS applies and the memo cannot be read across tenants.
- * That matters more than it looks: `workflow_activities.result` contains extracted invoice fields.
+ * Reads and writes go through `Db.scopedForOrg`, so the memo cannot be read across tenants. That matters
+ * more than it looks: `workflow_activities.result` contains extracted invoice fields.
  *
- * `scoped` requires `CurrentUser`. The queue consumer at build-order step 8 has no user and will need
- * the `scopedForOrg` variant — a one-line change here, called out so it is not a surprise.
+ * **`CurrentOrg`, not `CurrentUser`** — the change this file predicted, now made. A workflow engine needs
+ * to know which tenant and has no business knowing which person; requiring a user made it unreachable from
+ * the queue consumer, which is precisely where a durable workflow belongs (docs/services.md §3.1).
  */
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
+import { CurrentOrg, type OrgId } from "@ea/modules/shared/domain/Identity"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Cause, Effect, Exit, Layer, Option } from "effect"
 import { SqlClient } from "effect/sql"
@@ -88,7 +89,7 @@ const refuseSuspend = (what: string): never => {
 export const WorkflowEnginePg: Layer.Layer<
   WorkflowEngine.WorkflowEngine,
   never,
-  Db | SqlClient.SqlClient | CurrentUser
+  Db | SqlClient.SqlClient | CurrentOrg
 > = Layer.effect(WorkflowEngine.WorkflowEngine)(
   Effect.gen(function*() {
     const db = yield* Db
@@ -105,21 +106,20 @@ export const WorkflowEnginePg: Layer.Layer<
     /*
      * Named `connection`, not `sql`, on purpose.
      *
-     * Every callback below receives its own transaction-scoped `sql` — the one with
-     * `set local role effect_ai_app` and `app.current_org` applied. Shadowing would make the two
-     * indistinguishable at a glance, and using this one inside a scoped block would bypass the org GUC
-     * while looking identical. That is a tenancy bug the compiler cannot see.
+     * Every callback below receives its own transaction-scoped `sql` from `withOrg`. Shadowing would make
+     * the two indistinguishable at a glance, and using this one where a scoped one was meant would run
+     * outside the transaction while looking identical — which is the class of bug the compiler cannot see.
      */
     const connection = yield* SqlClient.SqlClient
-    const identity = yield* CurrentUser
+    const orgId = yield* CurrentOrg
 
-    /** `Db.scoped` with this request's connection and identity closed over, so methods are self-contained. */
+    /** `Db.scopedForOrg` with this message's connection and tenant closed over, so methods are self-contained. */
     const scoped = <A, E>(
-      f: (sql: SqlClient.SqlClient, orgId: typeof identity.orgId) => Effect.Effect<A, E>
+      f: (sql: SqlClient.SqlClient, scopedOrgId: OrgId) => Effect.Effect<A, E>
     ) =>
-      db.scoped(f).pipe(
+      db.scopedForOrg(f).pipe(
         Effect.provideService(SqlClient.SqlClient, connection),
-        Effect.provideService(CurrentUser, identity)
+        Effect.provideService(CurrentOrg, orgId)
       )
 
     /**
@@ -157,10 +157,10 @@ export const WorkflowEnginePg: Layer.Layer<
 
           // A completed run replays from its stored result without touching the body — which is what
           // makes a redelivered message free rather than merely idempotent.
-          const existing = yield* scoped((sql, orgId) =>
+          const existing = yield* scoped((sql, scopedOrgId) =>
             sql<{ result: StoredResult | null }>`
               select result from workflow_executions
-               where execution_id = ${options.executionId} and organization_id = ${orgId}
+               where execution_id = ${options.executionId} and organization_id = ${scopedOrgId}
             `
           )
           const stored = existing[0]?.result
@@ -169,10 +169,12 @@ export const WorkflowEnginePg: Layer.Layer<
           }
 
           if (existing.length === 0) {
-            yield* scoped((sql, orgId) =>
+            yield* scoped((sql, scopedOrgId) =>
               sql`
                 insert into workflow_executions (execution_id, organization_id, workflow_name, payload)
-                values (${options.executionId}, ${orgId}, ${workflow._tag}, ${JSON.stringify(options.payload)}::jsonb)
+                values (${options.executionId}, ${scopedOrgId}, ${workflow._tag}, ${
+                JSON.stringify(options.payload)
+              }::jsonb)
                 on conflict (execution_id) do nothing
               `
             )
@@ -191,11 +193,11 @@ export const WorkflowEnginePg: Layer.Layer<
           // redelivery re-enters the body, which is what makes a transient failure recoverable.
           const envelope = toStored(result)
           if (envelope !== undefined) {
-            yield* scoped((sql, orgId) =>
+            yield* scoped((sql, scopedOrgId) =>
               sql`
                 update workflow_executions
                    set result = ${JSON.stringify(envelope)}::jsonb, completed_at = now()
-                 where execution_id = ${options.executionId} and organization_id = ${orgId}
+                 where execution_id = ${options.executionId} and organization_id = ${scopedOrgId}
               `
             )
           }
@@ -213,13 +215,13 @@ export const WorkflowEnginePg: Layer.Layer<
         Effect.gen(function*() {
           const instance = yield* WorkflowEngine.WorkflowInstance
 
-          const hit = yield* scoped((sql, orgId) =>
+          const hit = yield* scoped((sql, scopedOrgId) =>
             sql<{ result: StoredResult }>`
               select result from workflow_activities
                where execution_id = ${instance.executionId}
                  and name = ${activity.name}
                  and attempt = ${attempt}
-                 and organization_id = ${orgId}
+                 and organization_id = ${scopedOrgId}
             `
           )
           if (hit.length > 0) return fromStored(hit[0]!.result)
@@ -241,11 +243,11 @@ export const WorkflowEnginePg: Layer.Layer<
 
           const envelope = toStored(result)
           if (envelope !== undefined) {
-            yield* scoped((sql, orgId) =>
+            yield* scoped((sql, scopedOrgId) =>
               sql`
                 insert into workflow_activities (execution_id, name, attempt, organization_id, result)
                 values (
-                  ${instance.executionId}, ${activity.name}, ${attempt}, ${orgId},
+                  ${instance.executionId}, ${activity.name}, ${attempt}, ${scopedOrgId},
                   ${JSON.stringify(envelope)}::jsonb
                 )
                 on conflict (execution_id, name, attempt) do nothing
@@ -257,10 +259,10 @@ export const WorkflowEnginePg: Layer.Layer<
         }).pipe(Effect.orDie),
 
       poll: (_workflow, executionId) =>
-        scoped((sql, orgId) =>
+        scoped((sql, scopedOrgId) =>
           sql<{ result: StoredResult | null }>`
             select result from workflow_executions
-             where execution_id = ${executionId} and organization_id = ${orgId}
+             where execution_id = ${executionId} and organization_id = ${scopedOrgId}
           `
         ).pipe(
           Effect.map((rows) => {

@@ -53,7 +53,7 @@ export const EmitEvent = (input: EmitEventInput) =>
      * One statement would be neater but would not tell us whether WE created the row, and that matters:
      * only the creator should send a message, or a duplicate emit would enqueue twice against one row.
      */
-    const inserted = yield* db.scoped((sql, orgId) =>
+    const inserted = yield* db.scopedForOrg((sql, orgId) =>
       sql<{ id: string }>`
         insert into events (id, organization_id, type, idempotency_key, payload)
         values (
@@ -67,7 +67,7 @@ export const EmitEvent = (input: EmitEventInput) =>
 
     if (inserted.length === 0) {
       // Already emitted. Return the existing id so a caller can still correlate, and send nothing.
-      const existing = yield* db.scoped((sql, orgId) =>
+      const existing = yield* db.scopedForOrg((sql, orgId) =>
         sql<{ id: string }>`
           select id from events
            where idempotency_key = ${input.idempotencyKey} and organization_id = ${orgId}

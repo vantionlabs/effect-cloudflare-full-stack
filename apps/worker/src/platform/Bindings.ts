@@ -29,6 +29,64 @@ export interface Env {
   readonly DOCUMENTS: R2Bucket
   /** The event queue producer. Stable for an isolate's lifetime, so safe to capture. */
   readonly EVENTS: { readonly send: (body: unknown) => Promise<void> }
+  /**
+   * Workers AI. **The binding IS the authorisation** — no account id, no token, no egress.
+   *
+   * Declared in `wrangler.jsonc` since the embedder was written, and absent from this interface until the
+   * decide pipeline was wired, which is exactly why the deployed Worker could not decide anything: the
+   * binding existed, nothing could reach it, and `bindings:check` had no way to notice
+   * (docs/services.md §3.1).
+   *
+   * Structurally typed rather than `Ai` from `@cloudflare/workers-types`, matching the two adapter
+   * interfaces it satisfies. `options` carries the AI Gateway id, which is how the binding transport
+   * reaches a gateway — it cannot be pointed at a gateway hostname the way a REST call can.
+   */
+  readonly AI: {
+    readonly run: (
+      model: string,
+      input: Record<string, unknown>,
+      options?: { readonly gateway?: { readonly id: string } } | undefined
+    ) => Promise<unknown>
+  }
+  /**
+   * The read-through cache. See `shared/domain/Cache/Cache.ts` for the rule about what may live here —
+   * the key must make staleness impossible, because KV has no invalidation and no atomic primitives.
+   *
+   * NOT better-auth's session store: `secondaryStorage` requires atomic `getAndDelete` and `increment`,
+   * and backing those with KV would silently break rate limiting (`BetterAuth.ts`).
+   */
+  readonly CACHE: {
+    readonly get: (key: string) => Promise<string | null>
+    readonly put: (
+      key: string,
+      value: string,
+      options?: { readonly expirationTtl?: number } | undefined
+    ) => Promise<void>
+  }
+  /**
+   * Analytics Engine, for the product's own rates — groundedRate, per-rail fire rates, cost per decision.
+   *
+   * Created implicitly on first write, so there is no resource to provision. `writeDataPoint`'s three arrays
+   * are positional and their order IS the schema: append only, never reorder. See `TelemetryAnalytics.ts`.
+   */
+  readonly METRICS: {
+    readonly writeDataPoint: (point: {
+      readonly blobs?: ReadonlyArray<string> | undefined
+      readonly doubles?: ReadonlyArray<number> | undefined
+      readonly indexes?: ReadonlyArray<string> | undefined
+    }) => void
+  }
+  /**
+   * An OTLP endpoint, when one is configured. Absent means spans are created and discarded.
+   *
+   * The spans already exist — `Activity`, `effect/sql`, `LanguageModel` and `RpcServer` all create them — so
+   * this is the drain, not the instrumentation.
+   */
+  readonly OTLP_ENDPOINT?: string | undefined
+  /** `k=v,k=v` auth headers for the OTLP endpoint. A secret. */
+  readonly OTLP_HEADERS?: string | undefined
+  /** The AI Gateway id, when one is configured. Absent means direct, unmetered, uncached model calls. */
+  readonly AI_GATEWAY?: string | undefined
   readonly VERSION?: string | undefined
 }
 

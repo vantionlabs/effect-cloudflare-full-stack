@@ -53,7 +53,7 @@ export const RetrievePolicy = (input: RetrievePolicyInput) =>
     )
     const vector = embedding._tag === "Some" ? `[${embedding.value.join(",")}]` : null
 
-    const rows = yield* db.scoped((sql, orgId) =>
+    const rows = yield* db.scopedForOrg((sql, orgId) =>
       sql<{
         chunk_id: string
         document_id: string

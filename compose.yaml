@@ -1,10 +1,21 @@
 # Local Postgres for development, tests and the eval harness.
-# Matches PlanetScale Postgres (17.x) and ships pgvector, so the RRF hybrid-search
-# function and HNSW indexes are exercised locally exactly as in production.
+#
+# Pinned to `0.8.5-pg18`: server 18.x and pgvector 0.8.5, which is what `bun run db:verify`
+# reports for PlanetScale. The image is 18.4 against production 18.6 — a patch gap, which is
+# what the registry offers and is not the kind of gap that changes behaviour. The floating
+# `pg18` tag would drift pgvector to 0.8.6 on the next pull, reintroducing a real gap for free.
+#
+# It used to be `pg17`, so dev ran 17.11 against a production 18.6. Nothing had gone wrong
+# yet, which is the only reason to close a version gap while it is still cheap.
+#
+# The container is the TEST database, not a staging environment: the suite migrates it,
+# truncates it and reseeds it, so its contents are disposable by design. Running the suite
+# against PlanetScale instead was measured and rejected — see docs/adr/0015.
+#
 # Port 55433 deliberately avoids docket's 55432.
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:0.8.5-pg18
     container_name: effect-ai-postgres
     environment:
       POSTGRES_USER: effect_ai
@@ -13,7 +24,17 @@ services:
     ports:
       - "55433:5432"
     volumes:
-      - effect-ai-pgdata:/var/lib/postgresql/data
+      # `/var/lib/postgresql`, NOT `/var/lib/postgresql/data`. Postgres 18 changed the
+      # convention: the official images now store data in a major-version subdirectory
+      # (`/var/lib/postgresql/18/docker`) so that `pg_upgrade --link` does not cross a mount
+      # boundary. Mounting the old path makes an 18 container refuse to start, with the data
+      # directory reported as an "unused mount/volume" — which reads like a permissions
+      # problem and is not one. See docker-library/postgres#1259.
+      #
+      # Also named for the major version: a Postgres major cannot read an older data
+      # directory, so pinning the volume to the major turns a crash loop into a fresh,
+      # correct database on the way up.
+      - effect-ai-pgdata-18:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U effect_ai -d effect_ai"]
       interval: 2s
@@ -21,4 +42,4 @@ services:
       retries: 30
 
 volumes:
-  effect-ai-pgdata:
+  effect-ai-pgdata-18:

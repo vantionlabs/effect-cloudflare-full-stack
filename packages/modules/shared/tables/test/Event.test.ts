@@ -8,14 +8,9 @@
  * Batch semantics live in the Worker's `queue` handler and are tested there. This is the half that decides
  * *what happened*, which is the half worth testing without a queue.
  */
-import {
-  DocumentNotFound,
-  EventBus,
-  type EventBusService,
-  EventId,
-  EventSendFailed
-} from "@ea/modules/shared/domain/Event"
-import { CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
+import { DocumentNotFound } from "@ea/modules/shared/domain/Errors"
+import { EventBus, type EventBusService, EventId, EventSendFailed } from "@ea/modules/shared/domain/Event"
+import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
 import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { ConsumeEvent, EmitEvent } from "@ea/modules/shared/use-cases/Event"
@@ -64,6 +59,7 @@ const run = <A, E>(bus: Layer.Layer<EventBus>, effect: Effect.Effect<A, E, any>)
   Effect.runPromise(
     effect.pipe(
       Effect.provideService(CurrentUser, identity),
+      Effect.provideService(CurrentOrg, identity.orgId),
       Effect.provide(Layer.mergeAll(Db.layer, IdsLive, bus)),
       Effect.provide(Admin)
     ) as Effect.Effect<A, E, never>
@@ -195,24 +191,42 @@ describe("ConsumeEvent", () => {
     expect(disposition._tag).toBe("Terminal")
   })
 
-  it("scopes events to the caller's organization", async () => {
+  it("takes its tenant from the EVENT, and ignores any ambient one", async () => {
+    /*
+     * This test asserted the opposite until the pipeline was wired, and the change is deliberate — so it is
+     * worth being explicit about what was traded.
+     *
+     * **Before:** `ConsumeEvent` read the row with `db.scoped`, so the caller's own organization scoped the
+     * lookup and another organization's event read as absent. Safe, and unusable from a queue: a consumer
+     * has no session, so there was no caller organization to scope by, which is precisely why the queue
+     * handler acked every message without doing anything.
+     *
+     * **Now:** the organization is resolved from the event row by an unscoped point lookup — the one query
+     * on this path where the tenant is the *answer* rather than an input — and everything after runs scoped
+     * to it. An ambient `CurrentOrg` is irrelevant, which is what this asserts.
+     *
+     * **So this function is PRIVILEGED**, in the same way `Db.unscopedForAuth` is. It must not be reachable
+     * from a request path, and that is enforced rather than trusted: `bun run dep:check` fails if anything
+     * other than the Worker's queue dispatch imports it.
+     */
     const { eventId } = await emit("c5")
-    const other = new Identity({
-      userId: UserId.make("u2"),
-      orgId: OrgId.make("event_org_other"),
-      email: "o@example.com",
-      role: "reviewer"
-    })
+    const other = OrgId.make("event_org_other")
 
+    let observedOrg: string | null = null
     const disposition = await Effect.runPromise(
-      ConsumeEvent(eventId, () => Effect.void).pipe(
-        Effect.provideService(CurrentUser, other),
-        Effect.provide(Layer.mergeAll(Db.layer, IdsLive, recordingBus().layer)),
-        Effect.provide(Admin)
-      ) as Effect.Effect<{ readonly _tag: string }, never, never>
+      ConsumeEvent(eventId, () => Effect.flatMap(CurrentOrg, (orgId) => Effect.sync(() => void (observedOrg = orgId))))
+        .pipe(
+          // An ambient tenant belonging to somebody else, which must have no effect whatsoever.
+          Effect.provideService(CurrentOrg, other),
+          Effect.provide(Layer.mergeAll(Db.layer, IdsLive, recordingBus().layer)),
+          Effect.provide(Admin)
+        ) as Effect.Effect<{ readonly _tag: string }, never, never>
     )
 
-    // RLS hides the row, so it reads as absent rather than as someone else's work.
-    expect(disposition._tag).toBe("Terminal")
+    expect(disposition._tag).toBe("Done")
+    // The event's own organization won. If this ever reads `event_org_other`, the unscoped lookup has
+    // stopped being a lookup and started being an instruction.
+    expect(observedOrg).toBe(ORG)
+    expect(observedOrg).not.toBe(other)
   })
 })

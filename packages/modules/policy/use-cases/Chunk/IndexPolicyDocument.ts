@@ -18,16 +18,11 @@
 import { EMBEDDING_DIMENSIONS } from "@ea/modules/policy/domain/Chunk"
 import { Chunker, embeddableText } from "@ea/modules/policy/domain/Chunk"
 import { EmbeddingProfile } from "@ea/modules/policy/domain/Embedding"
+import { EmbeddingWidthMismatch } from "@ea/modules/policy/domain/Errors"
 import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
-import { Effect, Schema } from "effect"
+import { Effect } from "effect"
 import { EmbeddingModel } from "effect/ai"
-
-/** Raised before any write when the configured embedder does not match the column width. */
-export class EmbeddingWidthMismatch extends Schema.TaggedError<EmbeddingWidthMismatch>()(
-  "EmbeddingWidthMismatch",
-  { modelId: Schema.String, expected: Schema.Int, actual: Schema.Int }
-) {}
 
 export interface IndexPolicyDocumentInput {
   readonly documentId: string

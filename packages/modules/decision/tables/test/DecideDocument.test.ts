@@ -9,13 +9,15 @@
  * model rather than trusting the engine's own bookkeeping: an engine reporting its own cache hits would
  * be the thing under test vouching for itself.
  */
+import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
 import { WorkflowEnginePg } from "@ea/modules/decision/server/Workflow"
 import { DecideDocumentLayer, DecideDocumentWorkflow, decideKey } from "@ea/modules/decision/use-cases/Decision"
 import { ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
 import { EmbedderDeterministic } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
-import { CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
+import { EventBus, type EventBusService } from "@ea/modules/shared/domain/Event"
+import { CurrentOrgFromUser, CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
 import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { PgClient } from "@effect/sql-pg"
@@ -66,8 +68,20 @@ const EXTRACTED = {
   line_items: []
 }
 
-/** A scripted model that counts each kind of call and can be told to fail the decide step. */
-const countingModel = (options: { readonly failDecide: boolean; readonly chunkId?: string }) => {
+/**
+ * A scripted model that counts each kind of call, can be told to fail the decide step, and can be told
+ * what to propose.
+ *
+ * `propose` matters: with it fixed at `route_for_approval` the rails could only ever be observed doing
+ * nothing, so rail 3 and the auto-approve branch had no test that ran them. `citeChunkId` is separate
+ * from `chunkId` so a citation can name a chunk that was never retrieved — which is rail 2's real case,
+ * as distinct from citing nothing at all.
+ */
+const countingModel = (options: {
+  readonly failDecide: boolean
+  readonly chunkId?: string
+  readonly propose?: "auto_approve" | "route_for_approval"
+}) => {
   const calls = { extract: 0, decide: 0 }
   const layer = Layer.effect(LanguageModel.LanguageModel)(
     LanguageModel.make({
@@ -87,7 +101,7 @@ const countingModel = (options: { readonly failDecide: boolean; readonly chunkId
           return Effect.succeed([{
             type: "text" as const,
             text: JSON.stringify({
-              outcome: "route_for_approval",
+              outcome: options.propose ?? "route_for_approval",
               citations: options.chunkId === undefined ? [] : [{
                 chunk_id: options.chunkId,
                 clause_ref: "Artikel 3",
@@ -118,26 +132,58 @@ const identity = new Identity({
  * constructed from the surrounding context, which does not have it yet. The failure is
  * "Service not found: iam/CurrentUser" at layer build, which is not obvious from the call site.
  */
-const base = (model: Layer.Layer<LanguageModel.LanguageModel>) =>
+/**
+ * A recording `EventBus`, and the reason it is here rather than in the auto-approve describe block.
+ *
+ * Every test in this file needs it, because the auto-approve branch calls `EmitExecute`. That the layer
+ * stack managed without one until now is itself the finding: the branch was never reached, so the missing
+ * service never surfaced. It failed with `Service not found: shared/EventBus` the first time a test
+ * actually armed a rule.
+ */
+const recordingBus = () => {
+  const sent: Array<string> = []
+  return {
+    sent,
+    layer: Layer.succeed(EventBus)(
+      {
+        send: (message) => Effect.sync(() => void sent.push(message.eventId))
+      } satisfies EventBusService
+    )
+  }
+}
+
+const base = (model: Layer.Layer<LanguageModel.LanguageModel>, bus = recordingBus().layer) =>
   Layer.mergeAll(
     Db.layer,
     IdsLive,
     EmbedderDeterministic,
     model,
+    bus,
+    // Write-only by construction, so discarding observations cannot change what a test observes.
+    TelemetryNoop,
     Layer.succeed(CurrentUser)(identity),
+    // The tenant, derived from the session: every queue-path use case requires CurrentOrg now.
+    CurrentOrgFromUser.pipe(Layer.provide(Layer.succeed(CurrentUser)(identity))),
     ChunkerHeading
   ).pipe(Layer.provideMerge(Admin))
 
-const provide = <A, E>(model: Layer.Layer<LanguageModel.LanguageModel>, effect: Effect.Effect<A, E, any>) =>
+const provide = <A, E>(
+  model: Layer.Layer<LanguageModel.LanguageModel>,
+  effect: Effect.Effect<A, E, any>,
+  bus?: Layer.Layer<EventBus>
+) =>
   effect.pipe(
     Effect.provide(DecideDocumentLayer),
     Effect.provide(WorkflowEnginePg),
     Effect.provide(PolicySearchLive),
-    Effect.provide(base(model))
+    Effect.provide(base(model, bus))
   ) as Effect.Effect<A, E, never>
 
-const run = <A, E>(model: Layer.Layer<LanguageModel.LanguageModel>, effect: Effect.Effect<A, E, any>) =>
-  Effect.runPromise(provide(model, effect))
+const run = <A, E>(
+  model: Layer.Layer<LanguageModel.LanguageModel>,
+  effect: Effect.Effect<A, E, any>,
+  bus?: Layer.Layer<EventBus>
+) => Effect.runPromise(provide(model, effect, bus))
 
 const asAdmin = <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) =>
   Effect.runPromise(effect.pipe(Effect.provide(Admin)) as Effect.Effect<A, E, never>)
@@ -163,6 +209,14 @@ beforeEach(async () => {
     Effect.flatMap(SqlClient.SqlClient, (sql) =>
       Effect.gen(function*() {
         yield* sql`delete from workflow_executions where organization_id = ${ORG}`
+        /*
+         * `events` has no foreign key into `source_documents` — deliberately, since an event outlives the
+         * document it refers to — so deleting documents does not cascade to it and a leftover
+         * `decision.execute` row makes the next test's "emitted nothing" assertion fail. Found exactly
+         * that way. Same for `rules`, which no other test arms.
+         */
+        yield* sql`delete from events where organization_id = ${ORG}`
+        yield* sql`delete from rules where organization_id = ${ORG}`
         yield* sql`delete from source_documents where organization_id = ${ORG}`
         for (
           const [id, collection, filename] of [
@@ -310,11 +364,133 @@ describe("the decide pipeline", () => {
   })
 
   it("escalates to needs_human when the model cites a chunk it never retrieved", async () => {
-    // Rail 2, through the full pipeline rather than in isolation: the citation names no chunk at all,
-    // so auto_approve is impossible and the proposal cannot stand as-is.
+    /*
+     * Rail 2 through the full pipeline. This test used to pass a model that cited NOTHING and proposed
+     * `route_for_approval`, then assert `route_for_approval` with zero rails fired — so its name
+     * described rail 2 and its body exercised no rail at all. A citation to a chunk that does not exist
+     * is the case that matters: the excerpt may be real policy, just not policy this decision retrieved,
+     * which means nobody checked whether it applies.
+     */
+    const model = countingModel({ failDecide: false, chunkId: "chunk_never_retrieved" })
+    const result = await run(model.layer, DecideDocumentWorkflow.execute(payload))
+    expect(result.outcome).toBe("needs_human")
+    expect(result.railsFired.some((fired) => fired.includes("never retrieved"))).toBe(true)
+  })
+
+  it("does nothing on a proposal it cannot ground, and fires no rail when there is nothing to check", async () => {
+    // The case the test above used to be. Kept, because "no citations and no auto_approve proposed"
+    // genuinely should pass through untouched — but named for what it is.
     const model = countingModel({ failDecide: false })
     const result = await run(model.layer, DecideDocumentWorkflow.execute(payload))
     expect(result.outcome).toBe("route_for_approval")
     expect(result.railsFired.length).toBe(0)
   })
+})
+
+/**
+ * The auto-approve branch, end to end through real Postgres.
+ *
+ * **This had no test.** Every existing case ran with nothing armed, so rail 3 stopped `auto_approve`
+ * before the branch below it could run — and the branch is the architectural claim the whole design
+ * turns on: the router and the human approval path call the SAME `EmitExecute`. Worse, the gap was
+ * self-concealing: after rail 3 was tightened to evaluate a rule's bounds, a bug that made
+ * `evaluateRule` refuse everything would have left all 197 tests green while silently disabling
+ * automatic approval for good. A never-firing gate is indistinguishable from a cautious one.
+ */
+describe("the auto-approve branch", () => {
+  /** Arms a rule whose bounds this fixture invoice actually fits. */
+  const arm = (overrides: Partial<{ max: number; requirePo: boolean; minDays: number }> = {}) =>
+    asAdmin(Effect.flatMap(SqlClient.SqlClient, (sql) =>
+      Effect.gen(function*() {
+        yield* sql`
+          insert into rules (
+            id, organization_id, vertical, armed, max_amount_minor, currency, require_po,
+            approved_suppliers, min_payment_days, description, created_by
+          ) values (
+            ${`rule_${crypto.randomUUID()}`}, ${ORG}, ${VERTICAL}, true,
+            ${overrides.max ?? 200_000}, 'EUR', ${overrides.requirePo ?? false},
+            '{}'::text[], ${overrides.minDays ?? 0}, 'test rule', 'u1'
+          )
+        `
+      })))
+
+  it("auto-approves when every bound holds, and emits exactly one execute event", async () => {
+    await arm()
+    const model = countingModel({ failDecide: false, chunkId, propose: "auto_approve" })
+    const result = await run(model.layer, DecideDocumentWorkflow.execute(payload))
+
+    expect(result.railsFired).toEqual([])
+    expect(result.outcome).toBe("auto_approve")
+
+    const stored = await asAdmin(
+      Effect.flatMap(SqlClient.SqlClient, (sql) =>
+        sql<{ status: string; id: string }>`
+          select id, status from decisions where decide_key = ${decideKey(DOCUMENT, VERTICAL)}
+        `)
+    )
+    expect(stored[0]!.status).toBe("auto_approved")
+
+    /*
+     * The event, not the execution row: the router emits and the queue consumer claims. Asserting on
+     * `executions` here would be asserting that a consumer ran, which it has not.
+     */
+    const events = await asAdmin(
+      Effect.flatMap(SqlClient.SqlClient, (sql) =>
+        sql<{ type: string; idempotency_key: string }>`
+          select type, idempotency_key from events where organization_id = ${ORG} and type = 'decision.execute'
+        `)
+    )
+    expect(events.length).toBe(1)
+    // Derived, never generated: the same key the executions row will claim under.
+    expect(events[0]!.idempotency_key).toBe(`decision:${stored[0]!.id}:dry_run`)
+  }, 30_000)
+
+  it("refuses the same invoice when the rule's ceiling is below it, naming the ceiling", async () => {
+    /*
+     * The pair that proves the bound is load-bearing rather than decorative. Same invoice, same model,
+     * same proposal — only the stored ceiling differs. Before `evaluateRule` existed, `max_amount_minor`
+     * was in the table and read by nothing, and this test would have failed.
+     */
+    await arm({ max: 50_000 })
+    const model = countingModel({ failDecide: false, chunkId, propose: "auto_approve" })
+    const result = await run(model.layer, DecideDocumentWorkflow.execute(payload))
+
+    expect(result.outcome).toBe("route_for_approval")
+    expect(result.railsFired.some((fired) => fired.includes("above the rule's ceiling"))).toBe(true)
+    // The reason is stored on the row, because it is what the reviewer is shown.
+    const stored = await asAdmin(
+      Effect.flatMap(SqlClient.SqlClient, (sql) =>
+        sql<{ rails_fired: ReadonlyArray<string> }>`
+          select rails_fired from decisions where decide_key = ${decideKey(DOCUMENT, VERTICAL)}
+        `)
+    )
+    expect(stored[0]!.rails_fired.some((fired) => fired.includes("EUR 500,00"))).toBe(true)
+  }, 30_000)
+
+  it("refuses when the rule requires a purchase order and the invoice states none", async () => {
+    // The fixture invoice has no PO line at all, so this is the absent case rather than an empty one.
+    await arm({ requirePo: true })
+    const model = countingModel({ failDecide: false, chunkId, propose: "auto_approve" })
+    const result = await run(model.layer, DecideDocumentWorkflow.execute(payload))
+
+    expect(result.outcome).toBe("route_for_approval")
+    expect(result.railsFired.some((fired) => fired.startsWith("purchase_order:"))).toBe(true)
+  }, 30_000)
+
+  it("emits NO execute event when a rail refused it", async () => {
+    // The other half of the claim. One emit call site means one place to get this wrong, and getting it
+    // wrong pays a supplier on a decision that was routed to a human.
+    await arm({ max: 50_000 })
+    const model = countingModel({ failDecide: false, chunkId, propose: "auto_approve" })
+    await run(model.layer, DecideDocumentWorkflow.execute(payload))
+
+    const events = await asAdmin(
+      Effect.flatMap(SqlClient.SqlClient, (sql) =>
+        sql<{ n: number }>`
+          select count(*)::int as n from events
+           where organization_id = ${ORG} and type = 'decision.execute'
+        `)
+    )
+    expect(events[0]!.n).toBe(0)
+  }, 30_000)
 })

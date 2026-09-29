@@ -6,7 +6,7 @@
  * can be exercised by simply having the send fail.
  */
 import { Context, type Effect } from "effect"
-import type { QueueMessage } from "./Event.model.ts"
+import type { QueueMessage } from "./Event.ts"
 
 export interface EventBusService {
   readonly send: (message: QueueMessage) => Effect.Effect<void, EventSendFailed>

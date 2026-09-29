@@ -38,12 +38,31 @@ const documents = new cloudflare.R2Bucket("documents", {
   location: "WEUR" // EU data residency for Dutch clients; see the client-work section of PLAN.md
 })
 
-// ─── Session cache ────────────────────────────────────────────────────────────────────────
-// better-auth sessions. Eventually consistent is correct here: a session read that is 60s
-// stale is fine, whereas the review queue is not (which is why the queue never touches KV).
-const sessions = new cloudflare.WorkersKvNamespace("sessions", {
+// ─── Read-through cache ───────────────────────────────────────────────────────────────────
+/*
+ * NOT a session cache, and the distinction is why this resource was deleted once and is now back.
+ *
+ * It was originally declared here for better-auth sessions, bound nowhere, and read by nothing — so the
+ * plan described a cache that did not exist while every session lookup went to Postgres. It was removed
+ * rather than left declared, because an unbound resource is a claim the code does not honour, and
+ * `bun run bindings:check` now fails in BOTH directions so it cannot come back half-wired.
+ *
+ * It is back for a different job. Sessions are still the wrong thing to put here, for a reason that is
+ * specific rather than cautious: better-auth's `secondaryStorage` interface requires atomic `getAndDelete`
+ * and `increment`, KV has neither, and backing it with KV would **silently break rate limiting** — a
+ * 6-digit OTP is only as strong as its attempt counter (see BetterAuth.ts).
+ *
+ * What it holds instead is parsed document text, keyed by document id AND parser version. That key is what
+ * makes it safe: a parser version defines the verbatim contract, so a bump is a different key and cannot
+ * serve text the current parser would not produce (plan risk R6). Every workflow redelivery otherwise
+ * re-does an R2 GET plus a parse, on the hottest path in the product.
+ *
+ * The rule for anything added later is in `shared/domain/Cache/Cache.ts`: **the key must make staleness
+ * impossible.** Not unlikely — impossible, because there is no invalidation.
+ */
+const cache = new cloudflare.WorkersKvNamespace("cache", {
   accountId,
-  title: name("sessions")
+  title: name("cache")
 })
 
 // ─── Event queue ──────────────────────────────────────────────────────────────────────────
@@ -106,6 +125,49 @@ const hyperdriveCached = new cloudflare.HyperdriveConfig("pg-cached", {
   caching: { disabled: false, maxAge: 60, staleWhileRevalidate: 15 }
 })
 
+// ─── AI Gateway ───────────────────────────────────────────────────────────────────────────
+/*
+ * One place in front of every model call, whoever serves the tokens.
+ *
+ * Declared here rather than made by hand because the provider HAS it — unlike Vectorize, which is the
+ * gap documented below. `AiGateway` is a first-class resource, so this is reproducible and reviewable.
+ *
+ * **Why it is worth the resource.** It would already have paid for itself: a 99-case eval run failed on
+ * all 99 with Workers AI code 4006, the free tier's 10,000 daily neurons — spent by REPEATED runs of the
+ * same fixtures at temperature 0. Identical prompts. `cacheTtl` serves those repeats for nothing.
+ *
+ * Four settings below are product decisions rather than tuning:
+ *
+ *   `cacheTtl`                   1 h. Safe ONLY because a prompt fully determines its answer here: it
+ *                                carries the extracted fields and the retrieved clauses. The corpus
+ *                                version must therefore be part of the cache key — a cached decision
+ *                                must never outlive a change to the policy it cites.
+ *   `cacheInvalidateOnUpdate`    true, so a settings change cannot serve answers from the old config.
+ *   `collectLogs`                true. This is where cost-per-decision becomes an observed number
+ *                                instead of something only the eval harness knows (services.md §6).
+ *   `rateLimiting*`              a sliding window, as a backstop against exactly the runaway loop that
+ *                                exhausted the daily allocation. It protects the budget, not the users;
+ *                                per-customer quota is a Durable Object (services.md §5).
+ *
+ * `zdr` is deliberately NOT set here. Zero Data Retention is a per-client contractual decision, not a
+ * default — plan risk R8 — and turning it on globally would silently change what we can promise. It
+ * belongs in a per-client stack config together with the provider profile.
+ */
+const aiGateway = new cloudflare.AiGateway("ai", {
+  accountId,
+  aiGatewayId: name("ai"),
+  // One hour. The eval harness re-runs identical fixtures; production re-decides only on redelivery,
+  // where the decide_key short circuit fires first and never reaches the model at all.
+  cacheTtl: 3600,
+  cacheInvalidateOnUpdate: true,
+  collectLogs: true,
+  // 600 requests per minute, sliding. A 99-case eval at concurrency 4 is nowhere near this; a runaway
+  // retry loop is.
+  rateLimitingInterval: 60,
+  rateLimitingLimit: 600,
+  rateLimitingTechnique: "sliding"
+})
+
 // ─── Outputs ──────────────────────────────────────────────────────────────────────────────
 // Consumed by apps/worker/wrangler.jsonc. `pulumi stack output --json` feeds the deploy
 // workflow, so binding ids are never hand-transcribed.
@@ -133,8 +195,9 @@ const hyperdriveCached = new cloudflare.HyperdriveConfig("pg-cached", {
  */
 
 export const r2BucketName = documents.name
-export const kvNamespaceId = sessions.id
 export const queueName = events.queueName
 export const queueDlqName = eventsDlq.queueName
 export const hyperdriveId = hyperdrive.id
 export const hyperdriveCachedId = hyperdriveCached.id
+export const aiGatewayId = aiGateway.aiGatewayId
+export const cacheNamespaceId = cache.id

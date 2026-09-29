@@ -11,7 +11,7 @@ import type { EmbeddingProfile } from "@ea/modules/policy/domain/Embedding"
 import { EmbedderDeterministic } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
 import { RetrievePolicy } from "@ea/modules/policy/use-cases/Retrieval"
-import { CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
+import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
 import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { PgClient } from "@effect/sql-pg"
@@ -49,6 +49,7 @@ const run = <A, E>(
     | Db
     | Ids
     | CurrentUser
+    | CurrentOrg
     | SqlClient.SqlClient
     | EmbeddingModel.EmbeddingModel
     | EmbeddingProfile
@@ -58,6 +59,8 @@ const run = <A, E>(
   Effect.runPromise(
     effect.pipe(
       Effect.provideService(CurrentUser, identity(orgId)),
+      // The tenant too: queue-path use cases require CurrentOrg, and a session implies it.
+      Effect.provideService(CurrentOrg, orgId),
       Effect.provide(layers)
     ) as Effect.Effect<A, E, never>
   )

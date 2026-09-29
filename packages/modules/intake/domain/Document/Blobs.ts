@@ -11,7 +11,7 @@
  */
 import type { OrgId } from "@ea/modules/shared/domain/Identity"
 import { Context, type Effect } from "effect"
-import type { DocumentId } from "./Document.model.ts"
+import type { DocumentId } from "./Document.ts"
 
 export interface BlobsService {
   /** Stores bytes and returns the key they were written under. */

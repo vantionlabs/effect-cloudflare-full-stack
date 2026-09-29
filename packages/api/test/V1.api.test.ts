@@ -25,7 +25,7 @@ describe("HealthV1 wire schema", () => {
       status: "ok",
       version: "abc123",
       database: {
-        postgres_version: "17.11",
+        postgres_version: "18.6",
         pgvector_version: "0.8.6",
         dutch_stemming: true
       }
@@ -51,7 +51,7 @@ describe("HealthV1 wire schema", () => {
     // the first is a degraded database, the second is a broken health check.
     expect(() =>
       Schema.decodeUnknownSync(DatabaseHealthV1)({
-        postgres_version: "17.11",
+        postgres_version: "18.6",
         dutch_stemming: true
       })
     ).toThrow()
