@@ -28,18 +28,32 @@
   // from CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE in .env (gitignored), so
   // nothing needs provisioning on Cloudflare to run or test locally.
   /*
-   * The Hyperdrive config created from the Cloudflare dashboard, pointing at PlanetScale Postgres.
+   * Hyperdrive, pointing at PlanetScale Postgres. **Caching must be DISABLED on this one.**
    *
-   * Local dev ignores this id: `wrangler dev` substitutes
+   * `081514f5…` (planetscale-effect-ai-main-s36j) was created automatically with the database and reports
+   * `caching: disabled` and the `postgres.rwgsxlfsivjd` role. The hand-made `3a73f8a5…` (effect-ai) has
+   * caching ENABLED at the 60s default and uses the restricted `pscale_api_*` role — it was wired here first
+   * and that was wrong.
+   *
+   * Why it matters, and it is plan risk R3 rather than a preference: Hyperdrive caches reads for 60 seconds
+   * with **no write-through invalidation**. A reviewer who approves a decision and then sees it still sitting
+   * in the queue is a bug, and a 60-second one is exactly long enough to be reported as flakiness rather than
+   * diagnosed. Everything this binding serves is transactional — the queue, decision detail, the event rows —
+   * so it cannot be cached.
+   *
+   * The cached config is not wasted: it is the right shape for the policy corpus, which is effectively static.
+   * Wiring it is deliberately NOT done yet, because it uses a different database role whose privileges have
+   * not been checked, and an unused binding on an unverified role is a trap for later.
+   *
+   * Local dev ignores this id entirely: `wrangler dev` substitutes
    * CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE from .env and talks to the compose container, so
-   * tests keep running against a database that can be dropped and reseeded. The id matters for
-   * `wrangler dev --remote` and for a deploy.
+   * tests keep running against a database that can be dropped and reseeded.
    *
-   * Not a secret: an account-scoped identifier. Cloudflare holds the credentials behind it, which is the
-   * point of Hyperdrive — the Worker never sees them except through the binding.
+   * Not a secret: an account-scoped identifier. Cloudflare holds the credentials behind it, which is the whole
+   * point — the Worker never sees them.
    */
   "hyperdrive": [
-    { "binding": "HYPERDRIVE", "id": "3a73f8a5ca0b4d6dbc83acff72dc0529" },
+    { "binding": "HYPERDRIVE", "id": "081514f5c4b1400a84d13d070ffb507e" },
   ],
   // `wrangler dev` emulates R2 locally via miniflare, so nothing needs provisioning to develop
   // or test. The real bucket is created by Pulumi (infra/index.ts).

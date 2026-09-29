@@ -19,10 +19,22 @@ So better-auth does **not** remove the need for scoping — it supplies `activeO
 `hasPermission()`, and knows nothing of our tables. But it does mean the _organization_ is not ours to model,
 which narrows what we have to build to the isolation itself.
 
-**2. The machinery could not run on the managed provider.** RLS is bypassed by superusers and, unless forced,
-by a table's owner — so the design needed a non-superuser role (`effect_ai_app`) and `set local role` on every
-transaction. PlanetScale issues a restricted `pscale_api_*` role with no `CREATEROLE`. The role could not be
-created, which meant the grants and the `SET` could not run either.
+**2. ~~The machinery could not run on the managed provider.~~ — THIS REASON WAS WRONG, corrected the same
+day.** The claim rested on the `pscale_api_*` username visible in the Hyperdrive origin settings, which has no
+`CREATEROLE`. But that is the API role. PlanetScale's default branch role is different, and `bun run db:verify`
+against the real database reports:
+
+```
+connecting as postgres (createrole=true, superuser=false)
+```
+
+`CREATEROLE` **and** not a superuser — which is a _better_ configuration for RLS than the local compose
+container, where the connecting user is a superuser and `force row level security` plus `set local role` were
+needed to make policies apply at all. On PlanetScale the policies would simply work, with no role to create and
+no `SET` per transaction.
+
+So this reason is withdrawn. Recorded rather than quietly edited out, because the decision was taken partly on
+it and a reader is entitled to know the argument was weaker than it looked.
 
 **3. The cost was ongoing.** Eleven policies and eleven grants, plus a `force row level security` per table,
 plus remembering all of it for every new table — a second thing to keep in step, forever, in a codebase whose
@@ -31,6 +43,11 @@ migrations are already the largest surface.
 ## Decision
 
 **Isolation comes from `Db.scoped` plus a static check. There is no RLS.**
+
+The decision stands on reasons 1 and 3 alone, which is worth stating plainly now that reason 2 is gone: RLS is
+_viable_ on this database, and it was removed because it was judged not worth eleven policies and eleven grants
+in perpetuity, not because it could not be made to work. That is a weaker justification than the one this ADR
+was originally written with.
 
 What the seam guarantees, and it is the part worth having: every method hands `orgId` to its callback, and
 **none accepts one as an argument**. There is no overload taking an `orgId`, so a caller cannot name a tenant —

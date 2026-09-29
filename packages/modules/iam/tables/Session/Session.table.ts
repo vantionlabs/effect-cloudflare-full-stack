@@ -141,8 +141,4 @@ export const SessionTable = Effect.gen(function*() {
   yield* sql`
     create index if not exists "invitation_inviterId_idx" on "invitation" ("inviterId")
   `
-
-  yield* sql`
-    grant select, insert, update, delete on "user", "session", "account", "verification", "organization", "member", "invitation" to effect_ai_app
-  `
 })

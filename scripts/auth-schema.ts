@@ -137,11 +137,19 @@ for (const { table, column } of indexed) {
   )
 }
 
-// better-auth reads and writes these itself, so the app role needs full access.
+/*
+ * No grant is emitted. There is no application role to grant to.
+ *
+ * This used to hand `effect_ai_app` full access to better-auth's tables, because RLS required a
+ * non-superuser role for policies to apply at all. RLS was removed (ADR-0014) and so was the role — and on
+ * PlanetScale it never existed, which is how this was found: migration 3 failed with
+ * `role "effect_ai_app" does not exist` on the first run against the real database. Local Postgres still had
+ * the role lying around from earlier migrations, so the local suite passed.
+ *
+ * A reminder that a migration suite which only ever runs against one database has not been tested.
+ */
 const tableNames = Object.values(tables).map((t) => t.modelName)
-statements.push(
-  `grant select, insert, update, delete on ${tableNames.map(q).join(", ")} to effect_ai_app`
-)
+void tableNames
 
 const body = `/**
  * better-auth's schema. GENERATED — do not hand-edit.
