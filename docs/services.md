@@ -500,8 +500,10 @@ Ordered by what unblocks the most, not by size:
    cache key needs the resolved tenant.
 4. **Run the console against `wrangler dev`.** It is built and unproven; this is hours, not days.
 5. **Wire or delete KV.**
-6. **An agent surface** — reviewer Q&A over the corpus, with retrieval as a tool, strictly beside the
-   decide path.
+6. ~~An agent surface~~ — **done 2026-09-29.** `policy/use-cases/Ask/AskCorpus.ts`, exposed as RPC only
+   (not the frozen v1 HTTP contract: an agent's prompt, tools and step bound are the least stable thing in
+   the system). Uses `@effect/ai-openai` over Workers AI's OpenAI-compatible endpoint rather than the
+   hand-rolled adapter, because tool calling should not be hand-rolled.
 7. **Billing/metering and outbound webhooks** — the remaining B2B basics, and the least interesting
    technically.
 

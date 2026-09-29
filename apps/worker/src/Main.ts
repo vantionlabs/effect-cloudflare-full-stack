@@ -26,6 +26,7 @@
  */
 import {
   ApiV1,
+  AskRpcLive,
   DecisionRpcLive,
   IdentityHttp,
   IdentityRpcLive,
@@ -38,9 +39,12 @@ import { LanguageModelWorkersAiBinding, WORKERS_AI_MODEL } from "@ea/modules/dec
 import { SessionHttp, SessionLive, SessionRpcLive, SessionStore } from "@ea/modules/iam/server/Session"
 import { DocumentParserText } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
+import { AgentModel } from "@ea/modules/policy/domain/Ask"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
+import { LanguageModelWorkersAiOpenAi } from "@ea/modules/shared/server/Model"
 import { Db } from "@ea/modules/shared/tables/Database"
-import { Layer, ManagedRuntime, Redacted } from "effect"
+import { Effect, Layer, ManagedRuntime, Redacted } from "effect"
+import { LanguageModel } from "effect/ai"
 import { HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { RpcSerialization, RpcServer } from "effect/rpc"
@@ -118,7 +122,21 @@ const ServicesLayer = (env: Env) =>
      */
     TelemetryAnalytics(env.METRICS),
     EmbedderWorkersAiBinding(env.AI),
-    LanguageModelWorkersAiBinding(env.AI, WORKERS_AI_MODEL, env.AI_GATEWAY)
+    LanguageModelWorkersAiBinding(env.AI, WORKERS_AI_MODEL, env.AI_GATEWAY),
+    /*
+     * The agent's model, under its OWN tag — see `policy/domain/Ask/AgentModel.ts`.
+     *
+     * A different adapter for a different requirement: the decide pipeline above uses the binding (no token,
+     * no egress, never needs tools), while the agent needs tool calling and therefore the OpenAI-compatible
+     * surface. Two layers under one `LanguageModel` tag would mean the last wins and the loser fails
+     * silently, which is why they are two tags and why this line is the only place the choice is made.
+     *
+     * Republished under `AgentModel` rather than built twice: the adapter's layer provides `LanguageModel`,
+     * and this takes that service and offers it under the agent's tag.
+     */
+    Layer.effect(AgentModel)(Effect.map(LanguageModel.LanguageModel, (model) => model)).pipe(
+      Layer.provide(LanguageModelWorkersAiOpenAi)
+    )
   ).pipe(
     Layer.provideMerge(SliceBindings(env)),
     Layer.provideMerge(Layer.succeed(Bindings)(env)),
@@ -174,6 +192,8 @@ const AppLayer = (env: Env) =>
     Layer.provide(IdentityRpcLive),
     Layer.provide(IntakeRpcLive),
     Layer.provide(DecisionRpcLive),
+    // The agent. Brings its own language model, locally — see AskRpcLive.ts.
+    Layer.provide(AskRpcLive),
     // JSON rather than msgpack: the console is a browser, the payloads are small, and a wire format a
     // human can read in devtools is worth more here than a few bytes.
     Layer.provide(RpcSerialization.layerJson),

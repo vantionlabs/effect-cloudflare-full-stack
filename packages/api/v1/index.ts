@@ -9,6 +9,7 @@
 // modules and api mutually dependent. Worth noting that RPC has no such constraint — `group.toLayer`
 // needs only the group — so the asymmetry belongs to the HTTP builder, not to this layout.
 export * from "./ApiV1.ts"
+export * from "./Ask/AskRpcLive.ts"
 export * from "./Decision/DecisionRpcLive.ts"
 export * from "./Health/HealthWire.ts"
 export * from "./Identity/IdentityHttp.ts"

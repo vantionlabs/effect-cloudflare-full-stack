@@ -9,6 +9,7 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
+    "@effect/ai-openai": "catalog:",
     "better-auth": "1.7.6",
     "effect": "catalog:",
     "pg": "^8.23.0"
