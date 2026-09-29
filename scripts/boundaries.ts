@@ -219,10 +219,38 @@ for (const dir of ["packages", "apps", "infra"]) {
   }
 }
 
-// Exactly one place may emit a decision.execute event, so the auto-approve path and the human
-// approve path provably share one execution path. Asserted here because it is the central
-// architectural claim and a second call site would silently break it.
-// (Enabled once the event engine lands at build-order step 8.)
+/*
+ * Exactly one place may CONSTRUCT a `decision.execute` event.
+ *
+ * Note what this does and does not assert. Two CALLERS are correct and expected — the human approval path
+ * and the auto-approve branch — because them sharing one path is the whole point. What must be unique is the
+ * place that builds the event, since a second constructor is how the two paths would silently diverge into
+ * "automatic" and "approved" as two features that merely resemble each other.
+ *
+ * A first version of this check counted callers and failed at 2, which was the check being wrong rather than
+ * the code.
+ */
+const executeEventConstructors = (): Array<string> => {
+  const sites: Array<string> = []
+  for (const absolute of walk(join(root, "packages"))) {
+    const path = relative(root, absolute)
+    if (path.includes("/test/")) continue
+    const source = readFileSync(absolute, "utf8")
+    // The literal that identifies the event being built, not a type annotation mentioning it.
+    for (const _ of source.matchAll(/type:\s*"decision\.execute"/g)) sites.push(path)
+  }
+  return sites
+}
+
+const emitSites = executeEventConstructors()
+if (emitSites.length !== 1) {
+  failures.push(
+    `a decision.execute event is constructed in ${emitSites.length} place(s), expected exactly 1:\n` +
+      emitSites.map((site) => `      ${site}`).join("\n") +
+      "\n    Both approval paths must reach execution through ONE emit, or \"the automatic path does\n" +
+      "    the same thing\" is an assertion nobody checks."
+  )
+}
 
 if (failures.length > 0) {
   console.error(`✗ ${failures.length} boundary violation(s):\n`)

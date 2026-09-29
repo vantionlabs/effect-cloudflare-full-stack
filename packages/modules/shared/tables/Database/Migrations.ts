@@ -16,6 +16,7 @@
  * `better-auth migrate` is never run (plan risk R9).
  */
 import { DecisionTable } from "@ea/modules/decision/tables/Decision"
+import { ExecutionTable } from "@ea/modules/decision/tables/Execution"
 import { ExtractionTable } from "@ea/modules/decision/tables/Extraction"
 import { RuleTable } from "@ea/modules/decision/tables/Rule"
 import { WorkflowTable } from "@ea/modules/decision/tables/Workflow"
@@ -52,7 +53,8 @@ export const migrations = {
   "0009_workflow": WorkflowTable,
   "0010_rule": RuleTable,
   "0011_decision": DecisionTable,
-  "0012_event": EventTable
+  "0012_event": EventTable,
+  "0013_execution": ExecutionTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

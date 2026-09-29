@@ -23,6 +23,7 @@ import { Db, textArray } from "@ea/modules/shared/tables/Database"
 import { Effect, Schema } from "effect"
 import { LanguageModel } from "effect/ai"
 import { Activity, Workflow } from "effect/workflow"
+import { EmitExecute } from "./EmitExecute.ts"
 
 /** What the decide workflow is asked to do. */
 export const DecidePayload = Schema.Struct({
@@ -184,6 +185,21 @@ export const DecideDocumentLayer = DecideDocumentWorkflow.toLayer(
     })
 
     /*
+     * Rail 3's authority, read from the rules table.
+     *
+     * At most one armed rule per organization per vertical, enforced by a partial unique index — docket
+     * allowed several and silently took the newest, so "which rule authorised this" had no single answer.
+     * Absent means not armed, which is the correct default for a product that authorises payments.
+     */
+    const rules = yield* Effect.orDie(db.scoped((sql) =>
+      sql<{ id: string }>`
+        select id from rules
+         where vertical = ${payload.vertical} and armed
+      `
+    ))
+    const armed = rules.length > 0
+
+    /*
      * (4) The rails. NOT an activity, and that is deliberate.
      *
      * An activity is memoised, and a memoised rail would mean a decision could be replayed past a rail
@@ -194,9 +210,7 @@ export const DecideDocumentLayer = DecideDocumentWorkflow.toLayer(
       proposal,
       grounded: extraction.checksPassed,
       chunkContent: new Map(retrieval.chunks.map((chunk) => [chunk.chunk_id, chunk.content])),
-      // Wired to the rules table at step 9. Until then nothing is armed, so nothing auto-approves —
-      // which is the correct default for a product that authorises payments.
-      autoApproveArmed: false,
+      autoApproveArmed: armed,
       retrievalMode: retrieval.mode
     })
 
@@ -229,6 +243,18 @@ export const DecideDocumentLayer = DecideDocumentWorkflow.toLayer(
         }
       })
     ))
+
+    /*
+     * The auto-approve branch, calling the SAME function the human path calls.
+     *
+     * This is the architectural claim the whole design turns on, and it is wired LAST on purpose: the human
+     * path was built first, so this branch had to conform to it rather than the reverse. `dep:check` asserts
+     * exactly one `EmitExecute` call site, and a test asserts an auto-approved execution row is identical to
+     * a human-approved one but for `approved_by`.
+     */
+    if (railed.outcome === "auto_approve") {
+      yield* Effect.orDie(EmitExecute({ decisionId, action: "dry_run" }))
+    }
 
     return new DecideResult({
       decisionId,
