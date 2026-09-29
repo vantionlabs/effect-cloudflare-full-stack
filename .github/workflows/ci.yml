@@ -37,6 +37,9 @@ jobs:
       # correct here: CI has no real sessions to protect, and a committed secret would be worse.
       BETTER_AUTH_SECRET: ci-only-secret-at-least-32-characters-long
       BASE_URL: http://localhost:8799
+      # Job-level so the `if:` conditions below can test it. `secrets.*` is not available in an
+      # `if:` on a step, but `env.*` is.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -77,7 +80,35 @@ jobs:
       - run: bun run check
       - run: bun run lint
       - run: bun run hygiene
-      - run: bun run test
+
+      # Everything that runs on a local runtime.
+      - name: Test (local runtimes)
+        run: bun run test --project domain --project tables --project evals --project console
+
+      # The `worker` project is separate because it CANNOT run locally.
+      #
+      # It boots a real Worker from apps/worker/wrangler.jsonc, and that config has an `ai` binding.
+      # Workers AI has no local emulation, so wrangler starts a REMOTE runtime and refuses without
+      # `CLOUDFLARE_API_TOKEN` — "in a non-interactive environment, it's necessary to set a
+      # CLOUDFLARE_API_TOKEN". It passes on a developer machine only because `wrangler login` cached
+      # OAuth credentials there, which is a third way this suite was green locally and red here.
+      #
+      # Gated on the secret rather than made conditional in the test file: a suite that silently
+      # skips itself is worse than one that visibly does not run, and the step below says so out loud.
+      - name: Test (real Worker — needs a remote runtime for the AI binding)
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bun run test --project worker
+
+      - name: Say so when the real-Worker suite did not run
+        if: ${{ env.CLOUDFLARE_API_TOKEN == '' }}
+        run: |
+          echo "::warning title=worker suite skipped::CLOUDFLARE_API_TOKEN is not set, so the \
+          real-Worker tests (auth, sessions, the origin allowlist) did NOT run. They need a remote \
+          runtime because the AI binding has no local emulation. Add the secret to run them."
+
       # The retrieval gate. Separate from `test` because it is a THRESHOLD, not an assertion: it can
       # regress without any test failing, and a decide pipeline built on retrieval that cannot find
       # the applicable clause produces a review queue full of needs_human with nothing to explain why.
