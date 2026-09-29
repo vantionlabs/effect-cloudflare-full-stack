@@ -40,6 +40,7 @@ jobs:
       # Job-level so the `if:` conditions below can test it. `secrets.*` is not available in an
       # `if:` on a step, but `env.*` is.
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -112,4 +113,22 @@ jobs:
       # The retrieval gate. Separate from `test` because it is a THRESHOLD, not an assertion: it can
       # regress without any test failing, and a decide pipeline built on retrieval that cannot find
       # the applicable clause produces a review queue full of needs_human with nothing to explain why.
-      - run: bun run evals:retrieval
+      #
+      # Needs Workers AI credentials for the same reason the worker suite needs a token: the semantic
+      # half is a real embedding call. The harness now REFUSES to print a hybrid number when the
+      # embeddings did not land, rather than reporting lexical recall under a semantic label — so
+      # running it without credentials would fail on that refusal, not on retrieval quality, which
+      # would be a confusing way to be red.
+      - name: Retrieval gate
+        if: ${{ env.CLOUDFLARE_AI_TOKEN != '' }}
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+        run: bun run evals:retrieval
+
+      - name: Say so when the retrieval gate did not run
+        if: ${{ env.CLOUDFLARE_AI_TOKEN == '' }}
+        run: |
+          echo "::warning title=retrieval gate skipped::CLOUDFLARE_AI_TOKEN is not set, so retrieval \
+          recall was NOT measured. The decide pipeline's quality rests on this number; a queue full \
+          of needs_human will not tell you retrieval is why."
