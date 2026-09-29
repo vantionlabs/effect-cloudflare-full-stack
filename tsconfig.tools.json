@@ -1,0 +1,43 @@
+{
+  // Everything that runs at BUILD or GATE time rather than in the product, and which `tsc -b
+  // tsconfig.json` therefore never saw.
+  //
+  // This existed as a hole. The root solution references five projects — packages/modules,
+  // packages/api, evals, apps/console, apps/worker — so `scripts/` had no tsconfig at all and
+  // `infra/` had one that nothing pointed at. Eight files were unchecked, and among them were
+  // `boundaries.ts`, `bindings-check.ts` and `auth-schema.ts`: **the scripts that enforce this
+  // repo's invariants were themselves untypechecked.** A gate that cannot be typechecked is a
+  // gate whose green is worth less than it looks.
+  //
+  // Borrowed from saas-starter's `tsconfig.tools.json`, which solves the same problem the same way
+  // and is wired into its `check` the same way.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // Not part of the project graph: nothing imports these, and making them composite would
+    // force an emit step for files that only ever run under Bun.
+    "composite": false,
+    "incremental": false,
+    "noEmit": true,
+    // The base sets `rootDir: "src"` for the product packages; these files live at the repo root
+    // and under scripts/, so it has to be widened or every file is "not under rootDir".
+    "rootDir": ".",
+    // Both follow from `composite: false` — the base turns them on for the emitted packages, and
+    // `declarationMap` without `declaration` is itself an error (TS5069).
+    "declaration": false,
+    "declarationMap": false,
+    // vitest.config.ts imports `./vitest.shared.ts`-style paths by real extension in some setups,
+    // which `tsc` accepts only when it is not emitting. Harmless here, and one less trap later.
+    "allowImportingTsExtensions": true,
+    // ES2023 only here. The base deliberately sets no `lib` override, and the product code targets
+    // workerd; it is the gate scripts that use `Array#toSorted`. Scoping it means one directory gets
+    // a newer lib rather than the whole repo silently gaining APIs workerd may not have.
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": [
+    "vitest.config.ts",
+    "scripts/*.ts",
+    "apps/*/vite.config.ts",
+    "apps/*/vitest.config.ts"
+  ]
+}

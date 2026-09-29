@@ -15,6 +15,7 @@
  */
 import { getAuthTables } from "better-auth/db"
 import { readFileSync } from "node:fs"
+import { writeFile } from "node:fs/promises"
 import { makeAuth } from "../packages/modules/iam/server/Session/BetterAuth.ts"
 
 /** A throwaway config: only the plugin list affects the emitted schema. */
@@ -191,6 +192,6 @@ if (process.argv.includes("--check")) {
   }
   console.log(`✓ auth schema matches the installed better-auth (${tableNames.length} tables)`)
 } else {
-  await Bun.write(target, body)
+  await writeFile(target, body, "utf8")
   console.log(`wrote SessionTable.ts — ${tableNames.length} tables: ${tableNames.join(", ")}`)
 }

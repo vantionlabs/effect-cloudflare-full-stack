@@ -13,7 +13,7 @@
  * forgotten. `null` says "we decided not to bound this"; it does not say "we did not think about it".
  * Which of the two it really was is recorded in `description` and shown to the reviewer.
  */
-import { Currency } from "@ea/modules/shared/domain/Money"
+import { Cents, Currency } from "@ea/modules/shared/domain/Money"
 import { Schema } from "effect"
 
 /**
@@ -29,8 +29,15 @@ export class AutoApproveRule extends Schema.Class<AutoApproveRule>("AutoApproveR
   vertical: Schema.String,
   /** A rule that exists but is not armed is a draft, and drafts must not approve payments. */
   armed: Schema.Boolean,
-  /** Integer minor units. Null means no ceiling. */
-  max_amount_minor: Schema.NullOr(Schema.Number),
+  /**
+   * Integer minor units. Null means no ceiling.
+   *
+   * `Cents`, not `Schema.Number`. This is the ceiling rail 3 compares an invoice total against, and a
+   * bare number schema accepts `NaN`, `Infinity` and `1234.56` — so a rule could carry a ceiling that
+   * makes every comparison false, or express "no ceiling" as `Infinity` through a second path that the
+   * `null` case already owns. The comment claimed integer minor units; now the type does.
+   */
+  max_amount_minor: Schema.NullOr(Cents),
   /** The only currency this rule authorises. A rule is never currency-agnostic by accident. */
   currency: Currency,
   /** When true, an invoice with no purchase order number is never approved automatically. */
@@ -43,7 +50,7 @@ export class AutoApproveRule extends Schema.Class<AutoApproveRule>("AutoApproveR
    * A short payment term is a known invoice-fraud indicator, which is why it is a bound a rule can
    * impose rather than something only the model notices in the policy text.
    */
-  min_payment_days: Schema.Number,
+  min_payment_days: Schema.Int,
   description: Schema.String
 }) {}
 

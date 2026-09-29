@@ -33,7 +33,7 @@
   },
   "scripts": {
     "prepare": "effect-tsgo patch --oxlint && (git rev-parse --git-dir >/dev/null 2>&1 && lefthook install || true)",
-    "check": "tsc -b tsconfig.json",
+    "check": "tsc -b tsconfig.json && tsc -p tsconfig.tools.json && tsc -p infra/tsconfig.json",
     "check:watch": "tsc -b tsconfig.json --watch",
     "format": "dprint fmt",
     "format:check": "dprint check",
@@ -49,7 +49,7 @@
     "deps:update": "syncpack update",
     "dep:check": "bun scripts/boundaries.ts",
     "hygiene": "bun run knip && bun run deps:check && bun run secrets && bun run dep:check && bun run bindings:check && bun run auth:check",
-    "preflight": "bun run format && bun run check && bun run lint && bun run hygiene && bun run test && bun run evals:retrieval",
+    "preflight": "bun run format && bun run check && bun run lint && bun run hygiene && bun run test",
     "effect:verify": "bun scripts/verify-effect-api.ts",
     "evals": "bun evals/Decisions.ts",
     "evals:rule": "bun evals/CheckRule.ts",

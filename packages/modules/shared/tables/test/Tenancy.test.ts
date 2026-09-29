@@ -12,7 +12,7 @@
  */
 import { CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
 import { PgClient } from "@effect/sql-pg"
-import { Effect, Redacted } from "effect"
+import { Effect, Layer, Redacted } from "effect"
 import { SqlClient } from "effect/sql"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { Db } from "../Database/Db.ts"
@@ -56,8 +56,8 @@ const runAsOrg = <A, E>(orgId: OrgId, effect: Effect.Effect<A, E, Db | SqlClient
   Effect.runPromise(
     effect.pipe(
       Effect.provideService(CurrentUser, identity(orgId)),
-      Effect.provide(Db.layer),
-      Effect.provide(Admin),
+      // One provide: `Db.layer` needs the connection `Admin` supplies (`multipleEffectProvide`).
+      Effect.provide(Db.layer.pipe(Layer.provideMerge(Admin))),
       Effect.scoped
     ) as Effect.Effect<A, E>
   )

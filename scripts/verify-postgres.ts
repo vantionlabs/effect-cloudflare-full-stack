@@ -22,7 +22,7 @@
  */
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Redacted } from "effect"
-import { SqlClient } from "effect/sql"
+import { SqlClient, type SqlError } from "effect/sql"
 import { existsSync, readFileSync } from "node:fs"
 
 /** Same loader as the eval harness: one source of truth for wrangler dev and for scripts. */
@@ -60,8 +60,17 @@ interface Check {
   readonly run: Effect.Effect<{ readonly ok: boolean; readonly detail: string }, unknown, SqlClient.SqlClient>
 }
 
-const query = <A>(run: (sql: SqlClient.SqlClient) => Effect.Effect<ReadonlyArray<A>>) =>
-  Effect.flatMap(SqlClient.SqlClient, run)
+/*
+ * `SqlError` in the callback's error channel, which it always could produce.
+ *
+ * This said `Effect.Effect<ReadonlyArray<A>>` — E defaulting to `never` — while every caller passes a
+ * `sql` template that fails with `SqlError`. The annotation was a lie, and `Check.run` types its error
+ * as `unknown` so nothing downstream noticed. It surfaced the moment scripts/ was typechecked at all:
+ * TS2375 plus the language service's own TS377003 `missingEffectError`, twelve times in this file.
+ */
+const query = <A>(
+  run: (sql: SqlClient.SqlClient) => Effect.Effect<ReadonlyArray<A>, SqlError.SqlError>
+) => Effect.flatMap(SqlClient.SqlClient, run)
 
 const checks: ReadonlyArray<Check> = [
   {

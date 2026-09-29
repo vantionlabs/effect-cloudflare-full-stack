@@ -64,8 +64,16 @@ const run = <A, E>(
     effect.pipe(
       Effect.provideService(CurrentUser, identity(userId)),
       Effect.provideService(CurrentOrg, ORG),
-      Effect.provide(Layer.mergeAll(Db.layer, IdsLive, DryRunAdapter, extra as Layer.Layer<never>)),
-      Effect.provide(Admin)
+      /*
+       * One provide. Chained provides each build against their own memo map, so a shared dependency
+       * can be constructed twice — `multipleEffectProvide`. `provideMerge` keeps the dependency
+       * direction the chain had while building it once.
+       */
+      Effect.provide(
+        Layer.mergeAll(Db.layer, IdsLive, DryRunAdapter, extra as Layer.Layer<never>).pipe(
+          Layer.provideMerge(Admin)
+        )
+      )
     ) as Effect.Effect<A, E, never>
   )
 

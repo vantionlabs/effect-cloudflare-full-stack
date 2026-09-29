@@ -78,8 +78,13 @@ const scripted = (options: { readonly toolCalls: number; readonly answer: string
 const run = (model: Layer.Layer<AgentModel>, search: Layer.Layer<PolicySearch>) =>
   Effect.runPromise(
     AskCorpus("Mag ik een factuur van een onbekende leverancier goedkeuren?").pipe(
-      Effect.provide(AskToolkitLive),
-      Effect.provide(Layer.mergeAll(model, search, Layer.succeed(CurrentOrg)(ORG)))
+      // One provide: `AskToolkitLive` requires `PolicySearch` and `CurrentOrg`, so this is
+      // `provideMerge` rather than a second chained provide (`multipleEffectProvide`).
+      Effect.provide(
+        AskToolkitLive.pipe(
+          Layer.provideMerge(Layer.mergeAll(model, search, Layer.succeed(CurrentOrg)(ORG)))
+        )
+      )
     ) as Effect.Effect<{ answer: string; steps: number; truncated: boolean }, never, never>
   )
 

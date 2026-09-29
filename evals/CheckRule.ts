@@ -39,6 +39,7 @@ import { applyRails } from "@ea/modules/decision/domain/Decision"
 import { verifySpans } from "@ea/modules/decision/domain/Extraction"
 import { checkArithmetic, invoiceRuleFacts } from "@ea/modules/decision/domain/Invoice"
 import { AutoApproveRule, evaluateRule } from "@ea/modules/decision/domain/Rule"
+import { Cents } from "@ea/modules/shared/domain/Money"
 import {
   APPROVED_SUPPLIERS,
   buildInvoices,
@@ -62,7 +63,7 @@ const RULE = new AutoApproveRule({
   id: "rule_under_test",
   vertical: "invoice",
   armed: true,
-  max_amount_minor: 100_000,
+  max_amount_minor: Cents.make(100_000),
   currency: "EUR",
   require_po: true,
   approved_suppliers: APPROVED_SUPPLIERS,

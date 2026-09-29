@@ -16,7 +16,7 @@
 import { AskRpcs } from "@ea/modules/policy/domain/Ask"
 import { AskCorpus, AskToolkitLive } from "@ea/modules/policy/use-cases/Ask"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
-import { Effect } from "effect"
+import { Effect, Layer } from "effect"
 import { serveForTenant } from "../Serve.ts"
 
 /**
@@ -33,8 +33,13 @@ export const AskRpcLive = AskRpcs.toLayer(
     "Ask.question": (payload: { readonly question: string }) =>
       serveForTenant(
         AskCorpus(payload.question.slice(0, MAX_QUESTION_LENGTH)).pipe(
-          Effect.provide(AskToolkitLive),
-          Effect.provide(PolicySearchLive)
+          /*
+           * One provide. `AskToolkitLive` requires `PolicySearch`, so this is `provideMerge` rather
+           * than `Layer.mergeAll`: merge would leave that requirement unsatisfied. Chaining two
+           * provides built `PolicySearchLive` against its own memo map, which the Effect language
+           * service flags as `multipleEffectProvide`.
+           */
+          Effect.provide(AskToolkitLive.pipe(Layer.provideMerge(PolicySearchLive)))
         )
       ).pipe(Effect.orDie)
   })

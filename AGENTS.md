@@ -101,6 +101,13 @@ the app role cannot discover that production does not.
 So a column like `rails_fired` breaks precisely when it is empty — the happy path breaks and the unhappy
 path works. Use `textArray(sql, values)`.
 
+**`bun run preflight` does NOT include the retrieval gate, on purpose.**
+`bun run evals:retrieval` is a separate command because it needs Workers AI credentials and real embedding
+calls, and CI runs it conditionally on `CLOUDFLARE_AI_TOKEN` with a loud warning when skipped. Putting it
+inside `preflight` made `preflight` permanently red while the Workers AI account has no neurons — a gate
+nobody can pass stops being read. Run it deliberately, and treat a failure as a retrieval-quality finding
+rather than a broken build.
+
 **Three things made the gates pass locally and fail on a clean machine, and all three had the same
 shape: a developer machine holds state a fresh one does not.** A green `bun run preflight` is therefore
 evidence about this machine, not about the code. The three were a generated file that was already on disk,

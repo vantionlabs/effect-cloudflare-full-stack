@@ -37,7 +37,7 @@ import { readThrough } from "@ea/modules/shared/domain/Cache"
 import type { QueueMessage } from "@ea/modules/shared/domain/Event"
 import { Db, withDatabase } from "@ea/modules/shared/tables/Database"
 import { ConsumeEvent, type EventRow } from "@ea/modules/shared/use-cases/Event"
-import { Effect, Schema } from "effect"
+import { Effect, Layer, Schema } from "effect"
 
 /**
  * The payload shapes, decoded rather than trusted.
@@ -163,10 +163,26 @@ const workFor = (row: EventRow) =>
         return yield* Effect.fail(new UnknownEventType({ type: row.type }))
     }
   }).pipe(
-    // Built per message: see the module docstring for why neither of these can be memoised per isolate.
-    Effect.provide(DecideDocumentLayer),
-    Effect.provide(WorkflowEnginePg),
-    Effect.provide(PolicySearchLive)
+    /*
+     * ONE provide, with the dependency direction written down.
+     *
+     * Built per message: see the module docstring for why none of these can be memoised per isolate.
+     *
+     * This was three chained `Effect.provide` calls, which the Effect language service flags
+     * (`multipleEffectProvide`) because each chained provide builds its layer against its own memo
+     * map — so a dependency shared by two of them can be constructed twice, and anything scoped gets
+     * a second lifecycle. `DecideDocumentLayer` genuinely requires both `WorkflowEngine` and
+     * `PolicySearch`, so plain `Layer.mergeAll` of all three would NOT work: merge puts layers
+     * side by side, it does not wire one into another.
+     *
+     * `provideMerge` is the faithful form — it feeds the two dependencies into `DecideDocumentLayer`
+     * AND keeps their outputs visible to the effect, which is what the chain did.
+     */
+    Effect.provide(
+      DecideDocumentLayer.pipe(
+        Layer.provideMerge(Layer.mergeAll(WorkflowEnginePg, PolicySearchLive))
+      )
+    )
   )
 
 /**

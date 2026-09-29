@@ -31,9 +31,9 @@
         "name": "@effect/language-service",
         "namespaceImportPackages": ["effect", "@effect/*"],
         "diagnosticSeverity": { "globalErrorInEffectFailure": "off" },
-        "includeSuggestionsInTsc": false,
-        "ignoreEffectWarningsInTscExitCode": true,
-        "ignoreEffectErrorsInTscExitCode": true
+        "includeSuggestionsInTsc": true,
+        "ignoreEffectWarningsInTscExitCode": false,
+        "ignoreEffectErrorsInTscExitCode": false
       }
     ]
   }

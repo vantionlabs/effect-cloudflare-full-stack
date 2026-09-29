@@ -20,6 +20,7 @@ import { AutoApproveRule, evaluateRule } from "@ea/modules/decision/domain/Rule"
 import { Telemetry } from "@ea/modules/decision/domain/Telemetry"
 import { ExtractDocument } from "@ea/modules/decision/use-cases/Extraction"
 import { Ids } from "@ea/modules/shared/domain/Ids"
+import { Cents } from "@ea/modules/shared/domain/Money"
 import { PolicySearch, Retrieval } from "@ea/modules/shared/domain/Retrieval"
 import { Db, textArray } from "@ea/modules/shared/tables/Database"
 import { Effect, Schema } from "effect"
@@ -293,7 +294,11 @@ export const DecideDocumentLayer = DecideDocumentWorkflow.toLayer(
           // bigint arrives as a string from the driver: Number() on it here is safe because a ceiling in
           // minor units cannot approach 2^53, and keeping it a string would make every comparison
           // lexicographic — which silently reads EUR 90,00 as above EUR 1.000,00.
-          max_amount_minor: rules[0]!.max_amount_minor === null ? null : Number(rules[0]!.max_amount_minor),
+          // `Cents.make` rather than a bare Number: it VALIDATES, so a ceiling that is somehow not an
+          // integer fails here rather than silently participating in a money comparison.
+          max_amount_minor: rules[0]!.max_amount_minor === null
+            ? null
+            : Cents.make(Number(rules[0]!.max_amount_minor)),
           currency: rules[0]!.currency as AutoApproveRule["currency"]
         }),
         invoiceRuleFacts(extraction.fields as Invoice)

@@ -64,8 +64,9 @@ const run = <A, E>(bus: Layer.Layer<EventBus>, effect: Effect.Effect<A, E, any>)
     effect.pipe(
       Effect.provideService(CurrentUser, identity),
       Effect.provideService(CurrentOrg, identity.orgId),
-      Effect.provide(Layer.mergeAll(Db.layer, IdsLive, bus)),
-      Effect.provide(Admin)
+      // One provide: the merged layers need the connection `Admin` supplies
+      // (`multipleEffectProvide` — chaining builds it against a separate memo map).
+      Effect.provide(Layer.mergeAll(Db.layer, IdsLive, bus).pipe(Layer.provideMerge(Admin)))
     ) as Effect.Effect<A, E, never>
   )
 
@@ -222,8 +223,9 @@ describe("ConsumeEvent", () => {
         .pipe(
           // An ambient tenant belonging to somebody else, which must have no effect whatsoever.
           Effect.provideService(CurrentOrg, other),
-          Effect.provide(Layer.mergeAll(Db.layer, IdsLive, recordingBus().layer)),
-          Effect.provide(Admin)
+          // One provide: the merged layers need the connection `Admin` supplies
+          // (`multipleEffectProvide` — chaining builds it against a separate memo map).
+          Effect.provide(Layer.mergeAll(Db.layer, IdsLive, recordingBus().layer).pipe(Layer.provideMerge(Admin)))
         ) as Effect.Effect<{ readonly _tag: string }, never, never>
     )
 

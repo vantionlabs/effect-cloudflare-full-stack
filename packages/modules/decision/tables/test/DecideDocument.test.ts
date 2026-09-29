@@ -177,10 +177,19 @@ const provide = <A, E>(
   bus?: Layer.Layer<EventBus>
 ) =>
   effect.pipe(
-    Effect.provide(DecideDocumentLayer),
-    Effect.provide(WorkflowEnginePg),
-    Effect.provide(PolicySearchLive),
-    Effect.provide(base(model, bus))
+    /*
+     * One provide, mirroring apps/worker/src/platform/DispatchEvent.ts.
+     *
+     * `DecideDocumentLayer` requires both `WorkflowEngine` and `PolicySearch`, so `Layer.mergeAll` of
+     * all of them would leave those unsatisfied — merge is side-by-side, not wiring. `provideMerge`
+     * feeds them in and keeps their outputs visible, which is what the chain did.
+     */
+    Effect.provide(
+      DecideDocumentLayer.pipe(
+        Layer.provideMerge(Layer.mergeAll(WorkflowEnginePg, PolicySearchLive)),
+        Layer.provideMerge(base(model, bus))
+      )
+    )
   ) as Effect.Effect<A, E, never>
 
 const run = <A, E>(

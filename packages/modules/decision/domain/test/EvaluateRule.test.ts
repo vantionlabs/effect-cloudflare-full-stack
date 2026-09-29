@@ -9,6 +9,7 @@
  */
 import { invoiceRuleFacts, parsePrintedDate } from "@ea/modules/decision/domain/Invoice"
 import { AutoApproveRule, evaluateRule, type RuleFacts } from "@ea/modules/decision/domain/Rule"
+import { Cents } from "@ea/modules/shared/domain/Money"
 import { describe, expect, it } from "vitest"
 
 const rule = (overrides: Partial<AutoApproveRule> = {}) =>
@@ -16,7 +17,7 @@ const rule = (overrides: Partial<AutoApproveRule> = {}) =>
     id: "rule_1",
     vertical: "invoice",
     armed: true,
-    max_amount_minor: 100_000,
+    max_amount_minor: Cents.make(100_000),
     currency: "EUR",
     require_po: true,
     approved_suppliers: ["Contoso Cleaning Services BV", "Fabrikam Office Supplies BV"],
