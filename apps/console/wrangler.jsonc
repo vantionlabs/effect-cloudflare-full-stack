@@ -1,39 +1,76 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "effect-ai-console-dev",
-  // `pages_build_output_dir` is what marks this a PAGES project rather than a Worker. Wrangler switches to
-  // Pages-specific validation on seeing it, so this file cannot also declare `main`, `queues` or `hyperdrive`.
-  "pages_build_output_dir": "dist",
+  "name": "effect-ai-console",
+  // ───────────────────────────────────────────────────────────────────────────────────────
+  // A WORKER, not a Pages project. This is the ADR-0001 revisit.
+  //
+  // The console was a static SPA on Pages with a three-line Function forwarding `/api/*` to the API
+  // Worker over a service binding. That shape worked and was verified end to end. It is being replaced
+  // because SSR cannot be bolted onto static assets: a Pages project serves files, and "refuse this
+  // route before any HTML is sent" needs a server that runs first.
+  //
+  // What is GAINED: real server-side auth. A `beforeLoad` running on the server can read the session
+  // cookie, decide, and redirect — so an unauthenticated visitor never receives the authenticated shell.
+  // On the SPA the only options were rendering then correcting (a flicker) or blocking on a client fetch
+  // (a spinner). Also: SSR loaders call the API over the service binding IN-PROCESS, with no HTTP hop at
+  // all, which is strictly better than the Function proxy it replaces.
+  //
+  // What is KEPT: one origin, and therefore none of the three cross-origin settings. The browser talks
+  // only to this Worker; this Worker talks to the API over the binding. That was ADR-0001's actual
+  // objective, and it survives the move.
+  //
+  // What is LOST: `pages deploy`'s preview-per-branch URLs. Workers has versioned previews instead, and
+  // the deploy pipeline names environments explicitly rather than inferring them from a branch.
+  // ───────────────────────────────────────────────────────────────────────────────────────
+  //
+  /*
+   * OUR entry, not `@tanstack/react-start/server-entry`.
+   *
+   * Cloudflare's framework guide points `main` at the package export, which is the right default. This
+   * console needs one branch in front of it: `/api/*` forwards to the API over the service binding so the
+   * whole app stays ONE ORIGIN — which is what lets better-auth's client SDK and the existing typed RPC
+   * client both work with no CORS, no trusted-origins list and no cookie domain.
+   *
+   * `src/server.ts` wraps the framework's own handler rather than reimplementing it, so there is nothing
+   * to drift: Start's default entry is `createStartHandler(defaultStreamHandler)` and so is ours.
+   */
+  "main": "./src/server.ts",
   "compatibility_date": "2026-09-26",
+  // Required by Start's server entry, which uses Node builtins through the framework rather than directly.
   "compatibility_flags": ["nodejs_compat"],
 
-  // ───────────────────────────────────────────────────────────────────────────────────────
-  // SAME ORIGIN, ON PAGES.
-  //
-  // The console deploys to Pages, and `/api/*` is forwarded to the Worker over a SERVICE BINDING
-  // by `functions/api/[[path]].ts`. So the browser only ever talks to one origin — the property
-  // ADR-0001 was protecting, preserved rather than traded away.
-  //
-  // Why a proxy and not two origins: this account has ZERO zones (verified against the API), so
-  // there is no custom domain to put both behind. Without one, Pages is `*.pages.dev` and the
-  // Worker is `*.workers.dev` — cross-origin, which would mean a CORS layer, a trusted-origins
-  // list, and `SameSite=None; Secure` cookies. Those are the three settings most likely to be
-  // subtly and silently wrong. A service binding avoids all three for one in-network hop.
-  //
-  // A service binding is Worker-to-Worker inside Cloudflare's network: no public request, no
-  // egress, no token.
-  // ───────────────────────────────────────────────────────────────────────────────────────
+  /*
+   * The API, over a service binding — Worker to Worker inside Cloudflare's network, no public request,
+   * no egress, no token.
+   *
+   * This is now reachable from SSR loaders and server functions as `env.API.fetch(...)`, which is the
+   * same capability the Pages Function had, available from every server-rendered route instead of only
+   * from a catch-all proxy.
+   */
   "services": [
     { "binding": "API", "service": "effect-ai" },
   ],
-  // NO `observability` BLOCK. Pages rejects it outright:
-  //
-  //   Configuration file for Pages projects does not support "observability"
-  //
-  // Found by deploying. The Pages docs say Workers-specific keys "do not apply" but give no list, so the only
-  // way to know is to try — `observability` is one of them, despite Pages Functions being Workers underneath.
-  // Function logs are available through the Pages project's own log stream instead.
-  // Pages supports ONLY `production` and `preview` as environment names — not arbitrary ones like the
-  // Worker's `staging`. Verified against the docs. `services` is non-inheritable here too, so a future
-  // `env.preview` must repeat it rather than expecting to inherit.
+
+  "observability": {
+    // Unlike Pages, a Worker accepts this — one of the smaller wins of the move, since the console's own
+    // SSR errors now land in the same place the API's do.
+    "enabled": true,
+  },
+
+  "env": {
+    "staging": {
+      "services": [
+        // Non-inheritable, like every other binding: staging's console must reach STAGING's API, and
+        // inheriting would silently point it at production.
+        { "binding": "API", "service": "effect-ai-staging" },
+      ],
+      "observability": { "enabled": true },
+    },
+    "dev": {
+      "services": [
+        { "binding": "API", "service": "effect-ai-dev" },
+      ],
+      "observability": { "enabled": true },
+    },
+  },
 }

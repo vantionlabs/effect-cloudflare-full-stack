@@ -1,34 +1,39 @@
 /**
- * The reviewer console: a client-rendered app, served by the Worker as static assets.
+ * The console, as a TanStack Start app on a Cloudflare Worker.
  *
- * **One deploy, two packages.** ADR-0001 keeps a single Worker — one origin, one auth seam, no CORS, assets
- * served before the Worker runs. That does not require a single *package*, and the plan conflated the two.
- * Here the console builds to static assets that `apps/worker`'s `assets` binding serves, so the deploy stays
- * single while the type environments stay apart.
+ * It was a static SPA on Pages until now. The move to Start is what buys **server-side auth**: a route
+ * can be refused before any HTML is sent, rather than rendering a shell and then discovering on the
+ * client that there is no session. That is the difference between a guard and a flicker.
  *
- * Client-rendered rather than SSR, deliberately. SSR is what forced one package: TanStack Start insists on
- * owning the Worker entry, so the Effect router and the SSR handler had to live in one build. For an
- * internal tool behind a login there is no SEO and no first-paint pressure on a queue grid that cannot
- * render before auth resolves, so SSR was paying a real architectural cost for nothing. It is recoverable
- * later — the routes are unchanged by it.
+ * Plugin order is not arbitrary — it is the order Cloudflare's own framework guide specifies:
+ * `cloudflare` first, declaring the SSR environment it owns, then `tanstackStart`, then React.
+ *
+ * `viteEnvironment: { name: "ssr" }` is what tells the Cloudflare plugin which Vite environment runs in
+ * workerd. Without it the SSR pass runs in Node and the bindings are absent, which fails as a missing
+ * `env` rather than as a configuration error.
  */
-import { tanstackRouter } from "@tanstack/router-plugin/vite"
+import { cloudflare } from "@cloudflare/vite-plugin"
+import tailwindcss from "@tailwindcss/vite"
+import { tanstackStart } from "@tanstack/react-start/plugin/vite"
+import viteReact from "@vitejs/plugin-react"
+import { fileURLToPath } from "node:url"
 import { defineConfig } from "vite"
 
 export default defineConfig({
-  plugins: [
-    tanstackRouter({ target: "react", autoCodeSplitting: true })
-  ],
-  build: {
-    // Where apps/worker's `assets` binding looks. Kept explicit so the two cannot drift silently.
-    outDir: "dist"
+  /*
+   * `@/` for this app's own src.
+   *
+   * shadcn/ui generates components importing `@/lib/utils` and `@/components/ui/*`, so the alias is not
+   * optional once its registry is used — and having it means a route three directories deep imports
+   * `@/auth/SignIn.ts` rather than counting `../`. Mirrored in tsconfig so tsc and the bundler agree.
+   */
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) }
   },
-  server: {
-    // `vite dev` proxies the API to `wrangler dev`, so the console is developed against the real Worker
-    // rather than a mock — the same reason the tests drive real workerd.
-    proxy: {
-      "/api": "http://localhost:8799",
-      "/auth": "http://localhost:8799"
-    }
-  }
+  plugins: [
+    cloudflare({ viteEnvironment: { name: "ssr" } }),
+    tanstackStart(),
+    viteReact(),
+    tailwindcss()
+  ]
 })

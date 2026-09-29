@@ -11,9 +11,27 @@
   "compilerOptions": {
     "noEmit": true,
     "rootDir": ".",
+    // Must match vite.config.ts's alias, or tsc and the bundler disagree about `@/`.
+    /*
+     * Mapped to `.js`, which is how saas-starter does it and is not a typo.
+     *
+     * Aliased imports are written WITHOUT an extension (`@/auth/SignIn`), unlike this repo's relative
+     * imports which carry `.ts`. TS2877 forbids a `.ts` extension on a non-relative path because it
+     * cannot be rewritten on emit — so the mapping supplies `.js`, and NodeNext resolves that back to
+     * the `.ts` source. Vite's alias resolves the same specifier directly.
+     */
+    "paths": { "@/*": ["./src/*.js"] },
     "tsBuildInfoFile": ".tsbuildinfo/src.tsbuildinfo",
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"]
+    /*
+     * `@cloudflare/workers-types` is here now, which it deliberately was NOT before.
+     *
+     * The console used to be browser-only, and ADR-0001 kept workers-types out precisely because its
+     * Request/Response collide with lib.dom. It now has a SERVER half — SSR and server functions running
+     * in workerd, reading `env` from `cloudflare:workers` — so it needs both. They coexist because DOM
+     * wins for the shared names and the Cloudflare-only globals are what we actually import by name.
+     */
+    "types": ["vite/client", "@cloudflare/workers-types"]
   }
 }

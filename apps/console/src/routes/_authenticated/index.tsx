@@ -6,8 +6,8 @@
  * decides whether a shortcut works.
  */
 import { createFileRoute } from "@tanstack/react-router"
-import { QueueScreen } from "../queue-screen.tsx"
+import { QueueScreen } from "../../queue-screen.tsx"
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authenticated/")({
   component: QueueScreen
 })

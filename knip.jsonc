@@ -25,16 +25,15 @@
       "entry": ["**/test/**/*.ts"],
     },
     "apps/console": {
-      // Vite's entry is index.html; routes are discovered by the router plugin, not imported.
+      // The Worker's entry is `main` in wrangler.jsonc (src/server.ts), which knip finds on its own;
+      // routes are discovered by TanStack Start's plugin, not imported.
       //
       // `functions/**` is Pages' file-based routing: Cloudflare discovers a Function by its PATH, so nothing
       // imports it and knip is right that it looks dead. Declaring it an entry point is the honest fix — the
       // alternative, an ignore, would also hide a genuinely dead Function later.
       "entry": [
-        "index.html",
         "src/routes/**/*.tsx",
         "test/**/*.tsx",
-        "functions/**/*.ts",
       ],
     },
     "evals": {
