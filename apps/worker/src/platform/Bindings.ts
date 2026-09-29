@@ -25,6 +25,27 @@ export interface Env {
     /** Assembled by the binding. Used by `pg` for better-auth; the Effect driver takes parts. */
     readonly connectionString: string
   }
+  /**
+   * A SECOND Hyperdrive config against the same database, with query caching left ON.
+   *
+   * Only the policy corpus may be read through it. Hyperdrive caches reads for 60s and does not
+   * invalidate on write, so the review queue and decision detail must keep using `HYPERDRIVE`, whose
+   * config has caching disabled — a reviewer who approves something and then sees a stale queue is the
+   * bug plan risk R3 names.
+   *
+   * **Declared but not yet consumed.** `Connect` is a single port today, so routing corpus reads
+   * through this connection is a threading change in the retrieval path rather than a config edit.
+   * Typed here so the binding that exists is the binding the code names, and so the next step is a
+   * diff against a declaration instead of a discovery.
+   */
+  readonly HYPERDRIVE_CACHED: {
+    readonly host: string
+    readonly port: number
+    readonly user: string
+    readonly password: string
+    readonly database: string
+    readonly connectionString: string
+  }
   /** Source documents. Tenancy is a key prefix, enforced in @ea/modules/intake/domain/Document. */
   readonly DOCUMENTS: R2Bucket
   /** The event queue producer. Stable for an isolate's lifetime, so safe to capture. */

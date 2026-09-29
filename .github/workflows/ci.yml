@@ -73,7 +73,11 @@ jobs:
 
       - name: Compose the Hyperdrive local connection string
         run: |
-          echo "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgres""ql://$PGUSER:$PGPASSWORD@localhost:$PGPORT/$PGDATABASE" >> "$GITHUB_ENV"
+          URL="postgres""ql://$PGUSER:$PGPASSWORD@localhost:$PGPORT/$PGDATABASE"
+          echo "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=$URL" >> "$GITHUB_ENV"
+          # The second Hyperdrive binding needs its own local string or the harness refuses to start.
+          # Same container: locally there is no Hyperdrive and no caching (ADR-0002).
+          echo "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED=$URL" >> "$GITHUB_ENV"
 
       # Kept as separate steps rather than one `preflight` so a failure names itself in the
       # Actions UI instead of hiding inside a composite script.

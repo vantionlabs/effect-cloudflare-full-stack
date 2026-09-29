@@ -72,7 +72,7 @@
    * shape, and a host that is not listed falls back to `BASE_URL` rather than being trusted.
    */
   "vars": {
-    "ENVIRONMENT": "dev",
+    "ENVIRONMENT": "production",
     "CLOUDFLARE_ACCOUNT_ID": "f4599b98c2430a831bcfc291d156a988",
     "CLOUDFLARE_AI_GATEWAY": "effect-ai-ai-dev",
     "AI_GATEWAY": "effect-ai-ai-dev",
@@ -121,13 +121,29 @@
    * Not a secret: an account-scoped identifier. Cloudflare holds the credentials behind it, which is the whole
    * point — the Worker never sees them.
    */
+  /*
+   * TWO configs against the SAME database, which is plan risk R3.
+   *
+   * Hyperdrive caches read queries for 60s with `stale_while_revalidate` 15s, and — this is the part
+   * that bites — it does NOT invalidate on write. A reviewer who approves a decision and then sees a
+   * sixty-second-stale queue is a bug, so the transactional path must never be cached.
+   *
+   * HYPERDRIVE    caching DISABLED — the review queue, decision detail, every write and the reads
+   *       that must observe one.
+   * HYPERDRIVE_CACHED caching ON — the policy corpus only, which changes when a document is ingested
+   *       and is otherwise static. Staleness there costs nothing a reviewer can see.
+   *
+   * Both point at the same Neon project. Splitting the CONNECTION is what lets one be cached without
+   * making the other wrong; it is not two databases.
+   */
   "hyperdrive": [
-    { "binding": "HYPERDRIVE", "id": "081514f5c4b1400a84d13d070ffb507e" },
+    { "binding": "HYPERDRIVE", "id": "8ef40398cba4415b96f52e61221b370f" },
+    { "binding": "HYPERDRIVE_CACHED", "id": "588d06bec00e403694acd2bbc6d688e3" },
   ],
   // `wrangler dev` emulates R2 locally via miniflare, so nothing needs provisioning to develop
   // or test. The real bucket is created by Pulumi (infra/index.ts).
   "r2_buckets": [
-    { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-dev" },
+    { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-production" },
   ],
   // Workers AI, for embeddings via @cf/baai/bge-m3 (1024 dims, matching EMBEDDING_DIMENSIONS).
   // No account id or token needed from inside the Worker: the binding IS the authorisation. The
@@ -156,7 +172,7 @@
    * Today it holds exactly one thing: parsed document text, keyed by document id AND parser version.
    */
   "kv_namespaces": [
-    { "binding": "CACHE", "id": "11c604785c1040dfa26e19523ce3e3b2" },
+    { "binding": "CACHE", "id": "3193b15790154e8da8418892e6999f2c" },
   ],
   /*
    * Analytics Engine, for the product's own rates. No resource to provision: a dataset is created on first
@@ -174,7 +190,7 @@
   // refused — so querying and writing are separately entitled, and the read working is not
   // evidence the deploy will. Restoring this is uncommenting three blocks.
   // "analytics_engine_datasets": [
-  //   { "binding": "METRICS", "dataset": "effect_ai_decisions_dev" },
+  //   { "binding": "METRICS", "dataset": "effect_ai_decisions_production" },
   // ],
   "ai": { "binding": "AI" },
   /*
@@ -191,14 +207,14 @@
    */
   "queues": {
     "producers": [
-      { "binding": "EVENTS", "queue": "effect-ai-events-dev" },
+      { "binding": "EVENTS", "queue": "effect-ai-events-production" },
     ],
     "consumers": [
       {
-        "queue": "effect-ai-events-dev",
+        "queue": "effect-ai-events-production",
         "max_retries": 5,
         "max_batch_size": 10,
-        "dead_letter_queue": "effect-ai-events-dlq-dev",
+        "dead_letter_queue": "effect-ai-events-dlq-production",
       },
     ],
   },
@@ -207,7 +223,21 @@
   // Separate bindings, separate secrets, separate logs.
   "env": {
     "staging": {
-      "vars": { "ENVIRONMENT": "staging" },
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "CLOUDFLARE_ACCOUNT_ID": "f4599b98c2430a831bcfc291d156a988",
+        "CLOUDFLARE_AI_GATEWAY": "effect-ai-ai-dev",
+        "AI_GATEWAY": "effect-ai-ai-dev",
+        /*
+         * Staging's console is a Pages PREVIEW branch, which gets a stable alias for free.
+         *
+         * Every var here is repeated on purpose: `vars` is non-inheritable, and a staging deploy that
+         * inherited nothing would default BASE_URL to http://localhost:8799 and refuse every sign-up
+         * with 403 INVALID_ORIGIN — the exact failure this project already shipped once.
+         */
+        "BASE_URL": "https://staging.effect-ai-console-dev.pages.dev",
+        "ALLOWED_HOSTS": "staging.effect-ai-console-dev.pages.dev",
+      },
       /*
        * The API on its own subdomain — the real-world shape.
        *
@@ -223,14 +253,30 @@
       // "routes": [
       //   { "pattern": "api-staging.example.com", "custom_domain": true },
       // ],
+      /*
+       * TWO configs against the SAME database, which is plan risk R3.
+       *
+       * Hyperdrive caches read queries for 60s with `stale_while_revalidate` 15s, and — this is the part
+       * that bites — it does NOT invalidate on write. A reviewer who approves a decision and then sees a
+       * sixty-second-stale queue is a bug, so the transactional path must never be cached.
+       *
+       * HYPERDRIVE        caching DISABLED — the review queue, decision detail, every write and the reads
+       *                   that must observe one.
+       * HYPERDRIVE_CACHED caching ON — the policy corpus only, which changes when a document is ingested
+       *                   and is otherwise static. Staleness there costs nothing a reviewer can see.
+       *
+       * Both point at the same Neon project. Splitting the CONNECTION is what lets one be cached without
+       * making the other wrong; it is not two databases.
+       */
       "hyperdrive": [
-        { "binding": "HYPERDRIVE", "id": "PULUMI_hyperdriveId" },
+        { "binding": "HYPERDRIVE", "id": "6cf07f8655824f63a5c306f164feb196" },
+        { "binding": "HYPERDRIVE_CACHED", "id": "9f66a0db9afe43069ed83a7a772fba57" },
       ],
       "r2_buckets": [
         { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-staging" },
       ],
       "kv_namespaces": [
-        { "binding": "CACHE", "id": "PULUMI_cacheNamespaceId" },
+        { "binding": "CACHE", "id": "19e3fc79ca324cc4b604e0f5c0aba28f" },
       ],
       // ⚠ TEMPORARILY DISABLED — the ACCOUNT needs Analytics Engine enabled before a Worker may
       // bind it. `wrangler deploy` fails with `code: 10089` and a dashboard link:
@@ -257,8 +303,16 @@
         ],
       },
     },
-    "production": {
-      "vars": { "ENVIRONMENT": "production" },
+    "dev": {
+      "vars": {
+        "ENVIRONMENT": "dev",
+        "CLOUDFLARE_ACCOUNT_ID": "f4599b98c2430a831bcfc291d156a988",
+        "CLOUDFLARE_AI_GATEWAY": "effect-ai-ai-dev",
+        "AI_GATEWAY": "effect-ai-ai-dev",
+        // No console is deployed for dev; it is reached at its own workers.dev hostname.
+        "BASE_URL": "https://effect-ai-dev.ishak-f45.workers.dev",
+        "ALLOWED_HOSTS": "effect-ai-dev.ishak-f45.workers.dev,localhost:8799",
+      },
       /*
        * The API on its own subdomain — the real-world shape.
        *
@@ -274,14 +328,30 @@
       // "routes": [
       //   { "pattern": "api.example.com", "custom_domain": true },
       // ],
+      /*
+       * TWO configs against the SAME database, which is plan risk R3.
+       *
+       * Hyperdrive caches read queries for 60s with `stale_while_revalidate` 15s, and — this is the part
+       * that bites — it does NOT invalidate on write. A reviewer who approves a decision and then sees a
+       * sixty-second-stale queue is a bug, so the transactional path must never be cached.
+       *
+       * HYPERDRIVE        caching DISABLED — the review queue, decision detail, every write and the reads
+       *                   that must observe one.
+       * HYPERDRIVE_CACHED caching ON — the policy corpus only, which changes when a document is ingested
+       *                   and is otherwise static. Staleness there costs nothing a reviewer can see.
+       *
+       * Both point at the same Neon project. Splitting the CONNECTION is what lets one be cached without
+       * making the other wrong; it is not two databases.
+       */
       "hyperdrive": [
-        { "binding": "HYPERDRIVE", "id": "PULUMI_hyperdriveId" },
+        { "binding": "HYPERDRIVE", "id": "514e8b327dd048f3ac40de09165ef43b" },
+        { "binding": "HYPERDRIVE_CACHED", "id": "33746fc280a543ecae33b34cd30ee46d" },
       ],
       "r2_buckets": [
-        { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-production" },
+        { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-dev" },
       ],
       "kv_namespaces": [
-        { "binding": "CACHE", "id": "PULUMI_cacheNamespaceId" },
+        { "binding": "CACHE", "id": "11c604785c1040dfa26e19523ce3e3b2" },
       ],
       // ⚠ TEMPORARILY DISABLED — the ACCOUNT needs Analytics Engine enabled before a Worker may
       // bind it. `wrangler deploy` fails with `code: 10089` and a dashboard link:
@@ -291,19 +361,19 @@
       // refused — so querying and writing are separately entitled, and the read working is not
       // evidence the deploy will. Restoring this is uncommenting three blocks.
       // "analytics_engine_datasets": [
-      //   { "binding": "METRICS", "dataset": "effect_ai_decisions_staging" },
+      //   { "binding": "METRICS", "dataset": "effect_ai_decisions_dev" },
       // ],
       "ai": { "binding": "AI" },
       "queues": {
         "producers": [
-          { "binding": "EVENTS", "queue": "effect-ai-events-production" },
+          { "binding": "EVENTS", "queue": "effect-ai-events-dev" },
         ],
         "consumers": [
           {
-            "queue": "effect-ai-events-production",
+            "queue": "effect-ai-events-dev",
             "max_retries": 5,
             "max_batch_size": 10,
-            "dead_letter_queue": "effect-ai-events-dlq-production",
+            "dead_letter_queue": "effect-ai-events-dlq-dev",
           },
         ],
       },

@@ -11,13 +11,24 @@ name: Deploy
 # serve a console against an API that has not shipped yet. And Pages Builds runs a build command, not a
 # gate: it cannot refuse a deploy because a tenancy boundary was violated or the auth schema drifted, which
 # is what `bun run hygiene` is for. See docs/adr/0001 and docs/services.md.
+#
+# Environment map. Each has its OWN Neon project, R2 bucket, queue, DLQ and KV namespace — nothing is
+# shared, because a staging migration must not alter production's tables and a staging replay of a fixture
+# invoice must not collide with production's `decide_key` unique constraint.
+#
+#   main       → staging      automatic, on green CI   effect-ai-staging   staging.<project>.pages.dev
+#   <dispatch> → production   a human promotes a SHA   effect-ai           <project>.pages.dev
+#   by hand    → dev          a sandbox               effect-ai-dev       no console
+#
+# Production is the TOP-LEVEL wrangler configuration, so it deploys with no `--env`. That is deliberate:
+# the top level is what a bare `wrangler deploy` ships, and the environment most costly to ship by accident
+# should be the one you cannot reach by forgetting a flag — you reach it by asking for it here.
 
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
-  # A named environment can also be released deliberately, decoupled from a merge.
   workflow_dispatch:
     inputs:
       environment:
@@ -29,18 +40,17 @@ on:
 # Deploys are serialised and never cancelled: interrupting a half-applied deploy is worse
 # than waiting for the previous one.
 concurrency:
-  group: deploy-${{ github.event.inputs.environment || 'dev' }}
+  group: deploy-${{ github.event.inputs.environment || 'staging' }}
   cancel-in-progress: false
 
 jobs:
-  # Every green main lands on dev automatically, because dev is the only environment whose Cloudflare
-  # resources actually exist — Pulumi provisioned one stack. Pointing automatic deploys at `staging`
-  # would fail on bindings whose resource ids name nothing, which is a confusing way to learn that.
-  # staging and production stay dispatch-only until their stacks are applied.
-  dev:
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+  staging:
+    # Every green main lands here. Nothing else does.
+    if: >-
+      github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' ||
+      github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging'
     runs-on: ubuntu-latest
-    environment: dev
+    environment: staging
     steps:
       - uses: actions/checkout@v5
         with:
@@ -58,73 +68,38 @@ jobs:
       # The API first, always. The console's `functions/api/[[path]].ts` reaches the Worker over a
       # service binding, so shipping the console against an older API is the one ordering that can
       # serve a broken app; the reverse merely serves an older console against a newer API.
-      - name: Deploy the Worker (dev)
+      - name: Deploy the Worker (staging)
         working-directory: apps/worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          # No --env: dev IS the top-level configuration in wrangler.jsonc, and passing a name that
-          # has no `env` block would silently deploy the top level anyway under a different name.
-          #
           # --var VERSION surfaces the deployed commit on /api/v1/health, so a response can always be
           # traced back to a specific build.
-          bunx wrangler deploy \
+          bunx wrangler deploy --env staging \
             --var VERSION:"${{ github.event.workflow_run.head_sha || github.sha }}"
 
       - name: Build the console
         run: bun run --filter @ea/console build
 
-      # --branch main makes this the Pages PRODUCTION deployment, which is what gives the stable
-      # hostname. It is load-bearing: the Worker's BASE_URL names that hostname, and a preview-only
-      # project would leave BASE_URL pointing at a 404 while every preview URL still worked.
-      - name: Deploy the console to Pages (dev)
+      # A Pages PREVIEW branch, which gets a stable alias for free: staging.<project>.pages.dev. Pages
+      # accepts only `production` and `preview` as environment names, so staging cannot be a third Pages
+      # environment — but it does not need to be.
+      - name: Deploy the console to Pages (staging)
         working-directory: apps/console
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bunx wrangler pages deploy --branch main
+        run: bunx wrangler pages deploy --branch staging
 
       # Through the Pages origin, not the Worker's own hostname: that is the path a browser takes,
       # and it is the only one that exercises the service-binding proxy.
       - name: Smoke test
-        run: ./.github/scripts/smoke.sh "https://effect-ai-console-dev.pages.dev"
-
-  staging:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging'
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          submodules: recursive
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      # wrangler is Node-targeted, as are the vitest worker project and Pulumi's language host.
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-      - run: bun install --frozen-lockfile
-
-      - name: Deploy to staging
-        working-directory: apps/worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          # --var VERSION surfaces the deployed commit on /api/v1/health, so a response can
-          # always be traced back to a specific build.
-          bunx wrangler deploy --env staging \
-            --var VERSION:"${{ github.event.workflow_run.head_sha || github.sha }}"
-
-      - name: Smoke test
-        run: ./.github/scripts/smoke.sh "${{ vars.STAGING_URL }}"
+        run: ./.github/scripts/smoke.sh "https://staging.effect-ai-console-dev.pages.dev"
 
   production:
-    # Never automatic. A human dispatches it, and the `production` GitHub environment can
-    # require a reviewer on top.
+    # Never automatic. A human dispatches it, and the `production` GitHub environment can require a
+    # reviewer on top. Merging and releasing stay separate decisions.
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
     runs-on: ubuntu-latest
     environment: production
@@ -140,12 +115,25 @@ jobs:
           node-version: 22
       - run: bun install --frozen-lockfile
 
-      - name: Deploy to production
+      - name: Deploy the Worker (production)
         working-directory: apps/worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bunx wrangler deploy --env production --var VERSION:"${{ github.sha }}"
+        # No `--env`: production IS the top-level configuration.
+        run: bunx wrangler deploy --var VERSION:"${{ github.sha }}"
+
+      - name: Build the console
+        run: bun run --filter @ea/console build
+
+      # --branch main makes this the Pages PRODUCTION deployment, which is what gives the stable
+      # hostname BASE_URL names.
+      - name: Deploy the console to Pages (production)
+        working-directory: apps/console
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bunx wrangler pages deploy --branch main
 
       - name: Smoke test
-        run: ./.github/scripts/smoke.sh "${{ vars.PRODUCTION_URL }}"
+        run: ./.github/scripts/smoke.sh "https://effect-ai-console-dev.pages.dev"

@@ -33,7 +33,7 @@ Hyperdrive        R2            KV            Queue        Workers AI
 (pooling)      documents       cache      effect-ai-events   via AI Gateway
      │                                          │
      ▼                                          ▼
-PlanetScale Postgres 18              the SAME Worker's queue() handler
+Neon Postgres 18.6 (Frankfurt)       the SAME Worker's queue() handler
 + pgvector + Dutch FTS               (one deploy, two entrypoints)
 ```
 
@@ -47,7 +47,7 @@ graph — not three services. `apps/worker/src/Main.ts` is the composition root 
 **Hyperdrive is a connection pooler, not a database.** This is the single most common confusion. A Worker
 is created and destroyed around each request, so it cannot hold a warm TCP connection pool the way a
 long-lived Node server does — and Postgres connections are expensive to open. Hyperdrive keeps the pool
-_outside_ the Worker and hands it a connection in single-digit milliseconds. The database is PlanetScale;
+_outside_ the Worker and hands it a connection in single-digit milliseconds. The database is Neon;
 Hyperdrive is the thing in front of it.
 
 **Pages and the Worker are two different deploys.** Pages serves the console's static files without
@@ -138,8 +138,8 @@ gated and says so. See the traps section of `AGENTS.md`.
 
 ## 4. Do staging and production share a database? No.
 
-They must not, and after the environment decision they do not: **each environment gets its own PlanetScale
-branch**, its own Hyperdrive configs, and its own R2 bucket, queue and KV namespace.
+They must not, and they do not: **each environment gets its own Neon project**, its own PAIR of Hyperdrive
+configs, and its own R2 bucket, queue, dead-letter queue and KV namespace. Nothing is shared.
 
 Three reasons specific to this product, beyond the general one:
 
@@ -154,9 +154,16 @@ Three reasons specific to this product, beyond the general one:
 
 What they _do_ share: one migration set, so the schema is identical by construction. Nothing else.
 
-The cost is real and worth stating plainly: **PlanetScale bills daily per database from creation until
-deletion**, so three branches is roughly three daily floors. The Cloudflare resources — R2, queues, KV — are
-effectively free by comparison. The database is the entire cost of having environments.
+The cost is why the provider changed. Neon's free allowances are **per project** — 100 CU-hours and 0.5 GB
+each — so three projects is three independent budgets rather than three tenants of one, and a suspended
+compute accrues nothing. PlanetScale billed per branch, daily, always on, at roughly $15/mo each. The
+Cloudflare resources — R2, queues, KV — are free by comparison either way. See
+[ADR-0002](adr/0002-neon-postgres-via-hyperdrive.md).
+
+One number worth carrying around: Neon suspends after **5 minutes** idle, but Hyperdrive holds idle origin
+connections for **10**, so a compute really suspends about **15 minutes** after the last query. Anything
+polling the health endpoint more often than that keeps it awake permanently and exhausts the free compute
+allowance in under three weeks.
 
 ### Two Hyperdrive configs per environment, not one
 

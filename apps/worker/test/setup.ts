@@ -8,6 +8,14 @@
 import { existsSync, readFileSync } from "node:fs"
 
 const VAR = "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"
+/**
+ * The second Hyperdrive binding needs its own local string or `createTestHarness` refuses to start.
+ *
+ * Deployed they are two configs against one database (ADR-0002); locally there is no Hyperdrive and no
+ * caching, so the same container serves both. Derived from VAR rather than read separately: two local
+ * strings that could disagree would be a way to test against two different databases by accident.
+ */
+const CACHED_VAR = `${VAR}_CACHED`
 
 if (process.env[VAR] === undefined || process.env[VAR] === "") {
   const envFile = new URL("../.env", import.meta.url).pathname
@@ -19,6 +27,10 @@ if (process.env[VAR] === undefined || process.env[VAR] === "") {
       }
     }
   }
+}
+
+if (process.env[CACHED_VAR] === undefined || process.env[CACHED_VAR] === "") {
+  process.env[CACHED_VAR] = process.env[VAR]
 }
 
 if (process.env[VAR] === undefined || process.env[VAR] === "") {
