@@ -133,20 +133,28 @@ describe("refusals", () => {
     expect(response.status).toBe(403)
   })
 
-  it("accepts a Pages preview hostname, which is what the wildcard is for", async () => {
-    // The positive half. A preview deployment's origin is `<hash>.<project>.pages.dev`, a hostname that does
-    // not exist until the deployment does, so it can only be matched by pattern. `harness.post` would send
-    // the loopback origin and prove nothing about the wildcard, so the header is set explicitly.
+  it("accepts the console's own hostname", async () => {
+    /*
+     * The positive half of the allowlist, and it replaces a test about a Pages preview WILDCARD.
+     *
+     * That wildcard is gone with Pages: the console is a Worker now, so there is one exact hostname per
+     * environment rather than a per-deployment preview host that only exists once deployed. Losing the
+     * wildcard is a small security gain — `*` in a host pattern crosses dots, so the pattern only stayed
+     * safe because it was scoped to a project label we owned.
+     *
+     * `harness.post` would send the loopback origin and prove nothing about the deployed host, so the
+     * header is set explicitly.
+     */
     const response = await harness.fetch("/api/auth/sign-up/email", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        origin: "https://d082cafd.effect-ai-console-dev.pages.dev"
+        origin: "https://effect-ai-console.ishak-f45.workers.dev"
       },
       body: JSON.stringify({
-        email: `preview-${Date.now()}@example.com`,
+        email: `console-host-${Date.now()}@example.com`,
         password: "correct-horse-battery-staple",
-        name: "Preview User"
+        name: "Console Host"
       })
     })
     expect(response.status).toBe(200)
