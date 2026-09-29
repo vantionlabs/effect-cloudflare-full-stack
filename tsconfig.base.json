@@ -31,6 +31,22 @@
         "name": "@effect/language-service",
         "namespaceImportPackages": ["effect", "@effect/*"],
         "diagnosticSeverity": { "globalErrorInEffectFailure": "off" },
+        /*
+         * The Effect diagnostics GATE, and all three were the other way round.
+         *
+         * `tsc -b` exited 0 while emitting eight `multipleEffectProvide` warnings, and
+         * `ignoreEffectErrorsInTscExitCode: true` would have swallowed genuine ERRORS too — which it
+         * did: `verify-postgres.ts` annotated its queries as unfailable while every one of them could
+         * fail with `SqlError` (TS377003 `missingEffectError`, twelve times, in a gate script).
+         *
+         * saas-starter takes the other route and sets `"diagnostics": false`, turning them off
+         * entirely. Deliberately NOT copied: a check that cannot fail is worth less than no check,
+         * because it still looks like coverage.
+         *
+         * Suggestions are VISIBLE but do not gate — they are idiom advice, and worth reading rather
+         * than obeying. One of them was a real bug: `Schema.Number` on the auto-approve ceiling,
+         * accepting NaN and Infinity where the comment claimed integer minor units.
+         */
         "includeSuggestionsInTsc": true,
         "ignoreEffectWarningsInTscExitCode": false,
         "ignoreEffectErrorsInTscExitCode": false
