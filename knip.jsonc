@@ -24,6 +24,10 @@
     "packages/api": {
       "entry": ["**/test/**/*.ts"],
     },
+    "apps/console": {
+      // Vite's entry is index.html; routes are discovered by the router plugin, not imported.
+      "entry": ["index.html", "src/routes/**/*.tsx", "test/**/*.tsx"],
+    },
     "evals": {
       // Standalone gates, invoked by package.json scripts rather than imported.
       "entry": ["*.ts"],

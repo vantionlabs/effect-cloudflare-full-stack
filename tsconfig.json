@@ -12,6 +12,9 @@
       "path": "./evals"
     },
     {
+      "path": "./apps/console"
+    },
+    {
       "path": "./apps/worker"
     }
   ]

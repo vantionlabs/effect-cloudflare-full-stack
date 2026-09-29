@@ -38,6 +38,15 @@
   // Workers AI, for embeddings via @cf/baai/bge-m3 (1024 dims, matching EMBEDDING_DIMENSIONS).
   // No account id or token needed from inside the Worker: the binding IS the authorisation. The
   // eval harness cannot use a binding, so it reaches the same model over REST with a token.
+  /*
+   * The reviewer console, built by `apps/console` and served as static assets.
+   *
+   * ONE deploy, TWO packages. ADR-0001 keeps a single Worker — one origin, one auth seam, no CORS, assets
+   * served before the Worker runs — and that never required a single package. The console has its own
+   * `tsconfig` with DOM and no workers-types, which is a boundary a package can express and two tsconfigs in
+   * one package could only approximate.
+   */
+  "assets": { "directory": "../console/dist", "binding": "ASSETS" },
   "ai": { "binding": "AI" },
   /*
    * One queue carrying a tagged union, not a queue per event type.

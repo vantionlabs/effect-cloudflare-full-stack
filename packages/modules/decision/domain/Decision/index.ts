@@ -2,3 +2,4 @@
 // this the only way in, and `"./internal/*": null` makes anything else unresolvable.
 export * from "./Decision.model.ts"
 export * from "./Decision.rails.ts"
+export * from "./Decision.rpc.ts"

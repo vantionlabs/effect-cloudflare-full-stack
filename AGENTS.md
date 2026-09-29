@@ -14,6 +14,17 @@ The five canonical triage roles, using the default label strings. See `docs/agen
 
 Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+## Filename conventions
+
+**`packages/` and `apps/worker/`: PascalCase, filename = exported symbol.** Concept folders are PascalCase,
+rings are lowercase, and facets use the closed suffix vocabulary (`.model` `.table` `.wire` `.rpc` `.rails`
+`.errors` `.parser` `.http`). See ADR-0010.
+
+**`apps/console/`: kebab-case.** The browser ring follows React ecosystem convention — `queue-grid.tsx`, not
+`QueueGrid.tsx` — because that is what every contributor coming from the React side will expect, and a
+console is where such a contributor is most likely to start. The two conventions meet at a package boundary,
+which is the only place a convention change is cheap to notice.
+
 ## Traps in this codebase
 
 Recorded because each has cost real debugging time more than once.

@@ -24,7 +24,16 @@
  *
  * `dispose` from `toWebHandler` is dropped on purpose: Workers offers no hook to call it.
  */
-import { ApiV1, IdentityHttp, IdentityRpcLive, IntakeHttp, IntakeRpcLive, RPC_V1_PATH, RpcV1 } from "@ea/api/v1"
+import {
+  ApiV1,
+  DecisionRpcLive,
+  IdentityHttp,
+  IdentityRpcLive,
+  IntakeHttp,
+  IntakeRpcLive,
+  RPC_V1_PATH,
+  RpcV1
+} from "@ea/api/v1"
 import { SessionHttp, SessionLive, SessionRpcLive, SessionStore } from "@ea/modules/iam/server/Session"
 import { DocumentParserText } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
@@ -120,6 +129,7 @@ const AppLayer = (env: Env) =>
     Layer.provide(IntakeHttp),
     Layer.provide(IdentityRpcLive),
     Layer.provide(IntakeRpcLive),
+    Layer.provide(DecisionRpcLive),
     // JSON rather than msgpack: the console is a browser, the payloads are small, and a wire format a
     // human can read in devtools is worth more here than a few bytes.
     Layer.provide(RpcSerialization.layerJson),

@@ -9,10 +9,11 @@
  * Mounted by the composition root with `RpcServer.layerHttp`, which puts it on the *same* router as the
  * HTTP API. One origin, one auth seam, one deploy.
  */
+import { DecisionRpcs } from "@ea/modules/decision/domain/Decision"
 import { IdentityRpcs } from "@ea/modules/iam/domain/Identity"
 import { IntakeRpcs } from "@ea/modules/intake/domain/Intake"
 
-export const RpcV1 = IdentityRpcs.merge(IntakeRpcs)
+export const RpcV1 = IdentityRpcs.merge(IntakeRpcs).merge(DecisionRpcs)
 
 /** Where the RPC endpoint is mounted. Exported so the client and the server cannot disagree. */
 export const RPC_V1_PATH = "/api/rpc/v1"

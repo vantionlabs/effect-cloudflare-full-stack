@@ -1,0 +1,18 @@
+{
+  // The browser ring. DOM lib, and NO @cloudflare/workers-types — which is the whole reason this is a
+  // separate package rather than a second tsconfig inside apps/worker.
+  //
+  // Those two type environments are mutually exclusive: workers-types' Request/Response collide with
+  // lib.dom. Two tsconfigs in one package was a workaround for a boundary; a package boundary IS the
+  // boundary, and it lets `dep:check` forbid the console from importing a driver — which it could not do
+  // while React and @effect/sql-pg sat in one dependency list.
+  "extends": "../../tsconfig.base.json",
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"]
+  }
+}

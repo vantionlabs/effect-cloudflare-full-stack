@@ -39,6 +39,15 @@ export default defineConfig({
         }
       },
       {
+        // The browser ring. jsdom is not needed: the interesting logic is the span locator, which is pure,
+        // and testing it directly beats rendering a component to assert a string offset.
+        test: {
+          name: "console",
+          include: ["apps/console/test/**/*.test.tsx"],
+          environment: "node"
+        }
+      },
+      {
         // Integration tests that boot a real Worker. Slower, needs the compose.yaml Postgres.
         test: {
           name: "worker",
