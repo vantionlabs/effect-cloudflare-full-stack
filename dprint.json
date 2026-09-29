@@ -19,6 +19,9 @@
     "**/*.tsbuildinfo",
     "**/coverage",
     "vendor/",
+    // The Effect source, vendored by `git subtree` for agents and humans to read. Never formatted:
+    // it is upstream's code, and a reformat would turn every `subtree pull` into a conflict.
+    "repos/",
     ".wrangler/",
     ".alchemy/",
     "**/worker-configuration.d.ts",

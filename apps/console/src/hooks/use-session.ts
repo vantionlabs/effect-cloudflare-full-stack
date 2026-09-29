@@ -19,8 +19,12 @@
 import type { CurrentSession } from "@/auth/current-session"
 import { useRouteContext } from "@tanstack/react-router"
 
-export const useSession = (): CurrentSession =>
-  useRouteContext({ from: "__root__", select: (context) => context.session })
+/*
+ * Not exported yet: `useIdentity` is its only caller, and knip flags an export with no importer. Export it
+ * the moment something renders differently for a guest — a marketing header, or a nav with either a name or
+ * a sign-in link. The two-hook split is still the right shape; only its visibility is provisional.
+ */
+const useSession = (): CurrentSession => useRouteContext({ from: "__root__", select: (context) => context.session })
 
 export const useIdentity = () => {
   const session = useSession()

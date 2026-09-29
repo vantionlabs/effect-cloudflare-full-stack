@@ -20,6 +20,9 @@
     "**/.output/**",
     "**/coverage/**",
     "vendor/**",
+    // Vendored Effect source: upstream's lint rules are not ours, and 1652 files of advice we cannot
+    // act on would drown the warnings we can.
+    "repos/**",
     ".wrangler/**",
     ".alchemy/**",
     "**/worker-configuration.d.ts",

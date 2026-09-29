@@ -31,6 +31,35 @@ The five canonical triage roles, using the default label strings. See `docs/agen
 
 Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+## The Effect source is vendored at `repos/effect`
+
+`git subtree`, pinned to the tag this repo runs — `effect@4.0.0-rc.118`, the same version as the `catalog:`
+entry. Added because v4 RC documentation is thin and reading the source is faster and more reliable than
+guessing: several APIs in this repo were settled by reading it (`Result` uses `.success`, not `.value`;
+`Schema.toStandardSchemaV1` exists so no form adapter is needed; `createStartHandler` is all the default
+server entry does).
+
+**READ-ONLY. Never import from it.** The installed `effect` in `node_modules` is what runs; `repos/effect`
+is documentation that happens to compile. An import from it would typecheck and then fail at runtime, which
+is why `.vscode/settings.json` excludes it from auto-import suggestions — the one way that mistake happens
+by accident rather than on purpose.
+
+It is excluded from dprint, oxlint, knip and secretlint, and no tsconfig or vitest project includes it. If a
+tool starts reporting 1652 findings, it is missing an exclude rather than telling you something new.
+
+**Updating it** means moving the pin deliberately, alongside the `catalog:` bump:
+
+```sh
+git subtree pull --prefix=repos/effect https://github.com/Effect-TS/effect.git effect@<new-tag> --squash
+```
+
+Pinned to a tag rather than `main` on purpose. Tip-of-main would show APIs the installed version does not
+have, and an agent reading source that disagrees with the lockfile is worse off than one reading nothing —
+it would be confidently wrong instead of uncertain.
+
+**It costs 54 MB and 4311 files.** That is the trade: a slower clone and a larger checkout, for a local
+copy of the answers.
+
 ## Filename conventions
 
 **`packages/` and `apps/worker/`: PascalCase, filename = exported symbol. No dots.** Concept folders are

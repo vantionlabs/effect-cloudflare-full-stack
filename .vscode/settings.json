@@ -1,0 +1,15 @@
+{
+  // The vendored Effect source at repos/ is reference material, not part of this project.
+  //
+  // Without these, `repos/**` competes in every file search, every quick-open and — worst — auto-import
+  // suggestions, which would offer to import from `repos/effect/packages/effect/src/...` instead of the
+  // installed `effect`. That import would typecheck and then fail at runtime, which is the one outcome
+  // worth configuring an editor to prevent.
+  //
+  // Taken from Effect's own post on the technique.
+  "typescript.preferences.autoImportFileExcludePatterns": ["repos/**"],
+  "javascript.preferences.autoImportFileExcludePatterns": ["repos/**"],
+  "files.exclude": { "repos/**": true },
+  "files.watcherExclude": { "repos/**": true },
+  "search.exclude": { "repos/**": true }
+}

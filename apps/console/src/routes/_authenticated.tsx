@@ -10,7 +10,10 @@
  * is produced. That is the property the move to Start bought; on the SPA the best available was a
  * render-then-correct flicker.
  */
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
+import { authClient } from "@/auth/auth-client"
+import { Button } from "@/components/ui/button"
+import { useIdentity } from "@/hooks/use-session"
+import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: ({ context, location }) => {
@@ -26,5 +29,46 @@ export const Route = createFileRoute("/_authenticated")({
       throw redirect({ to: "/login", search: { next: location.href } })
     }
   },
-  component: () => <Outlet />
+  component: AuthenticatedLayout
 })
+
+/**
+ * The shell every signed-in page sits inside: who you are, and how to stop being them.
+ *
+ * `useIdentity()` rather than `useSession()` — this renders only below the guard above, so the Guest case
+ * is structurally impossible and narrowing a union here would be pretending otherwise.
+ */
+function AuthenticatedLayout() {
+  const identity = useIdentity()
+  const navigate = useNavigate()
+
+  return (
+    <div className="flex min-h-full flex-col">
+      <header className="flex items-center justify-between border-b px-4 py-3">
+        <span className="text-sm font-medium">effect-ai</span>
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground text-sm">{identity.email}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              await authClient.signOut()
+              /*
+               * `reloadDocument` for the same reason sign-in needs it, in reverse: the session was cleared
+               * on this response and the router context still holds the Authenticated value resolved
+               * before it. A soft navigation would carry the stale context and render the signed-in shell
+               * for somebody who is no longer signed in.
+               */
+              await navigate({ to: "/login", search: { next: "/" }, reloadDocument: true })
+            }}
+          >
+            Sign out
+          </Button>
+        </div>
+      </header>
+      <div className="flex-1">
+        <Outlet />
+      </div>
+    </div>
+  )
+}

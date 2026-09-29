@@ -1,4 +1,14 @@
 {
+  /*
+   * The vendored Effect source, added with `git subtree` (see AGENTS.md).
+   *
+   * It is READ-ONLY reference material: nothing here imports it, and knip would otherwise report every
+   * one of its 1652 files as unused. Ignored rather than declared an entry point, because it genuinely is
+   * dead code as far as this repo is concerned — that is the point of it.
+   */
+  "ignore": [
+    "repos/**",
+  ],
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreDependencies": [
     // A Workers built-in module (cloudflare:sockets), not an npm package.

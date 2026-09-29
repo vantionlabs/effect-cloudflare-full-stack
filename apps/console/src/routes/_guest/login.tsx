@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { useSchemaForm } from "@/hooks/use-schema-form"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
@@ -54,8 +55,39 @@ export const Route = createFileRoute("/_guest/login")({
 function LoginPage() {
   const { next } = Route.useSearch()
   const navigate = useNavigate()
-  const [error, setError] = useState<string | undefined>(undefined)
-  const [busy, setBusy] = useState(false)
+  const [rejected, setRejected] = useState<string | undefined>(undefined)
+
+  const form = useSchemaForm({
+    schema: Credentials,
+    defaultValues: { email: "", password: "" },
+    onSubmit: async (value) => {
+      setRejected(undefined)
+      /*
+       * better-auth's own client, posting same-origin to `/api/auth/*` which `src/server.ts` forwards over
+       * the service binding. The cookie is therefore first-party, and the SDK's CSRF handling and error
+       * codes come for free rather than being reimplemented.
+       */
+      const result = await authClient.signIn.email(value)
+
+      if (result.error !== null && result.error !== undefined) {
+        /*
+         * better-auth's message, not a generic one: it distinguishes "wrong password" from "email not
+         * verified" from "too many attempts", and a user who cannot tell those apart retries the wrong
+         * thing. Held in local state rather than as a field error, because it belongs to the SUBMISSION —
+         * neither field is individually wrong.
+         */
+        setRejected(result.error.message ?? "Those credentials were not accepted.")
+        return
+      }
+
+      /*
+       * `reloadDocument`, not a soft navigation. The session cookie was set on THIS response and the
+       * router context was resolved before it existed, so a client navigation would re-run the guard
+       * against the stale Guest context and bounce straight back here.
+       */
+      await navigate({ to: next, reloadDocument: true })
+    }
+  })
 
   return (
     <main className="mx-auto flex min-h-full max-w-sm flex-col justify-center px-4">
@@ -66,60 +98,61 @@ function LoginPage() {
         </CardHeader>
         <CardContent>
           <form
-            onSubmit={async (event) => {
+            onSubmit={(event) => {
               event.preventDefault()
-              setError(undefined)
-
-              const form = new FormData(event.currentTarget)
-              // `decodeUnknownResult`: Effect 4's Result-returning decoder. No throw, no Either import.
-              const parsed = Schema.decodeUnknownResult(Credentials)({
-                email: form.get("email"),
-                password: form.get("password")
-              })
-              if (parsed._tag === "Failure") {
-                setError("Enter an email address and a password.")
-                return
-              }
-
-              setBusy(true)
-              /*
-               * better-auth's own client, posting same-origin to `/api/auth/*` which `src/server.ts`
-               * forwards over the service binding. So the cookie is first-party, and the SDK's CSRF
-               * handling and error codes come for free rather than being reimplemented.
-               */
-              const result = await authClient.signIn.email(parsed.success)
-              setBusy(false)
-
-              if (result.error === null || result.error === undefined) {
-                /*
-                 * `reloadDocument`, not a soft navigation. The session cookie was set on THIS response and
-                 * the router context was resolved before it existed, so a client navigation would re-run
-                 * the guard against the stale Guest context and bounce straight back here.
-                 */
-                await navigate({ to: next, reloadDocument: true })
-              } else {
-                /*
-                 * better-auth's message, not a generic one: it distinguishes "wrong password" from "email
-                 * not verified" from "too many attempts", and a user who cannot tell those apart retries
-                 * the wrong thing.
-                 */
-                setError(result.error.message ?? "Those credentials were not accepted.")
-              }
+              void form.handleSubmit()
             }}
           >
             <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
-                <Input id="email" name="email" type="email" required autoComplete="email" />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="password">Password</FieldLabel>
-                <Input id="password" name="password" type="password" required autoComplete="current-password" />
-              </Field>
-              {error === undefined ? null : <FieldError>{error}</FieldError>}
-              <Button type="submit" disabled={busy}>
-                {busy ? "Signing in…" : "Sign in"}
-              </Button>
+              <form.Field name="email">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+                    <Input
+                      id={field.name}
+                      name={field.name}
+                      type="email"
+                      autoComplete="email"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="password">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Password</FieldLabel>
+                    <Input
+                      id={field.name}
+                      name={field.name}
+                      type="password"
+                      autoComplete="current-password"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
+                  </Field>
+                )}
+              </form.Field>
+
+              {rejected === undefined ? null : <FieldError>{rejected}</FieldError>}
+
+              {
+                /*
+                Subscribed rather than read from `form.state`, so only the button re-renders while
+                submitting instead of every field on each keystroke.
+              */
+              }
+              <form.Subscribe selector={(state) => state.isSubmitting}>
+                {(isSubmitting) => (
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "Signing in…" : "Sign in"}
+                  </Button>
+                )}
+              </form.Subscribe>
             </FieldGroup>
           </form>
         </CardContent>
