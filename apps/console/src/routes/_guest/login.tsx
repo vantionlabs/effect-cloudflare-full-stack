@@ -4,10 +4,39 @@
  * `next` is carried through so signing in resumes wherever the visitor was headed. `_authenticated` puts
  * it there on redirect; without it every sign-in lands on the queue, which is wrong the moment somebody
  * follows a link to a specific decision.
+ *
+ * Validation is Effect 4's `Schema`, NOT a form library. `@lucas-barake/effect-form` would be the natural
+ * fit and PLAN.md names it — but every published version, including `0.26.0-beta.5`, peers on
+ * `effect: ^3.19.15` while this repo is on `4.0.0-rc.118`. Using it would put two Effect majors in one
+ * bundle, which breaks fiber and Context identity in ways that surface as impossible bugs. PLAN.md
+ * anticipated exactly this ("they version independently and can lag v4"). Revisit when it ships for v4.
  */
 import { authClient } from "@/auth/client"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { Schema } from "effect"
 import { useState } from "react"
+
+/**
+ * SHAPE only — deliberately not password policy.
+ *
+ * `FormData.get` returns `string | File | null`, so something has to establish these are strings before
+ * they reach a typed call; that is what a schema is for, and it is the same `Schema` the rest of the repo
+ * decodes with.
+ *
+ * What is NOT here is a minimum length. better-auth owns credential policy in its own config, and a copy
+ * in the browser would be a second place to change when it moves — the kind of duplication that ends with
+ * a form rejecting a password the server would have accepted. The input types and `required` handle the
+ * obvious cases; better-auth's error message handles the rest, and it distinguishes them better than a
+ * length check could.
+ */
+const Credentials = Schema.Struct({
+  email: Schema.String,
+  password: Schema.String
+})
 
 export const Route = createFileRoute("/_guest/login")({
   /*
@@ -29,76 +58,72 @@ function LoginPage() {
   const [busy, setBusy] = useState(false)
 
   return (
-    <main className="mx-auto flex min-h-full max-w-sm flex-col justify-center gap-6 px-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">effect-ai</h1>
-        <p className="text-muted-foreground mt-1 text-sm">Sign in to review decisions.</p>
-      </div>
+    <main className="mx-auto flex min-h-full max-w-sm flex-col justify-center px-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>effect-ai</CardTitle>
+          <CardDescription>Sign in to review decisions.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault()
+              setError(undefined)
 
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={async (event) => {
-          event.preventDefault()
-          setBusy(true)
-          setError(undefined)
-          const form = new FormData(event.currentTarget)
-          /*
-           * better-auth's own client. It posts same-origin to `/api/auth/*`, which `src/server.ts`
-           * forwards to the API over the service binding — so the cookie is first-party and the SDK's
-           * error handling, CSRF and future flows all come for free rather than being reimplemented.
-           */
-          const result = await authClient.signIn.email({
-            email: String(form.get("email") ?? ""),
-            password: String(form.get("password") ?? "")
-          })
-          setBusy(false)
-          if (result.error === null || result.error === undefined) {
-            /*
-             * `reloadDocument`, not a client navigation. The session cookie was set on THIS response, and
-             * the router's context was resolved before it existed — so a soft navigation would re-run the
-             * guard against the stale Guest context and bounce straight back here. A document load
-             * re-resolves the session on the server.
-             */
-            await navigate({ to: next, reloadDocument: true })
-          } else {
-            /*
-             * better-auth's message, not a generic one. It distinguishes "wrong password" from "email not
-             * verified" from "too many attempts", and a user who cannot tell those apart retries the wrong
-             * thing. The hand-rolled relay this replaced flattened all of them to one sentence.
-             */
-            setError(result.error.message ?? "Those credentials were not accepted.")
-          }
-        }}
-      >
-        <label className="flex flex-col gap-1.5 text-sm">
-          Email
-          <input
-            name="email"
-            type="email"
-            required
-            autoComplete="email"
-            className="border-input bg-background rounded-md border px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5 text-sm">
-          Password
-          <input
-            name="password"
-            type="password"
-            required
-            autoComplete="current-password"
-            className="border-input bg-background rounded-md border px-3 py-2 text-sm"
-          />
-        </label>
-        {error === undefined ? null : <p className="text-destructive text-sm">{error}</p>}
-        <button
-          type="submit"
-          disabled={busy}
-          className="bg-primary text-primary-foreground rounded-md px-3 py-2 text-sm font-medium disabled:opacity-60"
-        >
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
+              const form = new FormData(event.currentTarget)
+              // `decodeUnknownResult`: Effect 4's Result-returning decoder. No throw, no Either import.
+              const parsed = Schema.decodeUnknownResult(Credentials)({
+                email: form.get("email"),
+                password: form.get("password")
+              })
+              if (parsed._tag === "Failure") {
+                setError("Enter an email address and a password.")
+                return
+              }
+
+              setBusy(true)
+              /*
+               * better-auth's own client, posting same-origin to `/api/auth/*` which `src/server.ts`
+               * forwards over the service binding. So the cookie is first-party, and the SDK's CSRF
+               * handling and error codes come for free rather than being reimplemented.
+               */
+              const result = await authClient.signIn.email(parsed.success)
+              setBusy(false)
+
+              if (result.error === null || result.error === undefined) {
+                /*
+                 * `reloadDocument`, not a soft navigation. The session cookie was set on THIS response and
+                 * the router context was resolved before it existed, so a client navigation would re-run
+                 * the guard against the stale Guest context and bounce straight back here.
+                 */
+                await navigate({ to: next, reloadDocument: true })
+              } else {
+                /*
+                 * better-auth's message, not a generic one: it distinguishes "wrong password" from "email
+                 * not verified" from "too many attempts", and a user who cannot tell those apart retries
+                 * the wrong thing.
+                 */
+                setError(result.error.message ?? "Those credentials were not accepted.")
+              }
+            }}
+          >
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <Input id="email" name="email" type="email" required autoComplete="email" />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="password">Password</FieldLabel>
+                <Input id="password" name="password" type="password" required autoComplete="current-password" />
+              </Field>
+              {error === undefined ? null : <FieldError>{error}</FieldError>}
+              <Button type="submit" disabled={busy}>
+                {busy ? "Signing in…" : "Sign in"}
+              </Button>
+            </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
     </main>
   )
 }

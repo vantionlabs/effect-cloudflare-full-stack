@@ -28,12 +28,29 @@
       // The Worker's entry is `main` in wrangler.jsonc (src/server.ts), which knip finds on its own;
       // routes are discovered by TanStack Start's plugin, not imported.
       //
-      // `functions/**` is Pages' file-based routing: Cloudflare discovers a Function by its PATH, so nothing
-      // imports it and knip is right that it looks dead. Declaring it an entry point is the honest fix — the
-      // alternative, an ignore, would also hide a genuinely dead Function later.
       "entry": [
         "src/routes/**/*.tsx",
         "test/**/*.tsx",
+      ],
+      /*
+       * shadcn/ui components are VENDORED, not authored here.
+       *
+       * `shadcn add button` copies a whole component — variants, sub-parts and all — and using two of its
+       * seven exports today is normal; the rest are used the first time a screen needs them. knip is
+       * correct that they have no importer and wrong that they are dead, so this is an ignore rather than
+       * a deletion. Editing one is fine and expected; that is the point of the registry model.
+       *
+       * The consequence worth naming: genuinely dead UI in here will not be reported. Components are
+       * re-added by name, so the check that matters is whether `components.json` still lists things the
+       * app stopped using.
+       */
+      "ignore": [
+        "src/components/ui/**",
+        "src/lib/utils.ts",
+      ],
+      // lucide-react is shadcn's icon dependency, pulled in by components rather than imported by the app.
+      "ignoreDependencies": [
+        "lucide-react",
       ],
     },
     "evals": {

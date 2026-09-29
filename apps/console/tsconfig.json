@@ -5,9 +5,22 @@
   // listed only `src/**`. It asserts the span-highlighting that shares `containsVerbatim` with the
   // rail, which is exactly the code where a silent type drift would matter.
   "extends": "../../tsconfig.base.json",
+  // Both projects here are non-composite (see tsconfig.src.json), so they cannot be reference targets.
+  // `check` runs each with its own `tsc -p`. This file remains as the conventional entry point tooling
+  // looks for — shadcn and editors read it for the path aliases below.
   "include": [],
   "files": [],
-  "references": [
-    { "path": "./tsconfig.src.json" }
-  ]
+  /*
+   * `paths` on a solution file that compiles nothing, which looks redundant and is not.
+   *
+   * Resolution actually happens in the referenced projects, which declare it themselves. This copy exists
+   * because external tooling reads `tsconfig.json` by convention and does not follow references — the
+   * shadcn CLI refuses to run without it ("Could not find valid path aliases"), and editors behave better
+   * for the same reason. Kept in step with tsconfig.src.json by hand; there is no mechanism that couples
+   * them, which is the cost of the split.
+   */
+  "compilerOptions": {
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "references": []
 }

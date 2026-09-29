@@ -19,14 +19,22 @@
     "rootDir": ".",
     // Must match vite.config.ts's alias, or tsc and the bundler disagree about `@/`.
     /*
-     * Mapped to `.js`, which is how saas-starter does it and is not a typo.
+     * `bundler`, not the base's `NodeNext`.
      *
-     * Aliased imports are written WITHOUT an extension (`@/auth/SignIn`), unlike this repo's relative
-     * imports which carry `.ts`. TS2877 forbids a `.ts` extension on a non-relative path because it
-     * cannot be rewritten on emit — so the mapping supplies `.js`, and NodeNext resolves that back to
-     * the `.ts` source. Vite's alias resolves the same specifier directly.
+     * This app is bundled by Vite and never resolved by Node, so bundler resolution is the honest
+     * description — and it is what lets `@/*` map to `./src/*` with extensionless imports. Under NodeNext
+     * the mapping had to end in `.js` (TS2877 forbids a `.ts` extension on a non-relative path), and that
+     * suffix leaked: the shadcn CLI resolved `@/lib/utils` to a directory called `lib.js`.
+     *
+     * saas-starter sets this repo-wide. Here it is scoped to the console, because the Worker and the
+     * packages genuinely are Node/workerd-resolved.
      */
-    "paths": { "@/*": ["./src/*.js"] },
+    // `module: preserve` comes with `moduleResolution: bundler` — the base sets `NodeNext` for both, and
+    // TS rejects mixing one with the other (TS5095/TS5109). `preserve` is right for a bundled app: Vite
+    // owns the module format, so tsc should not rewrite imports at all.
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "paths": { "@/*": ["./src/*"] },
     "declaration": false,
     "declarationMap": false,
     "erasableSyntaxOnly": false,
