@@ -13,7 +13,7 @@ import { EventBus, type EventBusService, EventId, EventSendFailed } from "@ea/mo
 import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
 import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
-import { ConsumeEvent, EmitEvent } from "@ea/modules/shared/use-cases/Event"
+import { ConsumeEvent, EmitEvent, SweepEnqueueGap } from "@ea/modules/shared/use-cases/Event"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Layer, Redacted } from "effect"
 import { SqlClient } from "effect/sql"
@@ -122,6 +122,78 @@ describe("EmitEvent", () => {
     expect(bus.sent).toEqual([])
     // Queued, with no message in flight. This row is exactly what the cron re-sends.
     expect((await eventRow(result.eventId))[0]!.status).toBe("queued")
+  })
+})
+
+describe("SweepEnqueueGap", () => {
+  /*
+   * Closes the loop the test above opens: it leaves a `queued` row with no message and says "this row is
+   * exactly what the cron re-sends". Until now nothing re-sent it.
+   *
+   * The row has to be AGED to be swept — the sweeper ignores anything younger than two minutes, because a
+   * row is legitimately `queued` for the milliseconds between commit and the consumer claiming it. Backdating
+   * `created_at` is how the boundary gets tested rather than waited out.
+   */
+  const backdate = (eventId: string, interval: string) =>
+    run(
+      recordingBus().layer,
+      Effect.flatMap(Db, (db) =>
+        db.unscopedForCron((sql) =>
+          sql`update events set created_at = now() - interval '${sql.literal(interval)}' where id = ${eventId}`
+        ))
+    )
+
+  it("re-sends a queued row whose message was lost", async () => {
+    const lost = recordingBus({ fail: true })
+    const { eventId } = await run(lost.layer, EmitEvent({ type: "document.decide", idempotencyKey: "sweep1" }))
+    expect(lost.sent).toEqual([])
+    /*
+     * 30 days, not 5 minutes, and the reason is a finding in itself.
+     *
+     * The sweeper takes the OLDEST `MAX_PER_TICK` rows, and this database holds hundreds of permanently
+     * `queued` events left by other suites — uploads that emitted work no local consumer ever drains.
+     * With a 5-minute backdate our row sorted behind them and the sweep filled its 100-row budget before
+     * reaching it, so the test failed while the sweeper worked correctly. Backdating past every leftover
+     * makes the assertion about behaviour rather than about what else is in the table.
+     */
+    await backdate(eventId, "30 days")
+
+    const sweeper = recordingBus()
+    const result = await run(sweeper.layer, SweepEnqueueGap)
+
+    expect(result.resent).toBeGreaterThanOrEqual(1)
+    expect(sweeper.sent.map((m) => m.eventId)).toContain(eventId)
+    // The sweeper re-delivers and does NOT repair: touching `status` would race the consumer for the row.
+    expect((await eventRow(eventId))[0]!.status).toBe("queued")
+  })
+
+  it("does NOT re-send a row that is merely young", async () => {
+    /*
+     * The half that matters. A sweeper that re-sent every `queued` row would pass the test above while
+     * doubling the queue's work on the happy path — every event is `queued` for an instant.
+     */
+    const lost = recordingBus({ fail: true })
+    const { eventId } = await run(lost.layer, EmitEvent({ type: "document.decide", idempotencyKey: "sweep2" }))
+
+    const sweeper = recordingBus()
+    await run(sweeper.layer, SweepEnqueueGap)
+
+    expect(sweeper.sent.map((m) => m.eventId)).not.toContain(eventId)
+  })
+
+  it("does NOT re-send a row the consumer already finished", async () => {
+    // Idempotency is what makes re-sending safe, but not re-sending at all is cheaper than relying on it.
+    const { eventId } = await run(
+      recordingBus().layer,
+      EmitEvent({ type: "document.decide", idempotencyKey: "sweep3" })
+    )
+    await run(recordingBus().layer, ConsumeEvent(eventId, () => Effect.void))
+    await backdate(eventId, "5 minutes")
+
+    const sweeper = recordingBus()
+    await run(sweeper.layer, SweepEnqueueGap)
+
+    expect(sweeper.sent.map((m) => m.eventId)).not.toContain(eventId)
   })
 })
 

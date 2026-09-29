@@ -205,6 +205,22 @@
    * rather than only in a dashboard. `wrangler dev` emulates queues locally, so nothing needs
    * provisioning to develop or test.
    */
+  /*
+   * The cron. Recovery only — see `scheduled` in Main.ts.
+   *
+   * Every five minutes against a two-minute staleness threshold: a lost `queue.send` is noticed within
+   * roughly seven minutes, well inside anyone's patience for an undecided document and far outside the
+   * milliseconds a row is legitimately `queued`.
+   *
+   * Repeated per environment because `triggers` is NOT inheritable — the same rule that made `vars` a
+   * silent 403 in staging. `bun run bindings:check` now asserts this too: an environment that declares no
+   * crons while the top level does is a failure, because the deploy would succeed and the sweeper would
+   * simply never run there.
+   */
+  "triggers": {
+    "crons": ["*/5 * * * *"],
+  },
+
   "queues": {
     "producers": [
       { "binding": "EVENTS", "queue": "effect-ai-events-production" },
@@ -289,6 +305,9 @@
       //   { "binding": "METRICS", "dataset": "effect_ai_decisions_staging" },
       // ],
       "ai": { "binding": "AI" },
+      "triggers": {
+        "crons": ["*/5 * * * *"],
+      },
       "queues": {
         "producers": [
           { "binding": "EVENTS", "queue": "effect-ai-events-staging" },
@@ -364,6 +383,9 @@
       //   { "binding": "METRICS", "dataset": "effect_ai_decisions_dev" },
       // ],
       "ai": { "binding": "AI" },
+      "triggers": {
+        "crons": ["*/5 * * * *"],
+      },
       "queues": {
         "producers": [
           { "binding": "EVENTS", "queue": "effect-ai-events-dev" },

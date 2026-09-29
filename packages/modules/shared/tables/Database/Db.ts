@@ -51,6 +51,29 @@ export interface DbService {
   readonly unscopedForAuth: <A, E>(
     f: (sql: SqlClient.SqlClient) => Effect.Effect<A, E>
   ) => Effect.Effect<A, E | SqlError.SqlError, SqlClient.SqlClient>
+
+  /**
+   * Runs `f` with NO tenant scope, for CROSS-TENANT RECOVERY. Equally conspicuous, and separate from
+   * `unscopedForAuth` on purpose.
+   *
+   * A cron has no session and no single organization: it sweeps every tenant looking for work that was
+   * recorded but never dispatched. That is a second, genuinely different reason to leave the scope — and
+   * giving it its own name keeps `unscopedForAuth`'s contract narrow ("a session token, or an API key by
+   * hash") instead of quietly widening it to mean "anything without a user".
+   *
+   * **Two rules, and they are what make this safe:**
+   *
+   * 1. Select IDENTIFIERS and STATUS only — ids, types, timestamps, counts. Never a tenant's payload,
+   *    extracted fields or decision content. A recovery scan needs to know that work is stuck, not what
+   *    the work says.
+   * 2. Anything then DONE with a row must re-enter a scoped path, with the tenant taken from that row.
+   *    The scan finds candidates; it never acts as a tenant.
+   *
+   * `rg "unscopedForCron"` is the complete list of cross-tenant scans, which is the point of the name.
+   */
+  readonly unscopedForCron: <A, E>(
+    f: (sql: SqlClient.SqlClient) => Effect.Effect<A, E>
+  ) => Effect.Effect<A, E | SqlError.SqlError, SqlClient.SqlClient>
 }
 
 /**
@@ -84,7 +107,9 @@ export class Db extends Context.Service<Db, DbService>()("tables/Db") {
     return {
       scoped: (f) => Effect.flatMap(CurrentUser, (identity) => withOrg(identity.orgId, f)),
       scopedForOrg: (f) => Effect.flatMap(CurrentOrg, (orgId) => withOrg(orgId, f)),
-      unscopedForAuth: (f) => Effect.flatMap(SqlClient.SqlClient, f)
+      unscopedForAuth: (f) => Effect.flatMap(SqlClient.SqlClient, f),
+      // Same mechanism, different licence. See the interface for the two rules that make it safe.
+      unscopedForCron: (f) => Effect.flatMap(SqlClient.SqlClient, f)
     } satisfies DbService
   }))
 }

@@ -45,6 +45,8 @@ import { AgentModel } from "@ea/modules/policy/domain/Ask"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
 import { LanguageModelWorkersAiOpenAi } from "@ea/modules/shared/server/Model"
 import { Db } from "@ea/modules/shared/tables/Database"
+import { withDatabase } from "@ea/modules/shared/tables/Database"
+import { SweepEnqueueGap } from "@ea/modules/shared/use-cases/Event"
 import { Effect, Layer, ManagedRuntime, Redacted } from "effect"
 import { LanguageModel } from "effect/ai"
 import { HttpRouter } from "effect/http"
@@ -303,5 +305,39 @@ export default {
     _ctx: ExecutionContext
   ): Promise<void> {
     await getQueueRuntime(env).runPromise(consumeBatch(batch, dispatchEvent))
+  },
+
+  /**
+   * The cron. Recovery work only — it never decides anything.
+   *
+   * One job today: re-send events that were recorded but never enqueued. No transaction spans the
+   * `events` insert and `queue.send`, so a committed row can have no message behind it, and `EmitEvent`
+   * swallows a send failure on purpose — propagating would roll the caller back and destroy the row that
+   * makes recovery possible. This is what notices. See `SweepEnqueueGap`.
+   *
+   * It shares the SAME layer graph as `fetch` and `queue` through the MemoMap, which is what this file
+   * promised three entrypoints ago and is now actually true of all three.
+   *
+   * `runPromise` rather than `waitUntil`: a cron invocation's whole purpose is this work, so there is
+   * nothing to return early for, and failing loudly puts the error in the cron's own logs where an
+   * operator looking at a missed schedule will find it.
+   */
+  async scheduled(
+    controller: { readonly cron: string },
+    env: Env,
+    _ctx: ExecutionContext
+  ): Promise<void> {
+    const result = await getQueueRuntime(env).runPromise(withDatabase(SweepEnqueueGap))
+    /*
+     * Logged unconditionally, including the zero.
+     *
+     * Zero is the healthy steady state, and a silent success is indistinguishable from a cron that is
+     * not running at all — which is the failure mode this whole handler exists to prevent. A persistent
+     * non-zero `resent` is the alarm: work is being re-sent and still not completing.
+     */
+    console.log(
+      `cron ${controller.cron}: re-sent ${result.resent} unenqueued event(s)` +
+        (result.more ? " — LIMIT HIT, a backlog remains for the next tick" : "")
+    )
   }
 } satisfies ExportedHandler<Env>

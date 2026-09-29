@@ -2,3 +2,4 @@
 // this the only way in, and `"./internal/*": null` makes anything else unresolvable.
 export * from "./ConsumeEvent.ts"
 export * from "./EmitEvent.ts"
+export * from "./SweepEnqueueGap.ts"

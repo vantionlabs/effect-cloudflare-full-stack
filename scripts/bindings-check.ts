@@ -164,6 +164,23 @@ if (environments.length === 0) {
 
 const failures: Array<string> = []
 
+/**
+ * `triggers.crons`, which is non-inheritable in exactly the same way bindings are.
+ *
+ * Added because the wrangler comment said this one was "on the honour system", and an honour system is
+ * what this script exists to replace. A named environment with no `triggers` block simply has no cron:
+ * the deploy succeeds, the schedule silently never fires, and the enqueue-gap sweeper — whose entire job
+ * is noticing work nobody else notices — is itself the thing nobody notices is missing.
+ */
+const crons = (source: Record<string, unknown>): ReadonlyArray<string> => {
+  const triggers = source["triggers"]
+  if (typeof triggers !== "object" || triggers === null) return []
+  const list = (triggers as Record<string, unknown>)["crons"]
+  return Array.isArray(list) ? list.filter((entry): entry is string => typeof entry === "string") : []
+}
+
+const expectedCrons = crons(config as Record<string, unknown>)
+
 for (const [envName, envConfig] of environments) {
   const actual = bindingNames(envConfig)
   for (const name of expected) {
@@ -174,6 +191,16 @@ for (const [envName, envConfig] of environments) {
           `    Worker "${config.name}-${envName}" would not have it — and would still deploy.`
       )
     }
+  }
+
+  const envCrons = crons(envConfig as Record<string, unknown>)
+  if (expectedCrons.length > 0 && envCrons.length === 0) {
+    failures.push(
+      `env.${envName} declares no triggers.crons\n` +
+        `    The top level schedules [${expectedCrons.join(", ")}], and triggers are NOT inherited —\n` +
+        `    so "${config.name}-${envName}" would deploy with NO cron and the enqueue-gap sweeper\n` +
+        `    would never run there. A lost queue.send would stay lost, silently.`
+    )
   }
 }
 
