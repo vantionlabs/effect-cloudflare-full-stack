@@ -11,7 +11,7 @@
  */
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import type { ReactNode } from "react"
-import { getCurrentSession } from "../auth/CurrentSession.ts"
+import { getCurrentSession } from "../auth/current-session.ts"
 import appCss from "../styles.css?url"
 
 export const Route = createRootRoute({

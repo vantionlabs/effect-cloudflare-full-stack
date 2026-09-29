@@ -11,7 +11,7 @@
  * bundle, which breaks fiber and Context identity in ways that surface as impossible bugs. PLAN.md
  * anticipated exactly this ("they version independently and can lag v4"). Revisit when it ships for v4.
  */
-import { authClient } from "@/auth/client"
+import { authClient } from "@/auth/auth-client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"

@@ -13,7 +13,7 @@
  * `/api/v1/me` remains the authority for ORGANIZATION and ROLE, which it reads from the `member` table.
  * The guards ask a narrower question: is anyone signed in.
  */
-import { authClient } from "@/auth/client"
+import { authClient } from "@/auth/auth-client"
 import { createServerFn } from "@tanstack/react-start"
 import { getRequest } from "@tanstack/react-start/server"
 
