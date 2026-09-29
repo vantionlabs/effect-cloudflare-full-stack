@@ -30,6 +30,9 @@ export default defineConfig({
         test: {
           name: "tables",
           include: ["packages/modules/*/tables/test/**/*.test.ts"],
+          // Migrate once, before any file. Without this every database test depends on whichever file
+          // happened to call `migrate` having sorted first — and the failure looks like a bad query.
+          globalSetup: ["packages/modules/shared/tables/test/migrate.setup.ts"],
           environment: "node",
           testTimeout: 30_000,
           hookTimeout: 30_000

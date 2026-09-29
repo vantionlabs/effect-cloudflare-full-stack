@@ -29,7 +29,7 @@ import { SessionHttp, SessionLive, SessionRpcLive, SessionStore } from "@ea/modu
 import { DocumentParserText } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
 import { Db } from "@ea/modules/shared/tables/Database"
-import { Layer } from "effect"
+import { Effect, Layer, ManagedRuntime } from "effect"
 import { HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { RpcSerialization, RpcServer } from "effect/rpc"
@@ -37,6 +37,8 @@ import { HealthHttp } from "./Health/Health.http.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
 import { ConnectHyperdrive, ReactivityLive } from "./platform/HyperdriveConnect.ts"
 import { IdsUuid } from "./platform/Ids.ts"
+import { EventQueue, QueueBus } from "./platform/QueueBus.ts"
+import { consumeBatch, type QueueBatchLike } from "./platform/QueueHandler.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
 
 /**
@@ -49,16 +51,42 @@ import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
 const SliceBindings = (env: Env) =>
   Layer.mergeAll(
     Layer.succeed(DocumentBucket)(env.DOCUMENTS),
-    Layer.succeed(SessionStore)({ connectionString: env.HYPERDRIVE.connectionString })
+    Layer.succeed(SessionStore)({ connectionString: env.HYPERDRIVE.connectionString }),
+    Layer.succeed(EventQueue)(env.EVENTS)
   )
 
 /**
- * Everything STATELESS, built once per isolate.
+ * Everything STATELESS that is NOT tied to HTTP, built once per isolate.
+ *
+ * Split out from the HTTP layer because `queue` needs all of this and none of that: `HttpApiBuilder` and
+ * `RpcServer` require `HttpRouter` and a set of per-request services that only `toWebHandler` provides, so
+ * a runtime built from the full layer cannot exist outside a request. This half can, and both halves share
+ * one MemoMap — so `fetch` and `queue` use one set of adapters per isolate rather than two.
  *
  * The connection is deliberately absent: a TCP socket cannot outlive the request that opened it on
- * Workers, so `Connect.open` is called inside each request's scope instead. `Bindings` is here
+ * Workers, so `Connect.open` is called inside each request's or message's own scope. `Bindings` is here
  * because `env` genuinely is stable for an isolate's lifetime.
  */
+const ServicesLayer = (env: Env) =>
+  Layer.mergeAll(
+    // The org-scoping seam. Safe to memoise: Db itself is stateless, and its methods require SqlClient at
+    // call time — which `withDatabase` supplies per request.
+    Db.layer,
+    // Stateless adapters. Only the SQL connection and better-auth's pool are per-request, and both are
+    // acquired inside a request scope.
+    ConnectHyperdrive,
+    DocumentParserText,
+    IdsUuid,
+    BlobsR2,
+    QueueBus
+  ).pipe(
+    Layer.provideMerge(SliceBindings(env)),
+    Layer.provideMerge(Layer.succeed(Bindings)(env)),
+    Layer.provideMerge(ReactivityLive),
+    Layer.provide(layerConfigProvider(env))
+  )
+
+/** The HTTP and RPC surfaces, over the shared services. */
 const AppLayer = (env: Env) =>
   Layer.mergeAll(
     HttpApiBuilder.layer(ApiV1, { openapiPath: "/api/v1/openapi.json" }),
@@ -92,25 +120,13 @@ const AppLayer = (env: Env) =>
     Layer.provide(IntakeHttp),
     Layer.provide(IdentityRpcLive),
     Layer.provide(IntakeRpcLive),
-    // JSON rather than msgpack: the console is a browser, the payloads are small, and a wire format
-    // a human can read in devtools is worth more here than a few bytes.
+    // JSON rather than msgpack: the console is a browser, the payloads are small, and a wire format a
+    // human can read in devtools is worth more here than a few bytes.
     Layer.provide(RpcSerialization.layerJson),
     Layer.provide(SessionLive),
     Layer.provide(SessionRpcLive),
-    // The org-scoping seam. Safe to memoise: Db itself is stateless, and its methods require
-    // SqlClient at call time — which `withDatabase` supplies per request.
-    Layer.provideMerge(Db.layer),
-    // Stateless adapters: safe to memoise. Only the SQL connection and better-auth's pool are
-    // per-request, and both are acquired inside a request scope.
-    Layer.provideMerge(ConnectHyperdrive),
-    Layer.provideMerge(DocumentParserText),
-    Layer.provideMerge(IdsUuid),
-    Layer.provideMerge(BlobsR2),
-    Layer.provideMerge(SliceBindings(env)),
-    Layer.provideMerge(Layer.succeed(Bindings)(env)),
-    Layer.provideMerge(ReactivityLive),
-    Layer.provide(WorkerPlatform),
-    Layer.provide(layerConfigProvider(env))
+    Layer.provideMerge(ServicesLayer(env)),
+    Layer.provide(WorkerPlatform)
   )
 
 /**
@@ -128,9 +144,42 @@ const makeHandler = (env: Env) => HttpRouter.toWebHandler(AppLayer(env), { memoM
  */
 const getHandler = (env: Env) => (webHandler ??= makeHandler(env))
 
+/**
+ * The runtime for non-HTTP entry points.
+ *
+ * `queue` and `scheduled` share the SAME layer graph as `fetch` through the MemoMap above, so there is one
+ * set of adapters per isolate rather than three. What they do not share is a request: each invocation opens
+ * its own database connection inside its own scope, which is the constraint that shaped this whole file.
+ */
+let queueRuntime: ReturnType<typeof makeQueueRuntime> | undefined
+/*
+ * A `ManagedRuntime` over the SAME MemoMap as the web handler.
+ *
+ * That shared map is the whole point: `fetch` and `queue` then use one set of adapters per isolate rather
+ * than two. `toWebHandler` exposes only a handler, so a runtime is built separately — but pointing both at
+ * one MemoMap keeps them a single graph, which is what the composition root promised.
+ */
+const makeQueueRuntime = (env: Env) => ManagedRuntime.make(ServicesLayer(env), { memoMap })
+const getQueueRuntime = (env: Env) => (queueRuntime ??= makeQueueRuntime(env))
+
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     // The per-request door.
     return getHandler(env)(request, WorkerCtx.context(ctx))
+  },
+
+  /**
+   * The queue consumer.
+   *
+   * Every message is acked or retried **individually** — see QueueHandler.ts for why `ackAll`/`retryAll`
+   * are never used. The work each message triggers is not wired yet: `document.decide` runs the decide
+   * pipeline at step 9, when the execute branch lands and both paths provably call one function. Until
+   * then a message is read, recorded and acked, which is enough to prove the plumbing and the batch
+   * semantics without pretending the pipeline is connected.
+   */
+  async queue(batch: QueueBatchLike, env: Env, _ctx: ExecutionContext): Promise<void> {
+    await getQueueRuntime(env).runPromise(
+      consumeBatch(batch, () => Effect.succeed({ _tag: "Done" as const }))
+    )
   }
 } satisfies ExportedHandler<Env>

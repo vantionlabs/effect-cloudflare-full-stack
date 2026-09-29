@@ -98,22 +98,51 @@ const bindingNames = (scope: Record<string, unknown>): Set<string> => {
   for (const key of BINDING_KEYS) {
     const value = scope[key]
     /*
-     * Two shapes, and missing the second one was a real hole in this check.
+     * THREE shapes, and each of the last two was a real hole in this check when it was missing.
      *
-     * Most bindings are arrays (`hyperdrive`, `r2_buckets`, `queues`). But `ai` and `browser` are single
-     * OBJECTS — `"ai": { "binding": "AI" }`. An earlier version only walked arrays, so an `ai` binding
-     * present at the top level and absent from `env.production` passed silently, which is precisely the
-     * failure this script exists to catch: it deploys fine and throws at runtime.
+     *   array            `"r2_buckets": [{ binding }]`              — most bindings
+     *   single object    `"ai": { binding }`                        — ai, browser
+     *   nested arrays    `"queues": { producers: [], consumers: [] }`
+     *
+     * The failure mode is identical in all three and is why this script exists: a binding present at the
+     * top level and absent from `env.production` **deploys fine and throws at runtime**. An earlier
+     * version walked only arrays, so `ai` passed silently; the version after that reported
+     * `queues:undefined`, which is worse than a miss because it looks like a name.
      */
     const entries: Array<Record<string, unknown>> = Array.isArray(value)
       ? value as Array<Record<string, unknown>>
       : typeof value === "object" && value !== null
-      ? [value as Record<string, unknown>]
+      ? Object.values(value as Record<string, unknown>).some(Array.isArray)
+        // Nested: walk the array-valued properties rather than the wrapper.
+        ? Object.values(value as Record<string, unknown>).flatMap((nested) =>
+          Array.isArray(nested) ? nested as Array<Record<string, unknown>> : []
+        )
+        : [value as Record<string, unknown>]
       : []
 
     for (const entry of entries) {
-      const name = entry["binding"] ?? entry["queue"] ?? entry["database_name"] ?? entry["bucket_name"]
-      names.add(`${key}:${String(name)}`)
+      /*
+       * The BINDING name, not the resource name — and the distinction matters.
+       *
+       * A binding name is what the Worker's code refers to (`env.EVENTS`), so it must be identical in
+       * every environment or the code breaks. A resource name is deliberately environment-suffixed
+       * (`effect-ai-events-staging`), so comparing those across environments would fail on every
+       * correctly-configured file. An earlier version compared `entry["queue"]` and reported
+       * `queues:effect-ai-events-dev`, which looked like a binding name and was not one.
+       *
+       * A queue CONSUMER has no binding — it is a subscription, not a capability the code names. It is
+       * recorded as `queues:<consumer>` so that a consumer missing from one environment is still caught,
+       * without pinning the queue's name.
+       */
+      const binding = entry["binding"]
+      if (typeof binding === "string") {
+        names.add(`${key}:${binding}`)
+      } else if (key === "queues" && typeof entry["queue"] === "string") {
+        names.add("queues:<consumer>")
+      } else {
+        const fallback = entry["database_name"] ?? entry["bucket_name"] ?? entry["queue"]
+        if (typeof fallback === "string") names.add(`${key}:${fallback}`)
+      }
     }
   }
   return names

@@ -39,6 +39,31 @@
   // No account id or token needed from inside the Worker: the binding IS the authorisation. The
   // eval harness cannot use a binding, so it reaches the same model over REST with a token.
   "ai": { "binding": "AI" },
+  /*
+   * One queue carrying a tagged union, not a queue per event type.
+   *
+   * `max_retries: 5` with Queues' own backoff. `max_batch_size: 10` because each message opens a
+   * scoped database connection and Workers allows six simultaneous outgoing connections per
+   * invocation — which is also why the consumer processes a batch sequentially rather than in
+   * parallel.
+   *
+   * The DLQ consumer writes `events.status = 'dead'`, so a dead letter is visible in the product
+   * rather than only in a dashboard. `wrangler dev` emulates queues locally, so nothing needs
+   * provisioning to develop or test.
+   */
+  "queues": {
+    "producers": [
+      { "binding": "EVENTS", "queue": "effect-ai-events-dev" },
+    ],
+    "consumers": [
+      {
+        "queue": "effect-ai-events-dev",
+        "max_retries": 5,
+        "max_batch_size": 10,
+        "dead_letter_queue": "effect-ai-events-dlq-dev",
+      },
+    ],
+  },
 
   // Each environment deploys as its own Worker: effect-ai-staging, effect-ai-production.
   // Separate bindings, separate secrets, separate logs.
@@ -52,6 +77,19 @@
         { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-staging" },
       ],
       "ai": { "binding": "AI" },
+      "queues": {
+        "producers": [
+          { "binding": "EVENTS", "queue": "effect-ai-events-staging" },
+        ],
+        "consumers": [
+          {
+            "queue": "effect-ai-events-staging",
+            "max_retries": 5,
+            "max_batch_size": 10,
+            "dead_letter_queue": "effect-ai-events-dlq-staging",
+          },
+        ],
+      },
     },
     "production": {
       "vars": { "ENVIRONMENT": "production" },
@@ -62,6 +100,19 @@
         { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-production" },
       ],
       "ai": { "binding": "AI" },
+      "queues": {
+        "producers": [
+          { "binding": "EVENTS", "queue": "effect-ai-events-production" },
+        ],
+        "consumers": [
+          {
+            "queue": "effect-ai-events-production",
+            "max_retries": 5,
+            "max_batch_size": 10,
+            "dead_letter_queue": "effect-ai-events-dlq-production",
+          },
+        ],
+      },
     },
   },
 }

@@ -25,6 +25,7 @@ import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
 import { Migrator } from "effect/sql"
+import { EventTable } from "../Event/Event.table.ts"
 import { TenancyTable } from "../Tenancy/Tenancy.table.ts"
 
 export const migrations = {
@@ -50,7 +51,8 @@ export const migrations = {
   "0008_retrieval_or": RetrievalTable,
   "0009_workflow": WorkflowTable,
   "0010_rule": RuleTable,
-  "0011_decision": DecisionTable
+  "0011_decision": DecisionTable,
+  "0012_event": EventTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

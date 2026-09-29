@@ -27,6 +27,8 @@ export interface Env {
   }
   /** Source documents. Tenancy is a key prefix, enforced in @ea/modules/intake/domain/Document. */
   readonly DOCUMENTS: R2Bucket
+  /** The event queue producer. Stable for an isolate's lifetime, so safe to capture. */
+  readonly EVENTS: { readonly send: (body: unknown) => Promise<void> }
   readonly VERSION?: string | undefined
 }
 
