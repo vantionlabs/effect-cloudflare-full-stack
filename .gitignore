@@ -25,3 +25,6 @@ apps/console/dist/
 # committed credential the first time somebody follows the Cloudflare docs.
 .dev.vars
 .dev.vars.*
+
+# Per-project incremental state, one dir per package now that src and test are separate projects.
+.tsbuildinfo/

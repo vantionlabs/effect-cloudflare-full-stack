@@ -1,8 +1,16 @@
 {
-  // Solution file: the Worker and the browser client are compiled separately because
-  // @cloudflare/workers-types' Request/Response collide with lib.dom.d.ts.
+  // Solution file: the Worker source and its tests are separate projects.
+  //
+  // `tsconfig.worker.json` keeps its name rather than becoming `tsconfig.src.json`, because the name
+  // carries the reason it exists: Workers globals and NO "DOM", since @cloudflare/workers-types'
+  // Request/Response collide with lib.dom.
+  //
+  // `tsconfig.test.json` is NEW. The five suites under test/ — 30 tests, including the whole auth
+  // seam — were never typechecked, because `include` here was `[]` and the worker project includes
+  // only `src/**`.
   "extends": "../../tsconfig.base.json",
   "include": [],
+  "files": [],
   "references": [
     { "path": "./tsconfig.worker.json" }
   ]

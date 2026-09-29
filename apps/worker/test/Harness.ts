@@ -12,17 +12,29 @@ import { createTestHarness } from "wrangler"
 /** Must match better-auth's `baseURL` default in BetterAuth.ts, not the harness's bound port. */
 const ORIGIN = "http://localhost:8799"
 
+/*
+ * Request and Response types taken FROM wrangler rather than restated.
+ *
+ * `createTestHarness` returns the Workers-flavoured `Response` (it is wrangler's own dispatcher), and
+ * writing `Promise<Response>` here meant lib.dom's — which typechecked nowhere and produced
+ * `Response_2 is not assignable to Response` the first time apps/worker/test was checked at all.
+ * Deriving them keeps the two in step through a wrangler upgrade, where restating them would drift.
+ */
+type HarnessFetch = ReturnType<typeof createTestHarness>["fetch"]
+type HarnessRequestInit = Parameters<HarnessFetch>[1]
+export type HarnessResponse = Awaited<ReturnType<HarnessFetch>>
+
 export interface Harness {
-  readonly fetch: (path: string, init?: RequestInit) => Promise<Response>
+  readonly fetch: (path: string, init?: HarnessRequestInit) => Promise<HarnessResponse>
   /** A JSON POST carrying `Origin`, which better-auth's CSRF check requires. */
-  readonly post: (path: string, body: unknown, cookie?: string) => Promise<Response>
+  readonly post: (path: string, body: unknown, cookie?: string) => Promise<HarnessResponse>
   /** Signs up a fresh user, creates an organization and activates it. */
   readonly signedInWithOrg: () => Promise<{ cookie: string; organizationId: string }>
   readonly origin: string
   readonly dispose: () => Promise<void>
 }
 
-export const cookiesFrom = (response: Response): string =>
+export const cookiesFrom = (response: HarnessResponse): string =>
   response.headers.getSetCookie().map((cookie) => cookie.split(";")[0]).join("; ")
 
 export const startHarness = async (): Promise<Harness> => {
@@ -31,7 +43,7 @@ export const startHarness = async (): Promise<Harness> => {
   })
   await server.listen()
 
-  const fetch = (path: string, init?: RequestInit) => server.fetch(path, init)
+  const fetch = (path: string, init?: HarnessRequestInit) => server.fetch(path, init)
 
   const post = (path: string, body: unknown, cookie?: string) =>
     fetch(path, {
@@ -75,8 +87,11 @@ export const startHarness = async (): Promise<Harness> => {
     post,
     signedInWithOrg,
     origin: ORIGIN,
-    dispose: async () => {
-      await server?.dispose?.()
-    }
+    /*
+     * `close`, not `dispose`. This called `server?.dispose?.()` — a method `TestHarness` does not
+     * have — so the optional call silently did nothing and NO test server was ever shut down. It
+     * only surfaced when apps/worker/test was typechecked for the first time.
+     */
+    dispose: () => server.close()
   }
 }

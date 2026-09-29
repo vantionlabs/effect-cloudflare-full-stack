@@ -22,7 +22,8 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await server?.dispose?.()
+  // `close`, not `dispose`: see Harness.ts. The old call silently did nothing.
+  await server.close()
 })
 
 describe("GET /api/v1/health", () => {

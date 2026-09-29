@@ -1,12 +1,9 @@
 {
-  // Node/Bun only. Never runs on Workers — it drives the real stores against a real Postgres, which
-  // is the fidelity gain the Postgres data layer bought: the same engine as production, not merely
-  // the same dialect.
+  // Solution file: src and test as separate projects, per the Effect convention.
   "extends": "../tsconfig.base.json",
-  "include": ["**/*.ts"],
-  "compilerOptions": {
-    "noEmit": true,
-    "rootDir": ".",
-    "types": ["node"]
-  }
+  "include": [],
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.src.json" }
+  ]
 }

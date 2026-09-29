@@ -8,7 +8,7 @@
  */
 import { RPC_V1_PATH } from "@ea/api/v1"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { type Harness, startHarness } from "./Harness.ts"
+import { type Harness, type HarnessResponse, startHarness } from "./Harness.ts"
 
 let harness: Harness
 
@@ -44,7 +44,9 @@ const call = (tag: string, payload: unknown, cookie?: string) =>
     }])
   })
 
-const decode = async (response: Response) => {
+// `HarnessResponse`, not lib.dom's `Response`: the harness is wrangler's dispatcher and
+// returns the Workers-flavoured one. See Harness.ts.
+const decode = async (response: HarnessResponse) => {
   const text = await response.text()
   if (text === "") throw new Error(`empty RPC response, status ${response.status}`)
   return text

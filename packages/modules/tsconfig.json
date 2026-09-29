@@ -1,16 +1,14 @@
 {
-  // One package, one project. The ring boundaries inside it are enforced by
-  // `bun run dep:check` rather than by the module graph — see ADR-0011 for the trade.
+  // Solution file: no files of its own, only references. `tsc -b` builds src and test as SEPARATE
+  // projects, which is the Effect convention and what saas-starter does.
   //
-  // `types: []` stays, deliberately: it means `@cloudflare/workers-types` globals are NOT
-  // ambient here, so a server-ring file that needs `R2Bucket` has to import the type by name.
-  // An explicit import is greppable; an ambient global available to every domain file is not.
+  // Not cosmetic here. Tests were inside the same project as the source, so they shared its
+  // `erasableSyntaxOnly` and `types` — and in apps/worker and apps/console the test directory was
+  // excluded from `include` entirely and therefore never typechecked at all.
   "extends": "../../tsconfig.base.json",
-  "include": ["**/*.ts"],
-  "compilerOptions": {
-    "noEmit": true,
-    // Tests sit beside the code they test, so rootDir is the package rather than a src/ dir.
-    "rootDir": ".",
-    "types": []
-  }
+  "include": [],
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.src.json" }
+  ]
 }

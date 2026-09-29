@@ -1,0 +1,14 @@
+{
+  // Node/Bun only. Never runs on Workers — it drives the real stores against a real Postgres, which
+  // is the fidelity gain the Postgres data layer bought: the same engine as production, not merely
+  // the same dialect.
+  "extends": "../tsconfig.base.json",
+  "include": ["**/*.ts"],
+  "exclude": ["test/**"],
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "tsBuildInfoFile": ".tsbuildinfo/src.tsbuildinfo",
+    "types": ["node"]
+  }
+}

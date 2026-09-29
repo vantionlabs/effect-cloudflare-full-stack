@@ -9,6 +9,7 @@
     "outDir": "dist/worker",
     "noEmit": true,
     "composite": true,
+    "tsBuildInfoFile": ".tsbuildinfo/worker.tsbuildinfo",
     // tsconfig.base.json sets `types: []`, so ambient types must be listed
     // explicitly — they are NOT picked up by `include`.
     // - node: `node:stream` (Duplex.fromWeb) in CloudflareSocket.ts
