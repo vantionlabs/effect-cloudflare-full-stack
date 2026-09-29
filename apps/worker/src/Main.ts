@@ -35,6 +35,7 @@ import {
   RPC_V1_PATH,
   RpcV1
 } from "@ea/api/v1"
+import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
 import { DryRunAdapter } from "@ea/modules/decision/server/Execution"
 import { LanguageModelWorkersAiBinding, WORKERS_AI_MODEL } from "@ea/modules/decision/server/Extraction"
 import { SessionHttp, SessionLive, SessionRpcLive, SessionStore } from "@ea/modules/iam/server/Session"
@@ -131,7 +132,19 @@ const ServicesLayer = (env: Env) =>
      * is how often this system refuses and whether its refusals are grounded, which is the number a client
      * actually asks about — and per plan risk R1, a FALLING refusal rate is an alarm rather than a win.
      */
-    TelemetryAnalytics(env.METRICS),
+    /*
+     * Optional, for the same reason OTLP export is: **telemetry must never be an availability dependency.**
+     *
+     * Analytics Engine needs an ACCOUNT-level opt-in before a Worker may bind it, separately from the dataset
+     * (which is created on first write) and separately from the SQL read endpoint (which answered while the
+     * binding was still refused). So a deploy can legitimately have no METRICS binding, and a Worker that
+     * crashed at layer build because it could not report a metric would be trading the product for a graph.
+     *
+     * `TelemetryNoop` is safe as a fallback precisely because the port is write-only — no method returns a
+     * value — so nothing downstream behaves differently. What is NOT safe is being quiet about it, which is
+     * why it logs once at startup rather than silently discarding.
+     */
+    env.METRICS === undefined ? TelemetryNoop : TelemetryAnalytics(env.METRICS),
     EmbedderWorkersAiBinding(env.AI),
     LanguageModelWorkersAiBinding(env.AI, WORKERS_AI_MODEL, env.AI_GATEWAY),
     /*

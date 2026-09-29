@@ -45,6 +45,41 @@
    */
   "placement": { "mode": "smart" },
 
+  /*
+   * Non-secret runtime configuration for the DEV deploy.
+   *
+   * `CLOUDFLARE_ACCOUNT_ID` is a var rather than a secret: it is an account-scoped identifier, already written
+   * in this file's comments, and it is not a credential. `CLOUDFLARE_AI_TOKEN` is, and goes in via
+   * `wrangler secret put`.
+   *
+   * `CLOUDFLARE_AI_GATEWAY` routes model calls through the gateway created by Pulumi. For the AI binding it
+   * travels as a run option rather than a URL, which is why the adapter takes it separately — a binding
+   * cannot be pointed at a gateway hostname. Absent means direct, unmetered, uncached calls, so setting it is
+   * what turns on the response cache, the cost logging and the spend limit.
+   *
+   * `CONSOLE_ORIGIN` and `COOKIE_DOMAIN` are deliberately ABSENT here: the console reaches this Worker through
+   * the Pages Function proxy, so the browser sees one origin and none of the three cross-origin settings
+   * apply. They arrive together when a domain does (ADR-0001).
+   *
+   * `BASE_URL` and `ALLOWED_HOSTS` are a different concern and ARE required, which a deployed sign-up proved by
+   * returning 403 `INVALID_ORIGIN`. The proxy forwards the request unchanged, so the Worker sees the *Pages*
+   * host — but better-auth trusts `BASE_URL`'s origin, which was unset and therefore `http://localhost:8799`.
+   * `ALLOWED_HOSTS` names every hostname a Pages deployment answers on, because a preview gets a new one per
+   * deployment and per branch. The wildcard is scoped to the project label on purpose: `*` crosses dots, so
+   * `*.pages.dev` would trust every Cloudflare Pages project on the internet.
+   *
+   * The Worker's own `workers.dev` hostname is NOT listed. Nothing is meant to reach the API there in this
+   * shape, and a host that is not listed falls back to `BASE_URL` rather than being trusted.
+   */
+  "vars": {
+    "ENVIRONMENT": "dev",
+    "CLOUDFLARE_ACCOUNT_ID": "f4599b98c2430a831bcfc291d156a988",
+    "CLOUDFLARE_AI_GATEWAY": "effect-ai-ai-dev",
+    "AI_GATEWAY": "effect-ai-ai-dev",
+    "BASE_URL": "https://effect-ai-console-dev.pages.dev",
+    "ALLOWED_HOSTS": "effect-ai-console-dev.pages.dev,*.effect-ai-console-dev.pages.dev,localhost:8799",
+  },
+
   // ───────────────────────────────────────────────────────────────────────────────────────
   // ⚠ BINDINGS ARE NOT INHERITED BY ENVIRONMENTS.
   //
@@ -131,9 +166,16 @@
    * `blob1`/`double2`. Inserting a value in the middle silently reinterprets every historical row. Append
    * only; the mapping is documented in `platform/TelemetryAnalytics.ts`.
    */
-  "analytics_engine_datasets": [
-    { "binding": "METRICS", "dataset": "effect_ai_decisions_dev" },
-  ],
+  // ⚠ TEMPORARILY DISABLED — the ACCOUNT needs Analytics Engine enabled before a Worker may
+  // bind it. `wrangler deploy` fails with `code: 10089` and a dashboard link:
+  //   https://dash.cloudflare.com/f4599b98c2430a831bcfc291d156a988/workers/analytics-engine
+  //
+  // Note the SQL READ endpoint already answers (0 datasets) while the BINDING is still
+  // refused — so querying and writing are separately entitled, and the read working is not
+  // evidence the deploy will. Restoring this is uncommenting three blocks.
+  // "analytics_engine_datasets": [
+  //   { "binding": "METRICS", "dataset": "effect_ai_decisions_dev" },
+  // ],
   "ai": { "binding": "AI" },
   /*
    * One queue carrying a tagged union, not a queue per event type.
@@ -190,9 +232,16 @@
       "kv_namespaces": [
         { "binding": "CACHE", "id": "PULUMI_cacheNamespaceId" },
       ],
-      "analytics_engine_datasets": [
-        { "binding": "METRICS", "dataset": "effect_ai_decisions_staging" },
-      ],
+      // ⚠ TEMPORARILY DISABLED — the ACCOUNT needs Analytics Engine enabled before a Worker may
+      // bind it. `wrangler deploy` fails with `code: 10089` and a dashboard link:
+      //   https://dash.cloudflare.com/f4599b98c2430a831bcfc291d156a988/workers/analytics-engine
+      //
+      // Note the SQL READ endpoint already answers (0 datasets) while the BINDING is still
+      // refused — so querying and writing are separately entitled, and the read working is not
+      // evidence the deploy will. Restoring this is uncommenting three blocks.
+      // "analytics_engine_datasets": [
+      //   { "binding": "METRICS", "dataset": "effect_ai_decisions_staging" },
+      // ],
       "ai": { "binding": "AI" },
       "queues": {
         "producers": [
@@ -234,9 +283,16 @@
       "kv_namespaces": [
         { "binding": "CACHE", "id": "PULUMI_cacheNamespaceId" },
       ],
-      "analytics_engine_datasets": [
-        { "binding": "METRICS", "dataset": "effect_ai_decisions_staging" },
-      ],
+      // ⚠ TEMPORARILY DISABLED — the ACCOUNT needs Analytics Engine enabled before a Worker may
+      // bind it. `wrangler deploy` fails with `code: 10089` and a dashboard link:
+      //   https://dash.cloudflare.com/f4599b98c2430a831bcfc291d156a988/workers/analytics-engine
+      //
+      // Note the SQL READ endpoint already answers (0 datasets) while the BINDING is still
+      // refused — so querying and writing are separately entitled, and the read working is not
+      // evidence the deploy will. Restoring this is uncommenting three blocks.
+      // "analytics_engine_datasets": [
+      //   { "binding": "METRICS", "dataset": "effect_ai_decisions_staging" },
+      // ],
       "ai": { "binding": "AI" },
       "queues": {
         "producers": [

@@ -76,6 +76,20 @@ export const authSettings: Effect.Effect<AuthConfig, never, SessionStore> = Effe
     Config.String("BASE_URL").pipe(Config.withDefault("http://localhost:8799"))
   )
   /*
+   * Every hostname this deployment answers on, comma-separated, as host patterns.
+   *
+   * Empty means `BASE_URL` is the only one. Cloudflare Pages needs more than one: a preview deployment is
+   * reachable at `<hash>.<project>.pages.dev` and `<branch>.<project>.pages.dev` as well as the production
+   * hostname, and better-auth refuses a credentialed request from an origin it was not told about — which is
+   * how this was found, as a 403 on sign-up through a deployed preview.
+   *
+   * Patterns must be scoped to a hostname we control. See `AuthConfig.allowedHosts`: the wildcard crosses
+   * dots, so `*.pages.dev` would trust every Pages project in existence.
+   */
+  const allowedHosts = yield* Effect.orDie(
+    Config.String("ALLOWED_HOSTS").pipe(Config.withDefault(""))
+  )
+  /*
    * The console's origin, when it is a DIFFERENT origin from the API.
    *
    * Empty means same-origin, which is local `vite dev` and the Pages-Function-proxy shape. In the real-world
@@ -109,6 +123,9 @@ export const authSettings: Effect.Effect<AuthConfig, never, SessionStore> = Effe
   return {
     connectionString: store.connectionString,
     baseURL,
+    allowedHosts: allowedHosts === ""
+      ? undefined
+      : allowedHosts.split(",").map((host) => host.trim()).filter((host) => host !== ""),
     secret: Redacted.value(secret),
     consoleOrigin: consoleOrigin === "" ? undefined : consoleOrigin,
     cookieDomain: cookieDomain === "" ? undefined : cookieDomain

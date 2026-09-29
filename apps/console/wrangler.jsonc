@@ -1,6 +1,6 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "effect-ai-console",
+  "name": "effect-ai-console-dev",
   // `pages_build_output_dir` is what marks this a PAGES project rather than a Worker. Wrangler switches to
   // Pages-specific validation on seeing it, so this file cannot also declare `main`, `queues` or `hyperdrive`.
   "pages_build_output_dir": "dist",
@@ -26,11 +26,13 @@
   "services": [
     { "binding": "API", "service": "effect-ai" },
   ],
-
-  "observability": {
-    "enabled": true,
-    "traces": { "enabled": true, "head_sampling_rate": 1 },
-  },
+  // NO `observability` BLOCK. Pages rejects it outright:
+  //
+  //   Configuration file for Pages projects does not support "observability"
+  //
+  // Found by deploying. The Pages docs say Workers-specific keys "do not apply" but give no list, so the only
+  // way to know is to try — `observability` is one of them, despite Pages Functions being Workers underneath.
+  // Function logs are available through the Pages project's own log stream instead.
   // Pages supports ONLY `production` and `preview` as environment names — not arbitrary ones like the
   // Worker's `staging`. Verified against the docs. `services` is non-inheritable here too, so a future
   // `env.preview` must repeat it rather than expecting to inherit.

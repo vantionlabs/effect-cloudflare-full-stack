@@ -69,7 +69,7 @@ export interface Env {
    * Created implicitly on first write, so there is no resource to provision. `writeDataPoint`'s three arrays
    * are positional and their order IS the schema: append only, never reorder. See `TelemetryAnalytics.ts`.
    */
-  readonly METRICS: {
+  readonly METRICS?: {
     readonly writeDataPoint: (point: {
       readonly blobs?: ReadonlyArray<string> | undefined
       readonly doubles?: ReadonlyArray<number> | undefined

@@ -23,6 +23,24 @@ import { Client, Pool } from "pg"
 export interface AuthConfig {
   readonly connectionString: string
   readonly baseURL: string
+  /**
+   * Every host this deployment is legitimately served under, as host patterns (`*` allowed).
+   *
+   * Empty means `baseURL` is the only one, which is right for a fixed hostname. It is NOT right for
+   * Cloudflare Pages, where every preview deployment gets its own hostname — `<hash>.<project>.pages.dev`
+   * and `<branch>.<project>.pages.dev` — so no single string can name the origin the browser used.
+   *
+   * This is the reason it exists: better-auth trusts `baseURL`'s origin and nothing else by default, so a
+   * preview deployment was refused with `INVALID_ORIGIN` on sign-up. That refusal was CORRECT — the request
+   * really did come from an origin the server had not been told about — and the fix is to tell it, not to
+   * relax the check.
+   *
+   * **A pattern must be scoped to a hostname we control.** `*` here compiles to `[^/\\]`, which crosses
+   * dots, so `*.pages.dev` would trust every Cloudflare Pages project on the internet — any of which could
+   * then post credentialed requests at us. `*.effect-ai-console-dev.pages.dev` is safe because the project
+   * label is ours; the wildcard's looseness is not what makes it safe.
+   */
+  readonly allowedHosts?: ReadonlyArray<string> | undefined
   readonly secret: string
   /** The console's origin when it differs from the API's. Undefined means same-origin. */
   readonly consoleOrigin?: string | undefined
@@ -118,7 +136,30 @@ export const makeAuth = (config: AuthConfig) => {
 
   return betterAuth({
     database: pool,
-    baseURL: config.baseURL,
+    /*
+     * A string when one hostname serves this deployment; better-auth's dynamic form when several do.
+     *
+     * The dynamic form derives the base URL from the request's own host, having first checked it against
+     * `allowedHosts` — and, importantly, it derives `trustedOrigins` from the same list, so the two cannot
+     * disagree. `fallback` is what an unlisted host gets instead of a thrown error, which is the difference
+     * between a misconfigured host answering on the canonical origin and the Worker failing the request.
+     */
+    baseURL: config.allowedHosts === undefined || config.allowedHosts.length === 0
+      ? config.baseURL
+      : {
+        allowedHosts: [...config.allowedHosts],
+        /*
+         * `protocol` is deliberately OMITTED, and this is not an oversight.
+         *
+         * Setting it to `"https"` short-circuits better-auth's protocol derivation *unconditionally* — it
+         * does not exempt loopback. Local dev on `http://localhost:8799` would then resolve a base URL of
+         * `https://localhost:8799`, better-auth would mark the session cookie `Secure`, and the browser
+         * would drop it on an http origin: sign-in appears to succeed and the next request is anonymous,
+         * with nothing in any log. Omitted, the protocol comes from the request — http locally, https on
+         * Pages — and the trusted list gets the `http://` variant only for loopback hosts.
+         */
+        fallback: config.baseURL
+      },
     secret: config.secret,
 
     emailAndPassword: { enabled: true },
@@ -126,9 +167,17 @@ export const makeAuth = (config: AuthConfig) => {
     /*
      * Cross-origin, only when it actually is.
      *
-     * Same-origin needs none of this and gets none of it: no trusted-origins list, no cookie domain, no CORS
-     * — the three settings most likely to be subtly wrong, absent rather than defaulted. That is the local
-     * `vite dev` shape and the Pages-proxy shape.
+     * Same-origin needs none of this and gets none of it: no cross-origin trusted list, no cookie domain, no
+     * CORS — the three settings most likely to be subtly wrong, absent rather than defaulted. That is the
+     * local `vite dev` shape and the Pages-proxy shape.
+     *
+     * An earlier version of this comment claimed the Pages-proxy shape needed nothing at all. **That was
+     * wrong, and a deployed sign-up returned 403 `INVALID_ORIGIN` to prove it.** Same-origin does not mean
+     * "no origin configuration"; it means the browser's origin and the server's `baseURL` are the same
+     * origin, and they were not — `BASE_URL` was unset, so it defaulted to `http://localhost:8799` while the
+     * browser was on `*.pages.dev`. `allowedHosts` above is what fixes that, and it is a different concern
+     * from the three settings below: which hostnames serve this deployment, not which foreign origin to let
+     * in.
      *
      * The real-world shape is an API on its own subdomain (`api.example.com` serving `app.example.com`), and
      * then all three are required together. They are set from one config each so that a deployment cannot

@@ -107,6 +107,51 @@ describe("refusals", () => {
     expect(response.status).toBeGreaterThanOrEqual(400)
   })
 
+  it("refuses a credentialed request from a host that is not in ALLOWED_HOSTS", async () => {
+    /*
+     * The negative half of the Pages-preview fix, and the reason that fix is a list rather than a wildcard.
+     *
+     * A deployed sign-up returned 403 `INVALID_ORIGIN` because `BASE_URL` was unset and better-auth trusts
+     * only `baseURL`'s origin. `ALLOWED_HOSTS` now names the hostnames a Pages deployment answers on — so
+     * this asserts the check still REFUSES everything else, which is the property that makes adding hosts
+     * safe. Without it, a regression that widened the pattern to `*.pages.dev` — trusting every Pages
+     * project on the internet, because `*` crosses dots — would pass the suite.
+     */
+    const response = await harness.fetch("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        // A real Pages hostname, and a plausible typo of ours: neither is in the allowlist.
+        origin: "https://someone-elses-project.pages.dev"
+      },
+      body: JSON.stringify({
+        email: `untrusted-${Date.now()}@example.com`,
+        password: "correct-horse-battery-staple",
+        name: "Untrusted Origin"
+      })
+    })
+    expect(response.status).toBe(403)
+  })
+
+  it("accepts a Pages preview hostname, which is what the wildcard is for", async () => {
+    // The positive half. A preview deployment's origin is `<hash>.<project>.pages.dev`, a hostname that does
+    // not exist until the deployment does, so it can only be matched by pattern. `harness.post` would send
+    // the loopback origin and prove nothing about the wildcard, so the header is set explicitly.
+    const response = await harness.fetch("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://d082cafd.effect-ai-console-dev.pages.dev"
+      },
+      body: JSON.stringify({
+        email: `preview-${Date.now()}@example.com`,
+        password: "correct-horse-battery-staple",
+        name: "Preview User"
+      })
+    })
+    expect(response.status).toBe(200)
+  })
+
   it("leaves the public health endpoint unauthenticated", async () => {
     // Guards against over-applying the middleware: a monitor must not need credentials.
     const response = await harness.fetch("/api/v1/health")
