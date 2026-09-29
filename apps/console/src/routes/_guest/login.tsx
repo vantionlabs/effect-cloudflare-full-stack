@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { useHydrated } from "@/hooks/use-hydrated"
 import { useSchemaForm } from "@/hooks/use-schema-form"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { Schema } from "effect"
@@ -56,6 +57,7 @@ function LoginPage() {
   const { next } = Route.useSearch()
   const navigate = useNavigate()
   const [rejected, setRejected] = useState<string | undefined>(undefined)
+  const hydrated = useHydrated()
 
   const form = useSchemaForm({
     schema: Credentials,
@@ -97,7 +99,32 @@ function LoginPage() {
           <CardDescription>Sign in to review decisions.</CardDescription>
         </CardHeader>
         <CardContent>
+          {
+            /*
+             * EVERY control here is disabled until hydration, and not for the obvious reason.
+             *
+             * These inputs are controlled by form state, so their value comes from React. The server sends
+             * real, typeable HTML, and anything typed into it before the client takes over is discarded the
+             * moment React hydrates and re-renders from a form state that is still empty. Somebody who
+             * starts typing on a cold load watches their email vanish. The e2e suite hit this first,
+             * because Playwright types faster than a bundle loads: it filled both fields, React hydrated,
+             * and the sign-in submitted nothing at all.
+             *
+             * Disabling until ready makes the two states honest — the form is either not ready or it
+             * works, and never accepts input it is about to throw away.
+             *
+             * `method="post"` although this form never reaches the server.
+             *
+             * It is insurance for the window before hydration, when the browser owns this form and React
+             * does not. A form with no `method` submits as GET, which appends every field to the URL — and
+             * one of these fields is a password. That is how a credential ends up in browser history and in
+             * the access log of anything in front of the app. The submit button below is disabled until
+             * hydration for the same reason, and either measure alone would be enough; both are here
+             * because the cost is one word and the failure is one nobody would notice.
+             */
+          }
           <form
+            method="post"
             onSubmit={(event) => {
               event.preventDefault()
               void form.handleSubmit()
@@ -113,6 +140,8 @@ function LoginPage() {
                       name={field.name}
                       type="email"
                       autoComplete="email"
+                      required
+                      disabled={!hydrated}
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(event) => field.handleChange(event.target.value)}
@@ -130,6 +159,8 @@ function LoginPage() {
                       name={field.name}
                       type="password"
                       autoComplete="current-password"
+                      required
+                      disabled={!hydrated}
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(event) => field.handleChange(event.target.value)}
@@ -148,7 +179,17 @@ function LoginPage() {
               }
               <form.Subscribe selector={(state) => state.isSubmitting}>
                 {(isSubmitting) => (
-                  <Button type="submit" disabled={isSubmitting}>
+                  /*
+                   * Disabled until hydrated, so the only way to submit this form is the handler that
+                   * validates it and posts JSON. Before that, submitting could only leak the password into
+                   * the URL and land on a page that cannot sign anybody in — worse than a button that
+                   * visibly is not ready yet.
+                   *
+                   * It also gives the e2e suite a real signal instead of a sleep: Playwright waits for an
+                   * element to be enabled before clicking, so "hydrated" becomes something a test can wait
+                   * on rather than guess at.
+                   */
+                  <Button type="submit" disabled={isSubmitting || !hydrated}>
                     {isSubmitting ? "Signing in…" : "Sign in"}
                   </Button>
                 )}

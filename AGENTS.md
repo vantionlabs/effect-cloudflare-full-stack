@@ -137,6 +137,11 @@ inside `preflight` made `preflight` permanently red while the Workers AI account
 nobody can pass stops being read. Run it deliberately, and treat a failure as a retrieval-quality finding
 rather than a broken build.
 
+**`preflight` does not include `test:e2e` either**, for the related reason that it needs a running Postgres
+container and a Cloudflare token — `preflight` should stay runnable on a laptop with nothing started. Run it
+when you touch the console's auth, routing or forms, which is precisely where it has already earned its
+keep.
+
 **Three things made the gates pass locally and fail on a clean machine, and all three had the same
 shape: a developer machine holds state a fresh one does not.** A green `bun run preflight` is therefore
 evidence about this machine, not about the code. The three were a generated file that was already on disk,
@@ -157,6 +162,33 @@ argument narrows to `undefined`, so the error blames your route file rather than
 your disk because you ran `vite` at some point, which is exactly why local green means nothing here. Run
 `bun run --filter @ea/console build` first; CI does, before `check`, for this reason. Found when the first
 push to the remote failed CI on a tree whose `preflight` had just passed.
+
+**Anything a browser can do before hydration, it will — and the console's forms did all three.** The
+server sends real, typeable, submittable HTML; for the window before the bundle runs, React is not
+involved. Three distinct failures came out of that one window, and each looked like something else:
+
+- **A typed value is discarded.** A controlled input takes its value from form state, so on hydration React
+  re-renders it from a state that is still empty. Typing early means watching the field clear.
+- **A submit leaks the password into the URL.** With no React handler to call `preventDefault`, the browser
+  submits the form itself — and a form with no `method` submits as GET, so every field is appended to the
+  URL, into history and into every access log in front of the app.
+- **A button silently does nothing.** `Sign out` is an `onClick` and nothing else, so a click before
+  hydration leaves somebody believing they signed out when they did not.
+
+The fix is one hook, `useHydrated`, and disabling controls until it is true — plus `method="post"` on the
+form as insurance that cannot be defeated by another entry point. Gate a control when its pre-hydration
+behaviour is a _silent_ no-op with consequences; do not gate content, which would throw away the SSR.
+
+**This is also why the e2e suite found them: Playwright types faster than a bundle loads.** The first
+version raced hydration by accident and the symptom was a sign-in that did nothing at all, with no failed
+request to look at. The gate is the cure and also the test signal: Playwright waits for a control to be
+enabled, so `disabled={!hydrated}` turns "hydrated" into something a test waits on rather than sleeps
+through. Never put a `waitForTimeout` in its place — it hides the bug and re-introduces the race.
+
+**The browser suite has the same two prerequisites as `wrangler dev`:** the compose Postgres, and
+`CLOUDFLARE_API_TOKEN` in a non-interactive environment, because it boots the API and the `ai` binding has
+no local emulation. CI gates the job and prints a warning, for the same reason the `worker` project is
+gated. `E2E_BASE_URL` points the same specs at a deployed environment instead.
 
 **`Schema.TaggedError` is an `Error` whose `.message` is usually empty.** `failure.message` compiles and
 records a blank string. Lead with `_tag`.

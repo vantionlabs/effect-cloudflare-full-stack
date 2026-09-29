@@ -12,7 +12,8 @@
  */
 import { authClient } from "@/auth/auth-client"
 import { Button } from "@/components/ui/button"
-import { useIdentity } from "@/hooks/use-session"
+import { useHydrated } from "@/hooks/use-hydrated"
+import { useIdentity, useOrganizationId } from "@/hooks/use-session"
 import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_authenticated")({
@@ -40,7 +41,9 @@ export const Route = createFileRoute("/_authenticated")({
  */
 function AuthenticatedLayout() {
   const identity = useIdentity()
+  const organizationId = useOrganizationId()
   const navigate = useNavigate()
+  const hydrated = useHydrated()
 
   return (
     <div className="flex min-h-full flex-col">
@@ -51,6 +54,14 @@ function AuthenticatedLayout() {
           <Button
             variant="outline"
             size="sm"
+            /*
+             * Disabled until hydrated, because everything this button does is JavaScript: before that a
+             * click is a silent no-op, and the person has been told they signed out when they did not.
+             * That is a worse failure than a control that is visibly not ready yet — on a shared machine
+             * it is the whole point of the button. The e2e suite found it by clicking faster than the
+             * bundle loads, which is also how a real person on a cold connection would.
+             */
+            disabled={!hydrated}
             onClick={async () => {
               await authClient.signOut()
               /*
@@ -67,7 +78,27 @@ function AuthenticatedLayout() {
         </div>
       </header>
       <div className="flex-1">
-        <Outlet />
+        {
+          /*
+           * A session with no active organization is a real state, and every page below here would fail on
+           * it: the API's `resolveIdentity` refuses such a session, so the queue would render an error and
+           * the upload form would 403. Saying so once, here, is both more honest and cheaper than each page
+           * discovering it separately — and it is the guard's job, since "which tenant" is as much a
+           * precondition for these pages as "who".
+           *
+           * Not a redirect, because there is nowhere useful to send them: they ARE signed in, and the fix is
+           * an invitation or an organization switcher, neither of which exists yet. A named dead end beats a
+           * loop between here and a login page that would send them straight back.
+           */
+        }
+        {organizationId === null
+          ? (
+            <div className="text-muted-foreground mx-auto max-w-md px-4 py-16 text-sm">
+              This account has no active organization, so there is nothing to review yet. Ask an administrator for an
+              invitation.
+            </div>
+          )
+          : <Outlet />}
       </div>
     </div>
   )

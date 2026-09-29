@@ -5,29 +5,48 @@
  * render the authenticated shell and then correct it (a flicker, and briefly the wrong UI), or to block on
  * a client fetch (a spinner on every navigation). Neither is a guard: both send the page and decide after.
  *
- * **better-auth answers this, not us.** Two earlier versions did it by hand — one built
- * `new Request("https://api.internal/api/v1/me")` with an untyped cast, the next went through
- * `HttpApiClient` — and both reimplemented `getSession`, which already knows about cookie caching, session
- * refresh and the organization plugin. This file now only forwards headers and tags the result.
- *
- * `/api/v1/me` remains the authority for ORGANIZATION and ROLE, which it reads from the `member` table.
- * The guards ask a narrower question: is anyone signed in.
+ * better-auth's `getSession` answers it. Earlier versions of this file hand-built a request to
+ * `/api/v1/me` and cast the JSON; that reimplemented a method which already knows about cookie caching,
+ * session refresh and the organization plugin.
  */
 import { authClient } from "@/auth/auth-client"
 import { createServerFn } from "@tanstack/react-start"
 import { getRequest } from "@tanstack/react-start/server"
 
 /**
- * Deliberately a discriminated union rather than `session | null`.
+ * better-auth's own inferred session type, which is the point.
  *
- * `null` invites `session?.user.email` and a component that renders an empty string for a signed-out user
- * instead of refusing to render at all. A tag forces the caller to say which case it is handling — the same
- * reason the decision `Outcome` is a closed enum.
+ * `$Infer` is derived from the client's configuration INCLUDING its plugins, so `activeOrganizationId`
+ * below exists because `organizationClient()` is registered — nobody wrote that field down. A rename
+ * upstream, or a plugin added or removed, becomes a compile error here instead of an `undefined` at
+ * runtime. That is the same argument the RPC layer makes for sharing a contract rather than restating one.
+ */
+type BetterAuthSession = typeof authClient.$Infer.Session
+
+/**
+ * A PROJECTION of that type, not the whole thing — and the narrowing is a security boundary.
+ *
+ * `BetterAuthSession["session"]` contains `token`. This value goes into router context, and router context
+ * is serialised into the SSR payload and shipped to the browser. Spreading the session would therefore
+ * print the session token into the HTML — defeating the `HttpOnly` cookie whose entire purpose is that
+ * JavaScript cannot read it. `Pick` is what keeps that from happening by accident, and it is why this is a
+ * hand-listed projection of a derived type rather than the derived type itself.
+ *
+ * Also deliberately a tagged union rather than `session | null`: `null` invites `session?.user.email` and
+ * a component that renders an empty string for a signed-out user instead of refusing to render at all.
  */
 export type CurrentSession =
   | {
     readonly _tag: "Authenticated"
-    readonly user: { readonly id: string; readonly email: string; readonly name: string }
+    readonly user: Pick<BetterAuthSession["user"], "id" | "email" | "name" | "image">
+    /**
+     * The active organization, from the organization plugin.
+     *
+     * Optional because a session can exist before one is set, which is a real state: the API's
+     * `resolveIdentity` refuses such a session, so the console showing it as "signed in with nothing to
+     * review" is more honest than pretending the tenant is known.
+     */
+    readonly organizationId: BetterAuthSession["session"]["activeOrganizationId"]
   }
   | { readonly _tag: "Guest" }
 
@@ -38,10 +57,10 @@ export const getCurrentSession = createServerFn({ method: "GET" }).handler(
      *
      * better-auth decides what it needs from them — the session cookie today, and whatever a future plugin
      * adds without this file changing. Naming `cookie` explicitly was an earlier version's mistake: it
-     * worked, and it quietly took over a decision belonging to the library.
+     * worked, and quietly took over a decision belonging to the library.
      *
-     * The client is the SAME one the browser uses; only its transport differs, which `client.ts` handles
-     * with an isomorphic fetch. So there is one configuration, one plugin list, one place to change.
+     * The client is the SAME one the browser uses; only the transport differs, which `auth-client.ts`
+     * handles with an isomorphic fetch. One configuration, one plugin list, one place to change.
      */
     const { data } = await authClient.getSession({
       fetchOptions: { headers: getRequest().headers }
@@ -56,7 +75,14 @@ export const getCurrentSession = createServerFn({ method: "GET" }).handler(
 
     return {
       _tag: "Authenticated",
-      user: { id: data.user.id, email: data.user.email, name: data.user.name }
+      // Field by field, so adding one is a decision rather than a consequence of upstream adding it.
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.name,
+        image: data.user.image
+      },
+      organizationId: data.session.activeOrganizationId
     }
   }
 )

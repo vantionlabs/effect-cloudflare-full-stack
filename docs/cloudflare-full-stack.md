@@ -111,8 +111,12 @@ docker compose up -d      # Postgres 18 + pgvector 0.8.5 on :55433
 bun run db:migrate        # apply migrations to it
 bun run db:verify         # confirm pgvector and the Dutch stemmer are present
 
-bun run dev               # wrangler dev — REAL workerd on :8799
-cd apps/console && bun run dev   # vite on :5173
+# ONE command for both Workers. The console's vite dev server boots the API as an AUXILIARY Worker,
+# so the `API` service binding resolves and the browser has one origin, as it does deployed.
+bun run --filter @ea/console dev   # console on :5173, API behind it
+
+# The API alone, on its own port, when you are working on it rather than on the console.
+bun run dev                        # wrangler dev — REAL workerd on :8799
 ```
 
 What each binding resolves to locally:
@@ -126,13 +130,28 @@ What each binding resolves to locally:
 Local `vars` and secrets come from `apps/worker/.env`, which is gitignored and documented by
 `apps/worker/.env.example`. Copy and fill it.
 
-`vite` proxies `/api` and `/auth` to `:8799`, so **the console is developed against the real Worker on one
-origin** — not a mock. That is deliberate twice over: a mock would drift from the API, and the same-origin
-property is what the deployed Pages Function is reproducing. Local development therefore needs no CORS, and
-neither does production.
+The console forwards `/api/*` to the API over a **service binding** (`apps/console/src/server.ts`), so the
+console is developed against the real Worker on one origin — not a mock. That is deliberate twice over: a
+mock would drift from the API, and the same-origin property is what the deployment reproduces. Local
+development therefore needs no CORS, and neither does production.
 
-The one thing that leaks: because the `AI` binding forces a remote runtime, `wrangler dev` and the
-real-Worker test suite both need `CLOUDFLARE_API_TOKEN` in a non-interactive environment. On a laptop
+This used to be a `vite` proxy to `:8799`, and that is worth naming rather than quietly correcting: a proxy
+was the only option while the console was a Pages project, and it stopped existing when the console became a
+Worker with a service binding. For a while afterwards nothing bound `API` locally at all — the dev server
+started fine and the first sign-in failed inside the fetch. `auxiliaryWorkers` in
+`apps/console/vite.config.ts` is what makes the binding real locally, and it is the same topology as the
+deploy rather than an imitation of it.
+
+**`BASE_URL` in `apps/worker/.env` is load-bearing for local sign-in.** Without it wrangler falls back to
+the `vars` in `wrangler.jsonc`, whose `BASE_URL` is the deployed **https** console — and `useSecureCookies`
+is derived from that scheme, so the session cookie comes back marked `Secure`, the browser discards it over
+plain http, and sign-in returns 200 having signed nobody in. It must name the console's origin
+(`http://localhost:5173`), not the API's. This is the mirror of a bug already shipped once in the other
+direction, where the cookie was NOT marked `Secure` deployed; neither version appears in a log.
+
+The one thing that leaks: because the `AI` binding forces a remote runtime, `wrangler dev`, the
+real-Worker test suite and the browser suite all need `CLOUDFLARE_API_TOKEN` in a non-interactive
+environment. On a laptop
 `wrangler login` has cached credentials so it is invisible; in CI it is not, which is why that suite is
 gated and says so. See the traps section of `AGENTS.md`.
 

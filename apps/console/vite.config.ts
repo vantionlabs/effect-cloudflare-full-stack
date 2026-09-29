@@ -31,7 +31,25 @@ export default defineConfig({
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) }
   },
   plugins: [
-    cloudflare({ viteEnvironment: { name: "ssr" } }),
+    cloudflare({
+      viteEnvironment: { name: "ssr" },
+      /*
+       * The API, so the `API` service binding RESOLVES locally.
+       *
+       * Without this the console's own dev server starts happily and `env.API` is simply absent, so the
+       * first sign-in throws inside the isomorphic fetch rather than reporting a missing binding — the
+       * console was in exactly that state from the moment it stopped being a Pages project with a vite
+       * proxy and became a Worker with a service binding.
+       *
+       * An auxiliary Worker is not exposed on its own port: every request reaches it through this entry,
+       * which is the same topology as the deployed pair. So the browser has ONE origin locally too, and
+       * `localhost:5173` is what the API must be told it is (see apps/worker/.env.example).
+       *
+       * `wrangler deploy` ignores this: it deploys only the entry Worker, and the API is deployed from
+       * its own directory — first, because the console's binding needs it to exist. See deploy.yml.
+       */
+      auxiliaryWorkers: [{ configPath: "../worker/wrangler.jsonc" }]
+    }),
     tanstackStart(),
     viteReact(),
     tailwindcss()

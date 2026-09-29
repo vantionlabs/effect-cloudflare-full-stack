@@ -38,3 +38,24 @@ export const useIdentity = () => {
   }
   return session.user
 }
+
+/**
+ * The active organization, which is the TENANT and therefore not part of `useIdentity`.
+ *
+ * Kept separate on purpose. `useIdentity` answers "who is this", and a user is one thing; "which
+ * organization's data am I looking at" is another, and better-auth models it on the session rather than the
+ * user precisely because one user can switch between several. Folding it into the identity would make an
+ * organization switcher look like it changes who you are.
+ *
+ * Returns `null` when a session exists with no active organization — a real state rather than an error. The
+ * API's own `resolveIdentity` refuses such a session, so a caller that needs a tenant must handle the null
+ * rather than assert it away; what it must NOT do is substitute a default, which is how one tenant ends up
+ * reading another's queue.
+ */
+export const useOrganizationId = (): string | null => {
+  const session = useSession()
+  if (session._tag === "Guest") {
+    throw new Error("useOrganizationId() was called outside an authenticated route")
+  }
+  return session.organizationId ?? null
+}

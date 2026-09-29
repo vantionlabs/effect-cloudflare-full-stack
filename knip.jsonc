@@ -34,6 +34,21 @@
     "packages/api": {
       "entry": ["**/test/**/*.ts"],
     },
+    "e2e": {
+      /*
+       * Playwright specs are entry points: the runner discovers them, nothing imports them.
+       *
+       * `playwright.config.ts` is deliberately NOT listed — knip's Playwright plugin already treats it as
+       * an entry and reports the duplicate as a redundant pattern. The specs are listed because the
+       * coverage is worth being visible: an implicit pass reads the same as a workspace knip never looked
+       * at, and a `tests/support/` helper that stops being used should be reported. Verified by adding a
+       * dead file and watching knip name it.
+       */
+      "entry": [
+        "tests/**/*.spec.ts",
+      ],
+      "project": ["**/*.ts"],
+    },
     "apps/console": {
       // The Worker's entry is `main` in wrangler.jsonc (src/server.ts), which knip finds on its own;
       // routes are discovered by TanStack Start's plugin, not imported.

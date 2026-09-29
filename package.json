@@ -14,7 +14,8 @@
       "apps/*",
       "evals",
       "scripts",
-      "infra"
+      "infra",
+      "e2e"
     ],
     "catalog": {
       "@cloudflare/vite-plugin": "^1.62.1",
@@ -39,7 +40,7 @@
   },
   "scripts": {
     "prepare": "effect-tsgo patch --oxlint && (git rev-parse --git-dir >/dev/null 2>&1 && lefthook install || true)",
-    "check": "tsc -b tsconfig.json && tsc -p apps/console/tsconfig.json && tsc -p packages/modules/tsconfig.test.json && tsc -p packages/api/tsconfig.test.json && tsc -p evals/tsconfig.test.json && tsc -p apps/worker/tsconfig.test.json && tsc -p tsconfig.tools.json && tsc -p infra/tsconfig.json",
+    "check": "tsc -b tsconfig.json && tsc -p apps/console/tsconfig.json && tsc -p packages/modules/tsconfig.test.json && tsc -p packages/api/tsconfig.test.json && tsc -p evals/tsconfig.test.json && tsc -p apps/worker/tsconfig.test.json && tsc -p tsconfig.tools.json && tsc -p infra/tsconfig.json && tsc -p e2e/tsconfig.json",
     "check:watch": "tsc -b tsconfig.json --watch",
     "format": "dprint fmt",
     "format:check": "dprint check",
@@ -70,7 +71,8 @@
     "auth:check": "bun scripts/auth-schema.ts --check",
     "evals:retrieval": "bun evals/RetrievalRecall.ts",
     "db:verify": "bun scripts/verify-postgres.ts",
-    "db:migrate": "bun scripts/migrate.ts"
+    "db:migrate": "bun scripts/migrate.ts",
+    "test:e2e": "bun run --filter @ea/e2e test"
   },
   "devDependencies": {
     "@effect/tsgo": "0.46.1",
