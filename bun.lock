@@ -55,6 +55,8 @@
       "devDependencies": {
         "@cloudflare/workers-types": "^5.20260926.1",
         "@types/node": "catalog:",
+        "@types/pg": "^8.23.1",
+        "pg": "^8.23.0",
         "wrangler": "catalog:",
       },
     },
