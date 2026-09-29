@@ -26,11 +26,15 @@ const ORG = OrgId.make("exec_org")
 const DOCUMENT = "exec_doc"
 
 const Admin = PgClient.layer({
-  host: "localhost",
-  port: 55433,
-  username: "effect_ai",
-  password: Redacted.make("local_dev_only"),
-  database: "effect_ai",
+  // PG* env vars with the compose.yaml values as defaults, matching `migrate.setup.ts` and `evals/`.
+  // Hardcoding them made this suite pass locally and fail in CI with `28P01 password authentication
+  // failed`, because CI runs its own Postgres service with its own throwaway password. A test that can
+  // only reach one specific container is not a test of the code.
+  host: process.env["PGHOST"] ?? "localhost",
+  port: Number(process.env["PGPORT"] ?? 55433),
+  username: process.env["PGUSER"] ?? "effect_ai",
+  password: Redacted.make(process.env["PGPASSWORD"] ?? "local_dev_only"),
+  database: process.env["PGDATABASE"] ?? "effect_ai",
   ssl: false
 })
 
