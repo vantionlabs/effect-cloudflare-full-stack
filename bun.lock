@@ -6,6 +6,7 @@
       "name": "@ea/root",
       "devDependencies": {
         "@effect/tsgo": "0.46.1",
+        "@langchain/cloudflare": "^1.1.0",
         "@langchain/textsplitters": "^1.0.2",
         "@secretlint/secretlint-rule-preset-recommend": "13.0.6",
         "@types/node": "catalog:",
@@ -336,6 +337,8 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
     "@js-sdsl/ordered-map": ["@js-sdsl/ordered-map@4.4.2", "", {}, "sha512-iUKgm52T8HOE/makSxjqoWhe95ZJA1/G1sYsGev2JDKUSS14KAgg1LHb+Ba+IPow0xflbnSkOsZcO08C7w1gYw=="],
+
+    "@langchain/cloudflare": ["@langchain/cloudflare@1.1.0", "", { "peerDependencies": { "@langchain/core": "^1.2.0" } }, "sha512-fK4RFC4GNfapxO3d2l1qrB7p+kecvyMXjhyStOtnYtU7pN1syhy7H/fle3EHVpnZhq4+ElRe3nHjwVoQrbetPw=="],
 
     "@langchain/core": ["@langchain/core@1.2.13", "", { "dependencies": { "@cfworker/json-schema": "^4.0.2", "@standard-schema/spec": "^1.1.0", "js-tiktoken": "^1.0.12", "langsmith": ">=0.5.0 <1.0.0", "mustache": "^4.2.0", "p-queue": "^6.6.2", "zod": "^3.25.76 || ^4" } }, "sha512-ADGTxZ84n3civruUX1LlTOdua/PDGoni2U6TmKTX7hvRU2Jlepu8vLJI4Wnwj45KUKhUCrW94Il12Q2bxE3e8A=="],
 

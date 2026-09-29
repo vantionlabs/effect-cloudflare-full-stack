@@ -97,8 +97,21 @@ const bindingNames = (scope: Record<string, unknown>): Set<string> => {
   const names = new Set<string>()
   for (const key of BINDING_KEYS) {
     const value = scope[key]
-    if (!Array.isArray(value)) continue
-    for (const entry of value as Array<Record<string, unknown>>) {
+    /*
+     * Two shapes, and missing the second one was a real hole in this check.
+     *
+     * Most bindings are arrays (`hyperdrive`, `r2_buckets`, `queues`). But `ai` and `browser` are single
+     * OBJECTS — `"ai": { "binding": "AI" }`. An earlier version only walked arrays, so an `ai` binding
+     * present at the top level and absent from `env.production` passed silently, which is precisely the
+     * failure this script exists to catch: it deploys fine and throws at runtime.
+     */
+    const entries: Array<Record<string, unknown>> = Array.isArray(value)
+      ? value as Array<Record<string, unknown>>
+      : typeof value === "object" && value !== null
+      ? [value as Record<string, unknown>]
+      : []
+
+    for (const entry of entries) {
       const name = entry["binding"] ?? entry["queue"] ?? entry["database_name"] ?? entry["bucket_name"]
       names.add(`${key}:${String(name)}`)
     }

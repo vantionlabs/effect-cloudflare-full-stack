@@ -109,6 +109,30 @@ const hyperdriveCached = new cloudflare.HyperdriveConfig("pg-cached", {
 // ─── Outputs ──────────────────────────────────────────────────────────────────────────────
 // Consumed by apps/worker/wrangler.jsonc. `pulumi stack output --json` feeds the deploy
 // workflow, so binding ids are never hand-transcribed.
+/*
+ * ─── Vectorize is NOT declared here, and cannot be ────────────────────────────────────────
+ *
+ * `@pulumi/cloudflare` 6.21.0 ships 1216 resources and **none of them is Vectorize**. Checked, not
+ * assumed. So the managed-store arm of the retrieval comparison cannot be provisioned as code with this
+ * provider; it needs the CLI:
+ *
+ *   wrangler vectorize create effect-ai-policy-dev --dimensions=1024 --metric=cosine
+ *
+ * 1024 to match EMBEDDING_DIMENSIONS and `@cf/baai/bge-m3`, cosine to match the operator class the
+ * pgvector index uses — otherwise the two arms would be compared on different distance metrics.
+ *
+ * That is a real gap in the IaC story and an argument against adopting Vectorize as production: a
+ * resource created by hand is a resource nobody can reproduce or review. Worth weighing alongside its
+ * two bigger problems (no lexical half, so `retrieval_mode` is never "hybrid" and rail 4 refuses to
+ * auto-approve; and no row-level security, so tenancy rests on a metadata filter alone).
+ *
+ * Interestingly the provider DOES have `AiSearchInstance`, `AiSearchNamespace` and `AiSearchToken` —
+ * AutoRAG under its current name. So the fully managed option is declarable as code while the
+ * build-it-yourself-on-Vectorize option is not, which is the opposite of what one would guess.
+ *
+ * Workers AI needs no resource at all: the `ai` binding in wrangler.jsonc is the whole declaration.
+ */
+
 export const r2BucketName = documents.name
 export const kvNamespaceId = sessions.id
 export const queueName = events.queueName

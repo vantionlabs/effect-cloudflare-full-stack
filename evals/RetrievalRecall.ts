@@ -21,7 +21,7 @@
 import { type Chunker, ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
 import { EmbeddingProfile } from "@ea/modules/policy/domain/Embedding"
 import { chunkerLangChain } from "@ea/modules/policy/server/Chunk"
-import { EmbedderDeterministic } from "@ea/modules/policy/server/Embedding"
+import { EmbedderDeterministic, EmbedderWorkersAiRest } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
 import { RetrievePolicy } from "@ea/modules/policy/use-cases/Retrieval"
 import { CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
@@ -75,7 +75,18 @@ const IdsLive = Layer.succeed(Ids)({ next: Effect.sync(() => crypto.randomUUID()
  * real. With the deterministic one the semantic column is noise, and the report says so rather than
  * printing a number that looks like a result.
  */
-const Embedder = EmbedderDeterministic
+/**
+ * The embedder under test, chosen by whether credentials are present.
+ *
+ * Falling back is safe ONLY because `EmbeddingProfile.semantic` travels with the choice and the report
+ * reads it: with the deterministic embedder the hybrid column is suppressed as meaningless rather than
+ * printed as a result. A harness that quietly downgraded and still reported a semantic number would be
+ * worse than one that refused to run.
+ */
+const hasWorkersAi = process.env["CLOUDFLARE_ACCOUNT_ID"] !== undefined &&
+  process.env["CLOUDFLARE_AI_TOKEN"] !== undefined
+
+const Embedder = hasWorkersAi ? EmbedderWorkersAiRest : EmbedderDeterministic
 
 /**
  * The strategies under comparison.
@@ -248,12 +259,21 @@ const main = async () => {
   )
 
   const profile = await Effect.runPromise(
-    Effect.flatMap(EmbeddingProfile, (value) => Effect.succeed(value)).pipe(Effect.provide(Embedder))
+    Effect.flatMap(EmbeddingProfile, (value) => Effect.succeed(value)).pipe(
+      Effect.provide(Embedder)
+    ) as Effect.Effect<typeof EmbeddingProfile["Service"], unknown, never>
   )
 
   console.log(`embedder:  ${profile.modelId} (${profile.dimensions}d, semantic=${profile.semantic})`)
   console.log(`gold set:  ${gold.cases.length} queries · gate at k=${GATE_DEPTH}`)
-  console.log(`corpus:    evals/fixtures/inkoopbeleid.md\n`)
+  console.log(`corpus:    evals/fixtures/inkoopbeleid.md`)
+  if (!hasWorkersAi) {
+    console.log(
+      "\nno CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_AI_TOKEN in the environment, so the semantic half is\n" +
+        "NOT being measured. Put both in apps/worker/.env to fill in the hybrid column."
+    )
+  }
+  console.log("")
 
   const all: Array<Measured> = []
   for (const strategy of STRATEGIES) {
