@@ -79,51 +79,41 @@ const events = new cloudflare.Queue("events", {
   queueName: name("events")
 })
 
-// ─── Postgres, via Hyperdrive ─────────────────────────────────────────────────────────────
-// Hyperdrive terminates TLS to the origin and keeps the connection pool warm OUTSIDE the
-// Worker. That is what makes the per-request connection in apps/worker/src/platform/Database.ts
-// affordable — a p90 4ms handshake instead of a round trip to the origin region.
-//
-// TWO configs against the same database, on purpose. Hyperdrive caches reads for 60s by
-// default and does NOT invalidate on write, so a reviewer who approves a decision and then
-// sees a stale queue would be a bug. Transactional reads go through the uncached config.
-const postgresUrl = config.requireSecret("postgresUrl")
-
-const parsed = postgresUrl.apply((url) => {
-  const u = new URL(url)
-  return {
-    host: u.hostname,
-    port: Number(u.port || "5432"),
-    database: u.pathname.replace(/^\//, ""),
-    user: decodeURIComponent(u.username),
-    password: decodeURIComponent(u.password)
-  }
-})
-
-const hyperdriveOrigin = {
-  host: parsed.host,
-  port: parsed.port,
-  database: parsed.database,
-  user: parsed.user,
-  password: parsed.password,
-  scheme: "postgres"
-}
-
-/** Transactional: the review queue, decision detail, every write. Never serves stale rows. */
-const hyperdrive = new cloudflare.HyperdriveConfig("pg", {
-  accountId,
-  name: name("pg"),
-  origin: hyperdriveOrigin,
-  caching: { disabled: true }
-})
-
-/** Cached: the policy corpus, which is effectively static between ingests. */
-const hyperdriveCached = new cloudflare.HyperdriveConfig("pg-cached", {
-  accountId,
-  name: name("pg-cached"),
-  origin: hyperdriveOrigin,
-  caching: { disabled: false, maxAge: 60, staleWhileRevalidate: 15 }
-})
+// ─── Postgres, via Hyperdrive: DELIBERATELY NOT MANAGED HERE ──────────────────────────────
+/*
+ * Both Hyperdrive configs are managed OUTSIDE Pulumi, and this is a decision rather than an omission.
+ *
+ * They were declared here and imported, and `pulumi preview --diff` then wanted to change things that must
+ * not change:
+ *
+ *   ~ name   "planetscale-effect-ai-main-s36j" => "effect-ai-pg-dev"
+ *   ~ origin  user "pscale_api_l17q7kdn0uh6.rwgsxlfsivjd" => "postgres.rwgsxlfsivjd"
+ *   + origin  password: [secret]
+ *   - originConnectionLimit: 15
+ *
+ * The middle line is the one that settles it. `3a73f8a5…` is fronted by the restricted `pscale_api_*` role;
+ * our `postgresUrl` config is the main branch role. Applying would silently repoint a live, working config at
+ * different credentials — and `081514f5…` is the config the deployed Worker uses, so the blast radius is
+ * production's database access.
+ *
+ * It is also unfixable rather than merely awkward. Hyperdrive does not return the origin password, so it reads
+ * back as `""` forever: any declaration here either shows a permanent false diff or overwrites the live
+ * password on every `up`. There is no third option.
+ *
+ * `planetscale-effect-ai-main-s36j` was created by the PlanetScale–Cloudflare integration, which is the same
+ * flow this file already documents as unmanaged: *"Not managed here: the PlanetScale Postgres cluster
+ * itself... created there once, and its direct connection string is handed to this program as a secret config
+ * value."* A config created by that integration belongs in the same category as the cluster it fronts.
+ *
+ * Where the ids live instead: `apps/worker/wrangler.jsonc`, written out with the reasoning for which one is
+ * bound. `081514f5…` has caching DISABLED and is the only one bound, because Hyperdrive caches reads for 60s
+ * with no write-through invalidation and everything the Worker serves is transactional (plan risk R3).
+ * `3a73f8a5…` caches and is the right shape for the policy corpus, deliberately unbound because its role's
+ * privileges have not been verified.
+ *
+ * `bun run db:verify` is what actually guards this seam — it interrogates the live database through whichever
+ * config `DATABASE_URL` names, which is a stronger check than a declaration nobody can diff.
+ */
 
 // ─── AI Gateway ───────────────────────────────────────────────────────────────────────────
 /*
@@ -219,8 +209,6 @@ const console_ = new cloudflare.PagesProject("console", {
 export const r2BucketName = documents.name
 export const queueName = events.queueName
 export const queueDlqName = eventsDlq.queueName
-export const hyperdriveId = hyperdrive.id
-export const hyperdriveCachedId = hyperdriveCached.id
 export const aiGatewayId = aiGateway.aiGatewayId
 export const cacheNamespaceId = cache.id
 export const consoleProjectName = console_.name

@@ -19,10 +19,11 @@ config:
   accountId:
     type: string
     description: Cloudflare account id
-  postgresUrl:
-    type: string
-    secret: true
-    description: >-
-      Direct (NOT pooled) Postgres connection string for the PlanetScale cluster Hyperdrive
-      fronts. Pooled or transaction-mode strings break @effect/sql-pg's named prepared
-      statements, and Hyperdrive does the pooling itself.
+
+# `postgresUrl` used to be declared here, as a secret, for the Hyperdrive origins. Those are no longer
+# managed by this program (see index.ts for why — the origin password cannot be read back, so any declaration
+# either shows a permanent false diff or overwrites the live password on every `up`).
+#
+# So this program now holds NO secrets at all, which is worth noticing: the stack's passphrase protects
+# nothing, and the connection string lives in exactly one place — apps/worker/.env, gitignored, read by
+# `db:verify`, `db:migrate` and `wrangler dev` alike. One copy beats two that can disagree.

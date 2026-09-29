@@ -234,7 +234,11 @@ const NEEDS_NO_RESOURCE: Record<string, string> = {
   ai: "the binding is the authorisation; Workers AI has no resource to create",
   durable_objects: "defined by the Worker's own exported class plus a migration, not by a resource",
   services: "a reference to another Worker, which is deployed rather than provisioned",
-  analytics_engine_datasets: "a dataset is created implicitly on first write"
+  analytics_engine_datasets: "a dataset is created implicitly on first write",
+  hyperdrive: "managed OUTSIDE Pulumi, deliberately: the origin password cannot be read back, so any declaration " +
+    "either shows a permanent false diff or overwrites the live password on every `up`. `pulumi preview` " +
+    "proved it — it wanted to repoint the cached config's user from pscale_api_* to postgres.*. See " +
+    "infra/index.ts. The ids live in wrangler.jsonc and `bun run db:verify` guards the seam instead"
 }
 
 const infraPath = new URL("../infra/index.ts", import.meta.url).pathname

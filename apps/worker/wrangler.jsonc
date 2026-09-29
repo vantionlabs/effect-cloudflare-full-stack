@@ -121,7 +121,7 @@
    * Today it holds exactly one thing: parsed document text, keyed by document id AND parser version.
    */
   "kv_namespaces": [
-    { "binding": "CACHE", "id": "PULUMI_cacheNamespaceId" },
+    { "binding": "CACHE", "id": "11c604785c1040dfa26e19523ce3e3b2" },
   ],
   /*
    * Analytics Engine, for the product's own rates. No resource to provision: a dataset is created on first
