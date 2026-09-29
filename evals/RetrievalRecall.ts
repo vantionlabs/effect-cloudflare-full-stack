@@ -30,7 +30,31 @@ import { Db, migrate } from "@ea/modules/shared/tables/Database"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Layer, Redacted } from "effect"
 import { SqlClient } from "effect/sql"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
+
+/**
+ * Loads `apps/worker/.env` into the environment.
+ *
+ * Bun auto-loads a `.env` in the working directory, and this runs from the repo root — so the Worker's
+ * own env file, which is where the Hyperdrive string and the Cloudflare credentials already live, is
+ * invisible without this. One source of truth for both `wrangler dev` and the harness beats two files
+ * that drift.
+ *
+ * Existing environment variables win, so CI can supply secrets without a file.
+ */
+const loadWorkerEnv = () => {
+  const path = new URL("../apps/worker/.env", import.meta.url).pathname
+  if (!existsSync(path)) return
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const match = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim())
+    if (match === null) continue
+    const key = match[1]!
+    if (process.env[key] !== undefined && process.env[key] !== "") continue
+    process.env[key] = match[2]!.replace(/^["']|["']$/g, "")
+  }
+}
+
+loadWorkerEnv()
 
 const ORG = OrgId.make("eval_retrieval")
 const DOCUMENT_ID = "eval_retrieval_doc"
@@ -297,10 +321,17 @@ const main = async () => {
     )
   }
 
+  /*
+   * Report misses from the column that is actually in force.
+   *
+   * With a semantic embedder, hybrid is what production runs, so listing lexical misses would name
+   * queries the system does not in fact miss. Without one, lexical is all there is.
+   */
   for (const row of all.filter((entry) => entry.depth === GATE_DEPTH)) {
-    if (row.lexical.misses.length > 0) {
-      console.log(`\nmissed by ${row.strategy} at k=${GATE_DEPTH}:`)
-      for (const miss of row.lexical.misses) console.log(`  - ${miss}`)
+    const meaningful = profile.semantic ? row.hybrid : row.lexical
+    if (meaningful.misses.length > 0) {
+      console.log(`\nmissed by ${row.strategy} at k=${GATE_DEPTH} (${meaningful.label}):`)
+      for (const miss of meaningful.misses) console.log(`  - ${miss}`)
     }
   }
 
@@ -310,22 +341,49 @@ const main = async () => {
    * A comparison that lowered the bar to whatever won would stop being a gate. The floor is set on
    * lexical recall because that is the number this embedder can honestly report.
    */
-  const FLOOR = 0.75
+  /*
+   * TWO floors, because they guard different failures.
+   *
+   * `LEXICAL_FLOOR` is the degraded-mode guarantee: what retrieval still finds when the embedder is
+   * unavailable, which is a real operating state — `retrieval_mode` becomes "lexical" and rail 4 stops
+   * auto-approving, but decisions continue. `HYBRID_FLOOR` is what production actually delivers, and it
+   * is only enforced when the embedder is real; with the deterministic one the hybrid column is noise
+   * and gating on it would be gating on nothing.
+   */
+  const LEXICAL_FLOOR = 0.75
+  const HYBRID_FLOOR = 0.9
   const production = all.find((row) => row.depth === GATE_DEPTH && row.strategy === STRATEGIES[0]!.label)!
 
-  if (production.lexical.recall < FLOOR) {
+  const failures: Array<string> = []
+  if (production.lexical.recall < LEXICAL_FLOOR) {
+    failures.push(
+      `lexical recall@${GATE_DEPTH} is ${percent(production.lexical.recall)}, below ` +
+        `${percent(LEXICAL_FLOOR)} — retrieval degrades badly when the embedder is down`
+    )
+  }
+  if (profile.semantic && production.hybrid.recall < HYBRID_FLOOR) {
+    failures.push(
+      `hybrid recall@${GATE_DEPTH} is ${percent(production.hybrid.recall)}, below ` +
+        `${percent(HYBRID_FLOOR)} — this is what production delivers`
+    )
+  }
+
+  if (failures.length > 0) {
+    console.error(`\n✗ GATE FAILED for ${production.strategy}:`)
+    for (const failure of failures) console.error(`  - ${failure}`)
     console.error(
-      `\n✗ GATE FAILED: ${production.strategy} lexical recall@${GATE_DEPTH} is ` +
-        `${percent(production.lexical.recall)}, below the ${percent(FLOOR)} floor.\n` +
-        "  Fix retrieval before building the decide pipeline on it. A queue full of needs_human will\n" +
+      "\n  Fix retrieval before building the decide pipeline on it. A queue full of needs_human will\n" +
         "  not tell you this is why."
     )
     process.exit(1)
   }
 
   console.log(
-    `\n✓ gate passed: ${production.strategy} lexical recall@${GATE_DEPTH} ` +
-      `${percent(production.lexical.recall)} >= ${percent(FLOOR)}`
+    `\n✓ gate passed: ${production.strategy} at k=${GATE_DEPTH} — lexical ` +
+      `${percent(production.lexical.recall)} >= ${percent(LEXICAL_FLOOR)}` +
+      (profile.semantic
+        ? `, hybrid ${percent(production.hybrid.recall)} >= ${percent(HYBRID_FLOOR)}`
+        : " (hybrid not measured: no semantic embedder)")
   )
   console.log(
     "  Not comparable to docket's 33/99, which is an end-to-end grounded rate. They meet at step 11."

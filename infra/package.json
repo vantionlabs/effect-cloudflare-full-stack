@@ -10,8 +10,9 @@
     "outputs": "pulumi stack output --json"
   },
   "dependencies": {
-    "@pulumi/pulumi": "^3.265.0",
-    "@pulumi/cloudflare": "^6.21.0"
+    "@pulumi/cloudflare": "^6.21.0",
+    "@pulumi/command": "^1.2.1",
+    "@pulumi/pulumi": "^3.265.0"
   },
   "devDependencies": {
     "@types/node": "catalog:"

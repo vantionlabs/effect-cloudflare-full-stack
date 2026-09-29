@@ -20,6 +20,7 @@
  * seam is recorded rather than hidden, because it is the one manual step.
  */
 import * as cloudflare from "@pulumi/cloudflare"
+import * as command from "@pulumi/command"
 import * as pulumi from "@pulumi/pulumi"
 
 const config = new pulumi.Config()
@@ -109,31 +110,52 @@ const hyperdriveCached = new cloudflare.HyperdriveConfig("pg-cached", {
 // ─── Outputs ──────────────────────────────────────────────────────────────────────────────
 // Consumed by apps/worker/wrangler.jsonc. `pulumi stack output --json` feeds the deploy
 // workflow, so binding ids are never hand-transcribed.
+// ─── Vector index ─────────────────────────────────────────────────────────────────────────
 /*
- * ─── Vectorize is NOT declared here, and cannot be ────────────────────────────────────────
+ * Vectorize, through `wrangler` rather than a provider resource — because there is no provider
+ * resource.
  *
- * `@pulumi/cloudflare` 6.21.0 ships 1216 resources and **none of them is Vectorize**. Checked, not
- * assumed. So the managed-store arm of the retrieval comparison cannot be provisioned as code with this
- * provider; it needs the CLI:
+ * `@pulumi/cloudflare` 6.21.0 ships 1216 resources and **none is Vectorize**; checked, not assumed. Nor
+ * does the Cloudflare Terraform provider have a `cloudflare_vectorize`, which is the same gap seen from
+ * the other side: Pulumi's provider is bridged from Terraform's, so switching to Terraform would inherit
+ * it exactly. Only `wrangler` and the REST API can create an index.
  *
- *   wrangler vectorize create effect-ai-policy-dev --dimensions=1024 --metric=cosine
+ * A `command.local.Command` is the standard escape hatch for a provider gap, and it keeps the property
+ * that matters: **one graph, one `pulumi up`, one `pulumi preview`, and `destroy` actually removes it.**
+ * The alternative — a resource created by hand — is a resource nobody can reproduce or review.
  *
- * 1024 to match EMBEDDING_DIMENSIONS and `@cf/baai/bge-m3`, cosine to match the operator class the
- * pgvector index uses — otherwise the two arms would be compared on different distance metrics.
+ * Note what is deliberately NOT here: Workers AI needs no resource at all. The `ai` binding in
+ * wrangler.jsonc is its entire declaration, which is why the AI embedder needs no infrastructure change.
  *
- * That is a real gap in the IaC story and an argument against adopting Vectorize as production: a
- * resource created by hand is a resource nobody can reproduce or review. Worth weighing alongside its
- * two bigger problems (no lexical half, so `retrieval_mode` is never "hybrid" and rail 4 refuses to
- * auto-approve; and no row-level security, so tenancy rests on a metadata filter alone).
- *
- * Interestingly the provider DOES have `AiSearchInstance`, `AiSearchNamespace` and `AiSearchToken` —
- * AutoRAG under its current name. So the fully managed option is declarable as code while the
- * build-it-yourself-on-Vectorize option is not, which is the opposite of what one would guess.
- *
- * Workers AI needs no resource at all: the `ai` binding in wrangler.jsonc is the whole declaration.
+ * Worth recording for the retrieval decision: the provider DOES have `AiSearchInstance`,
+ * `AiSearchNamespace` and `AiSearchToken` — AutoRAG under its current name. So the fully managed option
+ * is declarable as code while build-it-yourself-on-Vectorize is not, which is the opposite of what one
+ * would guess.
  */
+const vectorizeIndexName = name("policy")
+
+const policyIndex = new command.local.Command("policy-index", {
+  /*
+   * 1024 dimensions to match EMBEDDING_DIMENSIONS and `@cf/baai/bge-m3`; cosine to match the operator
+   * class the pgvector HNSW index uses, so the two retrieval arms are compared on the same distance
+   * metric rather than on two.
+   *
+   * `|| true` on an existing index keeps this idempotent: re-running `up` after a partial failure must
+   * not fail on "already exists", which is the difference between a recoverable apply and a stuck one.
+   */
+  create: pulumi.interpolate`wrangler vectorize create ${vectorizeIndexName} --dimensions=1024 --metric=cosine || true`,
+  delete: pulumi.interpolate`wrangler vectorize delete ${vectorizeIndexName} --force || true`,
+  // Recreate when the name changes; nothing else about the index is mutable in place.
+  triggers: [vectorizeIndexName],
+  environment: {
+    // wrangler reads these itself. The token needs Vectorize edit, which is a DIFFERENT scope from the
+    // Workers AI read token the eval harness uses — do not reuse one for the other.
+    CLOUDFLARE_ACCOUNT_ID: accountId
+  }
+})
 
 export const r2BucketName = documents.name
+export const vectorizeIndex = policyIndex.stdout.apply(() => vectorizeIndexName)
 export const kvNamespaceId = sessions.id
 export const queueName = events.queueName
 export const queueDlqName = eventsDlq.queueName
