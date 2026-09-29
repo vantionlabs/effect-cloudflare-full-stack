@@ -35,6 +35,7 @@ import {
   RPC_V1_PATH,
   RpcV1
 } from "@ea/api/v1"
+import { DryRunAdapter } from "@ea/modules/decision/server/Execution"
 import { LanguageModelWorkersAiBinding, WORKERS_AI_MODEL } from "@ea/modules/decision/server/Extraction"
 import { SessionHttp, SessionLive, SessionRpcLive, SessionStore } from "@ea/modules/iam/server/Session"
 import { DocumentParserText } from "@ea/modules/intake/domain/Document"
@@ -112,6 +113,16 @@ const ServicesLayer = (env: Env) =>
      * so it is logged at startup rather than left implicit.
      */
     CacheKv(env.CACHE),
+    /*
+     * The execution adapter. Missing until the pipeline first ran, and the compiler said so the moment the
+     * cast came off `dispatchEvent` — so `decision.execute` would have dead-lettered every message exactly
+     * like `document.decide` did.
+     *
+     * `DryRunAdapter` records what it would have done and calls nothing. It is the only adapter that exists,
+     * and ADR-0013 is why the next one is not trivial: an adapter without provider-side idempotency may not
+     * be enabled for a customer with auto-approve armed.
+     */
+    DryRunAdapter,
     /*
      * The product's own numbers. Not spans — those already exist and are exported separately below.
      *

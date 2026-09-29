@@ -13,7 +13,6 @@
  * problem shape keeps producing.
  */
 import type { Collection } from "@ea/modules/shared/domain/Corpus"
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
 import {
   ChunkId,
   PolicySearch,
@@ -112,7 +111,7 @@ export const RetrievePolicy = (input: RetrievePolicyInput) =>
 export const PolicySearchLive: Layer.Layer<
   PolicySearch,
   never,
-  Db | EmbeddingModel.EmbeddingModel | SqlClient.SqlClient | CurrentUser
+  Db | EmbeddingModel.EmbeddingModel | SqlClient.SqlClient
 > = Layer.effect(PolicySearch)(
   Effect.gen(function*() {
     /*
@@ -128,7 +127,19 @@ export const PolicySearchLive: Layer.Layer<
     // Named for what it is: the raw request connection. The transaction-scoped one arrives per
     // callback inside RetrievePolicy, and confusing the two would bypass the org GUC.
     const connection = yield* SqlClient.SqlClient
-    const identity = yield* CurrentUser
+    /*
+     * The TENANT is NOT captured here — it stays in `search`'s requirement, which is what the port declares.
+     *
+     * This captured `CurrentUser` until the pipeline was first run end to end, and that was the last thing
+     * keeping the decide path unreachable from the queue: a queue consumer has no user, so building this layer
+     * died with `Service not found: iam/CurrentUser`. The queries had already moved to `scopedForOrg`; the
+     * layer's capture had not, which is a reminder that converting a use case is not the same as converting
+     * the layer that constructs it.
+     *
+     * Leaving the tenant in the requirement rather than capturing it is also strictly better: a captured
+     * tenant would be fixed for the life of the layer, and a layer that outlived one message would serve one
+     * organisation's corpus to another.
+     */
 
     return {
       search: (input) =>
@@ -136,8 +147,7 @@ export const PolicySearchLive: Layer.Layer<
           RetrievePolicy(input).pipe(
             Effect.provideService(Db, db),
             Effect.provideService(EmbeddingModel.EmbeddingModel, model),
-            Effect.provideService(SqlClient.SqlClient, connection),
-            Effect.provideService(CurrentUser, identity)
+            Effect.provideService(SqlClient.SqlClient, connection)
           )
         )
     } satisfies PolicySearchService

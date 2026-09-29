@@ -36,7 +36,7 @@ import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
 import { readThrough } from "@ea/modules/shared/domain/Cache"
 import type { QueueMessage } from "@ea/modules/shared/domain/Event"
 import { Db, withDatabase } from "@ea/modules/shared/tables/Database"
-import { ConsumeEvent, type Disposition, type EventRow } from "@ea/modules/shared/use-cases/Event"
+import { ConsumeEvent, type EventRow } from "@ea/modules/shared/use-cases/Event"
 import { Effect, Schema } from "effect"
 
 /**
@@ -176,7 +176,7 @@ const workFor = (row: EventRow) =>
  * the tenant lookup, the workflow engine, the activities — needs that one connection. One per message,
  * which is what the Workers six-simultaneous-connection limit and the batch semaphore are sized against.
  */
-export const dispatchEvent = (message: QueueMessage): Effect.Effect<Disposition, never, never> =>
+export const dispatchEvent = (message: QueueMessage) =>
   withDatabase(ConsumeEvent(message.eventId, workFor)).pipe(
     /*
      * A failure to even record the outcome is a RETRY, not a crash.
@@ -194,4 +194,4 @@ export const dispatchEvent = (message: QueueMessage): Effect.Effect<Disposition,
         { _tag: "Retry" as const, reason: "the event could not be read or recorded" }
       )
     )
-  ) as Effect.Effect<Disposition, never, never>
+  )

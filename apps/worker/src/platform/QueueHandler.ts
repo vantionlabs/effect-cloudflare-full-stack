@@ -56,9 +56,16 @@ export interface QueueBatchLike {
  */
 const OUTBOUND_CONNECTION_LIMIT = 6
 
-export const consumeBatch = (
+export const consumeBatch = <R>(
   batch: QueueBatchLike,
-  handle: (message: QueueMessage) => Effect.Effect<Disposition>
+  /*
+   * Generic in `R`, so the requirements of the work flow out to the caller's runtime.
+   *
+   * It was `Effect<Disposition>` — `R = never` — which forced the call site into a cast, and the cast hid a
+   * missing `CurrentUser` until the pipeline was run for the first time and every message dead-lettered with
+   * `Service not found`. The type was right and the cast overrode it.
+   */
+  handle: (message: QueueMessage) => Effect.Effect<Disposition, never, R>
 ) =>
   Effect.flatMap(Semaphore.make(OUTBOUND_CONNECTION_LIMIT), (connections) =>
     Effect.forEach(

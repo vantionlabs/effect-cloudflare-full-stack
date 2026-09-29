@@ -6,6 +6,7 @@
  */
 import { MeV1 } from "@ea/modules/iam/domain/Identity"
 import { Schema } from "effect"
+import { Client } from "pg"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { cookiesFrom, type Harness, startHarness } from "./Harness.ts"
 
@@ -25,20 +26,73 @@ describe("refusals", () => {
     expect(response.status).toBe(401)
   })
 
-  it("401s a valid session with NO active organization", async () => {
-    // The important one. Silently defaulting to "their first organization" is a cross-tenant
-    // leak: a user in two orgs would act in whichever the query happened to return first. If the
-    // session has not chosen, there is nothing to act in.
+  it("gives a new user a personal organization, so sign-up is usable", async () => {
+    /*
+     * This asserted 401 until the pipeline was run end to end for the first time — and the 401 was real:
+     * sign-up created no organization, `resolveIdentity` refused a session that could not name a tenant, and
+     * **a user could register and then get 401 on everything**, with nothing in any log. The test was
+     * faithfully encoding a bug, which is the failure mode of a test written from the implementation.
+     *
+     * `databaseHooks` in `BetterAuth.ts` now creates a personal organization and sets it active. The refusal
+     * this test used to carry is asserted below, on a state that has to be constructed deliberately.
+     */
     const signUp = await harness.post("/api/auth/sign-up/email", {
-      email: `noorg-${Date.now()}@example.com`,
+      email: `fresh-${Date.now()}@example.com`,
       password: "correct-horse-battery-staple",
-      name: "No Org"
+      name: "Fresh User"
     })
     expect(signUp.status).toBe(200)
 
     const response = await harness.fetch("/api/v1/me", {
       headers: { cookie: cookiesFrom(signUp) }
     })
+    expect(response.status).toBe(200)
+    const identity = await response.json() as { organization_id: string; role: string }
+    // Owner of their own organization: a personal org is theirs, not a shared default.
+    expect(identity.role).toBe("owner")
+    expect(identity.organization_id.length).toBeGreaterThan(0)
+  })
+
+  it("401s a valid session whose membership has been revoked", async () => {
+    /*
+     * The invariant the test above used to carry, on a state that now has to be made rather than defaulted to.
+     *
+     * Silently falling back to "their first organization" would be a cross-tenant leak — a user in two
+     * organizations would act in whichever the query returned first — so a session with no membership must be
+     * refused rather than guessed at. Revocation is the real-world version: a member removed from an
+     * organization has to stop being served, which is why `resolveIdentity` re-reads membership every request
+     * instead of trusting the session.
+     */
+    const email = `revoked-${Date.now()}@example.com`
+    const signUp = await harness.post("/api/auth/sign-up/email", {
+      email,
+      password: "correct-horse-battery-staple",
+      name: "Revoked User"
+    })
+    expect(signUp.status).toBe(200)
+    const cookie = cookiesFrom(signUp)
+
+    // Works first, so the refusal below is demonstrably caused by the revocation and not by the setup.
+    expect((await harness.fetch("/api/v1/me", { headers: { cookie } })).status).toBe(200)
+
+    /*
+     * `pg` directly rather than widening the harness with a SQL escape hatch.
+     *
+     * The harness drives the Worker over HTTP; giving it arbitrary SQL would make it the thing every future
+     * test reaches for instead of an endpoint, and a suite that writes rows behind the API stops testing the
+     * API. This case genuinely needs a state no endpoint produces, so the escape is local and visible.
+     */
+    const client = new Client({
+      connectionString: process.env["CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"]
+    })
+    await client.connect()
+    try {
+      await client.query(`delete from member where "userId" = (select id from "user" where email = $1)`, [email])
+    } finally {
+      await client.end()
+    }
+
+    const response = await harness.fetch("/api/v1/me", { headers: { cookie } })
     expect(response.status).toBe(401)
   })
 
