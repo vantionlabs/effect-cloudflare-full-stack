@@ -82,20 +82,20 @@ jobs:
       - name: Build the console
         run: bun run --filter @ea/console build
 
-      # A Pages PREVIEW branch, which gets a stable alias for free: staging.<project>.pages.dev. Pages
-      # accepts only `production` and `preview` as environment names, so staging cannot be a third Pages
-      # environment — but it does not need to be.
-      - name: Deploy the console to Pages (staging)
+      # A WORKER now, not a Pages project: the console runs TanStack Start and server-renders, which
+      # static assets cannot do. `--env staging` names it `effect-ai-console-staging`, and its own service
+      # binding points at `effect-ai-staging` so staging's console talks to staging's API.
+      - name: Deploy the console (staging)
         working-directory: apps/console
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bunx wrangler pages deploy --branch staging
+        run: bunx wrangler deploy --env staging
 
       # Through the Pages origin, not the Worker's own hostname: that is the path a browser takes,
       # and it is the only one that exercises the service-binding proxy.
       - name: Smoke test
-        run: ./.github/scripts/smoke.sh "https://staging.effect-ai-console-dev.pages.dev"
+        run: ./.github/scripts/smoke.sh "https://effect-ai-console-staging.ishak-f45.workers.dev"
 
   production:
     # Never automatic. A human dispatches it, and the `production` GitHub environment can require a
@@ -126,14 +126,13 @@ jobs:
       - name: Build the console
         run: bun run --filter @ea/console build
 
-      # --branch main makes this the Pages PRODUCTION deployment, which is what gives the stable
-      # hostname BASE_URL names.
-      - name: Deploy the console to Pages (production)
+      # No `--env`: production IS the top-level configuration, for the console as for the API.
+      - name: Deploy the console (production)
         working-directory: apps/console
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bunx wrangler pages deploy --branch main
+        run: bunx wrangler deploy
 
       - name: Smoke test
-        run: ./.github/scripts/smoke.sh "https://effect-ai-console-dev.pages.dev"
+        run: ./.github/scripts/smoke.sh "https://effect-ai-console.ishak-f45.workers.dev"

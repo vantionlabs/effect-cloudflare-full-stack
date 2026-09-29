@@ -22,6 +22,7 @@
       "@effect/atom-react": "4.0.0-rc.118",
       "@effect/sql-pg": "4.0.0-rc.118",
       "@tailwindcss/vite": "^4.3.3",
+      "@tanstack/ai": "^0.63.0",
       "@tanstack/react-router": "^1.170.40",
       "@tanstack/react-start": "1.168.59",
       "@types/node": "25.1.0",
@@ -37,7 +38,7 @@
   },
   "scripts": {
     "prepare": "effect-tsgo patch --oxlint && (git rev-parse --git-dir >/dev/null 2>&1 && lefthook install || true)",
-    "check": "tsc -b tsconfig.json && tsc -p apps/console/tsconfig.src.json && tsc -p packages/modules/tsconfig.test.json && tsc -p packages/api/tsconfig.test.json && tsc -p evals/tsconfig.test.json && tsc -p apps/worker/tsconfig.test.json && tsc -p apps/console/tsconfig.test.json && tsc -p tsconfig.tools.json && tsc -p infra/tsconfig.json",
+    "check": "tsc -b tsconfig.json && tsc -p apps/console/tsconfig.json && tsc -p packages/modules/tsconfig.test.json && tsc -p packages/api/tsconfig.test.json && tsc -p evals/tsconfig.test.json && tsc -p apps/worker/tsconfig.test.json && tsc -p tsconfig.tools.json && tsc -p infra/tsconfig.json",
     "check:watch": "tsc -b tsconfig.json --watch",
     "format": "dprint fmt",
     "format:check": "dprint check",

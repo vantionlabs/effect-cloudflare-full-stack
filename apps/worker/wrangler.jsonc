@@ -76,8 +76,19 @@
     "CLOUDFLARE_ACCOUNT_ID": "f4599b98c2430a831bcfc291d156a988",
     "CLOUDFLARE_AI_GATEWAY": "effect-ai-ai-dev",
     "AI_GATEWAY": "effect-ai-ai-dev",
-    "BASE_URL": "https://effect-ai-console-dev.pages.dev",
-    "ALLOWED_HOSTS": "effect-ai-console-dev.pages.dev,*.effect-ai-console-dev.pages.dev,localhost:8799",
+    /*
+     * The CONSOLE's hostname, which changed when the console became a Worker.
+     *
+     * These named `*.pages.dev` until the console moved off Pages — and that stale value would have
+     * reproduced the exact 403 INVALID_ORIGIN this project already shipped once: better-auth compares the
+     * browser's Origin against these, the browser is now on `*.workers.dev`, and nothing in a log would
+     * say so. The hostname of the FRONT DOOR belongs here, never the API's own.
+     *
+     * Both local ports are listed because the console and the API are separate dev servers now: Vite
+     * serves the console, `wrangler dev` serves the API, and the browser's origin is Vite's.
+     */
+    "BASE_URL": "https://effect-ai-console.ishak-f45.workers.dev",
+    "ALLOWED_HOSTS": "effect-ai-console.ishak-f45.workers.dev,localhost:5173,localhost:8799",
   },
 
   // ───────────────────────────────────────────────────────────────────────────────────────
@@ -251,8 +262,8 @@
          * inherited nothing would default BASE_URL to http://localhost:8799 and refuse every sign-up
          * with 403 INVALID_ORIGIN — the exact failure this project already shipped once.
          */
-        "BASE_URL": "https://staging.effect-ai-console-dev.pages.dev",
-        "ALLOWED_HOSTS": "staging.effect-ai-console-dev.pages.dev",
+        "BASE_URL": "https://effect-ai-console-staging.ishak-f45.workers.dev",
+        "ALLOWED_HOSTS": "effect-ai-console-staging.ishak-f45.workers.dev",
       },
       /*
        * The API on its own subdomain — the real-world shape.
@@ -329,8 +340,9 @@
         "CLOUDFLARE_AI_GATEWAY": "effect-ai-ai-dev",
         "AI_GATEWAY": "effect-ai-ai-dev",
         // No console is deployed for dev; it is reached at its own workers.dev hostname.
-        "BASE_URL": "https://effect-ai-dev.ishak-f45.workers.dev",
-        "ALLOWED_HOSTS": "effect-ai-dev.ishak-f45.workers.dev,localhost:8799",
+        // The console's dev Worker, not the API's: this is the origin a browser is on.
+        "BASE_URL": "https://effect-ai-console-dev.ishak-f45.workers.dev",
+        "ALLOWED_HOSTS": "effect-ai-console-dev.ishak-f45.workers.dev,localhost:5173,localhost:8799",
       },
       /*
        * The API on its own subdomain — the real-world shape.

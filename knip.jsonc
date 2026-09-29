@@ -48,9 +48,21 @@
         "src/components/ui/**",
         "src/lib/utils.ts",
       ],
-      // lucide-react is shadcn's icon dependency, pulled in by components rather than imported by the app.
       "ignoreDependencies": [
+        // shadcn's icon dependency, pulled in by registry components rather than imported by the app.
         "lucide-react",
+        /*
+         * `@tanstack/ai` is declared AHEAD of its first import, which knip is right to flag and which is
+         * a deliberate exception rather than an oversight.
+         *
+         * It is the chat and agent layer the console is about to grow — `useChat`, streaming, tool calls —
+         * and the `tanstack-ai` skill reads the installed version to give version-correct guidance. So the
+         * dependency is what makes the tooling useful before the code exists.
+         *
+         * Delete this entry the moment something imports it: an unused dependency with a note explaining
+         * why is exactly how a permanent unused dependency starts.
+         */
+        "@tanstack/ai",
       ],
     },
     "evals": {

@@ -1,26 +1,55 @@
 {
-  // Solution file: the browser source and its tests are separate projects.
-  //
-  // The test project is NEW — `test/highlight.test.tsx` was never typechecked, because `include` here
-  // listed only `src/**`. It asserts the span-highlighting that shares `containsVerbatim` with the
-  // rail, which is exactly the code where a silent type drift would matter.
-  "extends": "../../tsconfig.base.json",
-  // Both projects here are non-composite (see tsconfig.src.json), so they cannot be reference targets.
-  // `check` runs each with its own `tsc -p`. This file remains as the conventional entry point tooling
-  // looks for — shadcn and editors read it for the path aliases below.
-  "include": [],
-  "files": [],
   /*
-   * `paths` on a solution file that compiles nothing, which looks redundant and is not.
+   * ONE project for the console, deliberately not the src/test split every other package uses.
    *
-   * Resolution actually happens in the referenced projects, which declare it themselves. This copy exists
-   * because external tooling reads `tsconfig.json` by convention and does not follow references — the
-   * shadcn CLI refuses to run without it ("Could not find valid path aliases"), and editors behave better
-   * for the same reason. Kept in step with tsconfig.src.json by hand; there is no mechanism that couples
-   * them, which is the cost of the split.
+   * The split needs `composite` so the solution file can reference the parts. This app cannot be
+   * composite: `composite` implies `declaration`, declaration emit requires every inferred type be
+   * nameable from outside, and better-auth's client type is not — TS2883 names four internal types it
+   * would have to reach. Annotating a type the library generates is not a trade worth making.
+   *
+   * And a non-composite project cannot be a reference target, so a solution file referencing nothing is
+   * worse than no solution file: an editor finds THIS file first, and when it includes no files the
+   * console's source belongs to no project at all. That is exactly what happened — `cloudflare:workers`
+   * and the `@/` alias resolved under `tsc -p tsconfig.src.json` and failed in the editor, because the
+   * editor was using inferred defaults with no `types` and no `paths`.
+   *
+   * So: one project, covering src and test, which is what an app that nothing imports actually is.
    */
+  "extends": "../../tsconfig.base.json",
+  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx"],
   "compilerOptions": {
-    "paths": { "@/*": ["./src/*"] }
-  },
-  "references": []
+    "noEmit": true,
+    "rootDir": ".",
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "tsBuildInfoFile": ".tsbuildinfo/console.tsbuildinfo",
+
+    /*
+     * `module: preserve` + `moduleResolution: bundler`, not the base's NodeNext.
+     *
+     * Vite bundles this app and Node never resolves it, so bundler resolution is the honest description —
+     * and it is what lets `@/*` map to `./src/*` with extensionless imports. Under NodeNext the mapping
+     * had to end in `.js` (TS2877 forbids a `.ts` extension on a non-relative path), and that suffix
+     * leaked: the shadcn CLI resolved `@/lib/utils` into a directory called `lib.js`.
+     */
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "paths": { "@/*": ["./src/*"] },
+
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    /*
+     * All three are needed, and the combination is what the move to SSR bought.
+     *
+     * - vite/client: `import.meta.env`, and `?url` imports like `styles.css?url`
+     * - @cloudflare/workers-types: `cloudflare:workers` for `env`, since this app now has a SERVER half
+     * - node: vitest globals in test/, and Start's server helpers
+     *
+     * ADR-0001 kept workers-types OUT while the console was browser-only, because its Request/Response
+     * collide with lib.dom. They coexist here: DOM wins for the shared names, and the Cloudflare-only
+     * globals are the ones imported by name.
+     */
+    "types": ["vite/client", "@cloudflare/workers-types", "node"]
+  }
 }
