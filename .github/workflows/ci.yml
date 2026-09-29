@@ -106,9 +106,7 @@ jobs:
       - name: Say so when the real-Worker suite did not run
         if: ${{ env.CLOUDFLARE_API_TOKEN == '' }}
         run: |
-          echo "::warning title=worker suite skipped::CLOUDFLARE_API_TOKEN is not set, so the \
-          real-Worker tests (auth, sessions, the origin allowlist) did NOT run. They need a remote \
-          runtime because the AI binding has no local emulation. Add the secret to run them."
+          echo "::warning title=worker suite skipped::CLOUDFLARE_API_TOKEN is not set, so the real-Worker tests (auth, sessions, the origin allowlist) did NOT run. They need a remote runtime because the AI binding has no local emulation. Add the secret to run them."
 
       # The retrieval gate. Separate from `test` because it is a THRESHOLD, not an assertion: it can
       # regress without any test failing, and a decide pipeline built on retrieval that cannot find
@@ -129,6 +127,4 @@ jobs:
       - name: Say so when the retrieval gate did not run
         if: ${{ env.CLOUDFLARE_AI_TOKEN == '' }}
         run: |
-          echo "::warning title=retrieval gate skipped::CLOUDFLARE_AI_TOKEN is not set, so retrieval \
-          recall was NOT measured. The decide pipeline's quality rests on this number; a queue full \
-          of needs_human will not tell you retrieval is why."
+          echo "::warning title=retrieval gate skipped::CLOUDFLARE_AI_TOKEN is not set, so retrieval recall was NOT measured. The decide pipeline's quality rests on this number; a queue full of needs_human will not tell you retrieval is why."
