@@ -16,7 +16,7 @@
  * Re-indexing replaces the document's chunks rather than adding to them, so running it twice is safe.
  */
 import { EMBEDDING_DIMENSIONS } from "@ea/modules/policy/domain/Chunk"
-import { chunkDocument, embeddableText } from "@ea/modules/policy/domain/Chunk"
+import { Chunker, embeddableText } from "@ea/modules/policy/domain/Chunk"
 import { EmbeddingProfile } from "@ea/modules/policy/domain/Embedding"
 import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
@@ -46,6 +46,8 @@ export const IndexPolicyDocument = (input: IndexPolicyDocumentInput) =>
     const db = yield* Db
     const ids = yield* Ids
     const profile = yield* EmbeddingProfile
+    // The PORT, so the chunking strategy is a composition choice the recall gate can vary.
+    const chunker = yield* Chunker
     const model = yield* EmbeddingModel.EmbeddingModel
 
     // (2): refuse before writing, not on the first insert.
@@ -59,7 +61,7 @@ export const IndexPolicyDocument = (input: IndexPolicyDocumentInput) =>
       )
     }
 
-    const chunks = chunkDocument(input.text, { title: input.title })
+    const chunks = yield* chunker.chunk(input.text, { title: input.title })
     if (chunks.length === 0) return { chunks: 0, embedded: 0 }
 
     /*

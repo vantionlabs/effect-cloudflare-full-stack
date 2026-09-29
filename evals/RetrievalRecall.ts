@@ -18,7 +18,9 @@
  *
  *   bun run evals:retrieval
  */
+import { type Chunker, ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
 import { EmbeddingProfile } from "@ea/modules/policy/domain/Embedding"
+import { chunkerLangChain } from "@ea/modules/policy/server/Chunk"
 import { EmbedderDeterministic } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
 import { RetrievePolicy } from "@ea/modules/policy/use-cases/Retrieval"
@@ -42,8 +44,6 @@ const DOCUMENT_ID = "eval_retrieval_doc"
  */
 const DEPTHS = [3, 8] as const
 const GATE_DEPTH = 3
-/** What the pipeline itself will request. */
-const K = 8
 
 interface GoldCase {
   readonly query: string
@@ -77,16 +77,36 @@ const IdsLive = Layer.succeed(Ids)({ next: Effect.sync(() => crypto.randomUUID()
  */
 const Embedder = EmbedderDeterministic
 
-const layers = Layer.mergeAll(Db.layer, IdsLive, Embedder).pipe(Layer.provideMerge(Pg))
+/**
+ * The strategies under comparison.
+ *
+ * Only the chunker varies: same corpus, same embedder, same store, same SQL function, same gold set.
+ * That is the point — a comparison where two things changed tells you nothing about either.
+ */
+const STRATEGIES: ReadonlyArray<{ readonly label: string; readonly layer: Layer.Layer<Chunker> }> = [
+  { label: "heading (ours)", layer: ChunkerHeading },
+  /*
+   * A SWEEP, not a single setting.
+   *
+   * The first run of this comparison used one size (1200) against a 1,800-character corpus, got two
+   * chunks and 7.7% recall, and that number said nothing about the strategy. Sweeping shows it at its
+   * best, which is the only version of the comparison worth acting on. 150 is roughly the average chunk
+   * the heading strategy produces on this corpus, so it is the like-for-like point.
+   */
+  { label: "langchain 150", layer: chunkerLangChain(150) },
+  { label: "langchain 300", layer: chunkerLangChain(300) },
+  { label: "langchain 600", layer: chunkerLangChain(600) },
+  { label: "langchain 1200", layer: chunkerLangChain(1200) }
+]
 
-const run = <A, E>(effect: Effect.Effect<A, E, any>) =>
+const run = <A, E>(chunker: Layer.Layer<Chunker>, effect: Effect.Effect<A, E, any>) =>
   Effect.runPromise(
     effect.pipe(
       Effect.provideService(
         CurrentUser,
         new Identity({ userId: UserId.make("eval"), orgId: ORG, email: "eval@example.com", role: "reviewer" })
       ),
-      Effect.provide(layers)
+      Effect.provide(Layer.mergeAll(Db.layer, IdsLive, Embedder, chunker).pipe(Layer.provideMerge(Pg)))
     ) as Effect.Effect<A, E, never>
   )
 
@@ -135,46 +155,51 @@ const score = async (
 
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`
 
-const main = async () => {
-  /*
-   * Migrate first. The harness is self-contained on purpose: a gate that measures whatever schema
-   * happens to be lying around is not a gate. This caught its own version of that — the OR-semantics
-   * fix to the retrieval function sat unapplied while the harness cheerfully reported the old number.
-   */
-  await Effect.runPromise(migrate.pipe(Effect.provide(Pg)) as Effect.Effect<unknown, unknown, never>)
+/** One strategy's numbers at one depth. */
+interface Measured {
+  readonly strategy: string
+  readonly depth: number
+  readonly chunks: number
+  readonly lexical: Score
+  readonly hybrid: Score
+  readonly withClauseRef: number
+}
 
-  // Seed the document row the chunks reference, then index the corpus.
-  await Effect.runPromise(
-    Effect.flatMap(SqlClient.SqlClient, (sql) =>
-      sql`
-        insert into source_documents (id, organization_id, collection, filename, r2_key, content_type)
-        values (${DOCUMENT_ID}, ${ORG}, 'policy', 'inkoopbeleid.md', ${`${ORG}/${DOCUMENT_ID}`}, 'text/markdown')
-        on conflict (id) do nothing
-      `).pipe(Effect.provide(Pg))
-  )
-
+const measure = async (
+  strategy: { readonly label: string; readonly layer: Layer.Layer<Chunker> }
+): Promise<ReadonlyArray<Measured>> => {
   const indexed = await run(
-    IndexPolicyDocument({ documentId: DOCUMENT_ID, title: "Inkoopbeleid", text: corpus, collection: "policy" })
-  )
-  const profile = await Effect.runPromise(
-    Effect.flatMap(EmbeddingProfile, (value) => Effect.succeed(value)).pipe(Effect.provide(Embedder))
-  )
-
-  console.log(`corpus: ${indexed.chunks} chunks, ${indexed.embedded} embedded`)
-  console.log(`embedder: ${profile.modelId} (${profile.dimensions}d, semantic=${profile.semantic})`)
-  console.log(`gold set: ${gold.cases.length} queries, gate at k=${GATE_DEPTH}\n`)
-
-  const hybridAt = (depth: number) =>
-    score("hybrid (RRF)", depth, async (query, limit) => {
-      const result = await run(RetrievePolicy({ query, limit }))
-      return result.chunks.map((chunk) => chunk.clause_ref)
+    strategy.layer,
+    IndexPolicyDocument({
+      documentId: DOCUMENT_ID,
+      title: "Inkoopbeleid",
+      text: corpus,
+      collection: "policy"
     })
+  )
 
-  // Lexical-only is measured by asking the SQL function with a null embedding — the same code path
-  // production takes when the embedder is unavailable, not a separate query written for the harness.
+  /*
+   * How many chunks carry a citable reference.
+   *
+   * Reported alongside recall because it is the thing recall cannot show. The obligations index
+   * (slice 1.5) fetches applicable rules BY reference, bypassing ranking — so a strategy with perfect
+   * recall and no references still cannot support the claim "every applicable rule was considered".
+   */
+  const refs = await run(
+    strategy.layer,
+    Effect.flatMap(Db, (db) =>
+      db.scoped((sql) =>
+        sql<{ n: number }>`
+          select count(*)::int as n from document_chunks
+           where document_id = ${DOCUMENT_ID} and clause_ref is not null
+        `
+      ))
+  )
+
   const lexicalAt = (depth: number) =>
     score("lexical only", depth, async (query, limit) => {
       const rows = await run(
+        strategy.layer,
         Effect.flatMap(Db, (db) =>
           db.scoped((sql) =>
             sql<{ clause_ref: string | null }>`
@@ -185,56 +210,93 @@ const main = async () => {
       return rows.map((row) => row.clause_ref)
     })
 
-  const results: Array<{ depth: number; lexical: Score; hybrid: Score }> = []
+  const hybridAt = (depth: number) =>
+    score("hybrid (RRF)", depth, async (query, limit) => {
+      const result = await run(strategy.layer, RetrievePolicy({ query, limit }))
+      return result.chunks.map((chunk) => chunk.clause_ref)
+    })
+
+  const out: Array<Measured> = []
   for (const depth of DEPTHS) {
-    results.push({ depth, lexical: await lexicalAt(depth), hybrid: await hybridAt(depth) })
+    out.push({
+      strategy: strategy.label,
+      depth,
+      chunks: indexed.chunks,
+      withClauseRef: refs[0]!.n,
+      lexical: await lexicalAt(depth),
+      hybrid: await hybridAt(depth)
+    })
+  }
+  return out
+}
+
+const main = async () => {
+  /*
+   * Migrate first. The harness is self-contained on purpose: a gate that measures whatever schema
+   * happens to be lying around is not a gate. This caught its own version of that — the OR-semantics
+   * fix to the retrieval function sat unapplied while the harness cheerfully reported the old number.
+   */
+  await Effect.runPromise(migrate.pipe(Effect.provide(Pg)) as Effect.Effect<unknown, unknown, never>)
+
+  await Effect.runPromise(
+    Effect.flatMap(SqlClient.SqlClient, (sql) =>
+      sql`
+        insert into source_documents (id, organization_id, collection, filename, r2_key, content_type)
+        values (${DOCUMENT_ID}, ${ORG}, 'policy', 'inkoopbeleid.md', ${`${ORG}/${DOCUMENT_ID}`}, 'text/markdown')
+        on conflict (id) do nothing
+      `).pipe(Effect.provide(Pg))
+  )
+
+  const profile = await Effect.runPromise(
+    Effect.flatMap(EmbeddingProfile, (value) => Effect.succeed(value)).pipe(Effect.provide(Embedder))
+  )
+
+  console.log(`embedder:  ${profile.modelId} (${profile.dimensions}d, semantic=${profile.semantic})`)
+  console.log(`gold set:  ${gold.cases.length} queries · gate at k=${GATE_DEPTH}`)
+  console.log(`corpus:    evals/fixtures/inkoopbeleid.md\n`)
+
+  const all: Array<Measured> = []
+  for (const strategy of STRATEGIES) {
+    all.push(...await measure(strategy))
   }
 
-  console.log("k   mode            recall    any-hit   MRR")
-  for (const { depth, lexical: lex, hybrid: hyb } of results) {
-    for (const result of [lex, hyb]) {
-      console.log(
-        `${String(depth).padEnd(3)} ${result.label.padEnd(15)} ${percent(result.recall).padStart(7)}  ${
-          percent(result.hitRate).padStart(8)
-        }  ${result.mrr.toFixed(3)}`
-      )
-    }
-  }
-
-  const gated = results.find((entry) => entry.depth === GATE_DEPTH)!
-  const lexical = gated.lexical
-  const hybrid = gated.hybrid
-
-  if (!profile.semantic) {
+  console.log("strategy              chunks  refs  k   lexical  hybrid   MRR(lex)")
+  for (const row of all) {
     console.log(
-      "\nNOTE: this embedder is not semantic, so the hybrid row is lexical retrieval plus noise.\n" +
-        "      The two rows differing at all reflects RRF reordering, NOT semantic recall. Set\n" +
-        "      EMBEDDING_API_KEY and swap to EmbedderOpenAiCompatible to measure the real thing."
+      `${row.strategy.padEnd(21)} ${String(row.chunks).padStart(6)}  ${String(row.withClauseRef).padStart(4)}  ` +
+        `${String(row.depth).padEnd(3)} ${percent(row.lexical.recall).padStart(7)}  ` +
+        `${percent(row.hybrid.recall).padStart(7)}  ${row.lexical.mrr.toFixed(3)}`
     )
   }
 
-  const reported = profile.semantic ? hybrid : lexical
-  if (reported.misses.length > 0) {
-    console.log(`\nmissed (${reported.label}):`)
-    for (const miss of reported.misses) console.log(`  - ${miss}`)
+  if (!profile.semantic) {
+    console.log(
+      "\nNOTE: this embedder is not semantic, so the hybrid column is lexical plus noise. It is shown\n" +
+        "      only to confirm RRF reorders; it is NOT evidence about semantic recall. Set a real\n" +
+        "      embedder to fill that column in."
+    )
+  }
+
+  for (const row of all.filter((entry) => entry.depth === GATE_DEPTH)) {
+    if (row.lexical.misses.length > 0) {
+      console.log(`\nmissed by ${row.strategy} at k=${GATE_DEPTH}:`)
+      for (const miss of row.lexical.misses) console.log(`  - ${miss}`)
+    }
   }
 
   /*
-   * The gate.
+   * The gate applies to the strategy in production, not to the best of the bunch.
    *
-   * Set on the LEXICAL number, because that is the one this embedder can honestly report, and because
-   * lexical recall is the floor the semantic half is supposed to improve on rather than rescue. 0.75
-   * is chosen from the gold set's composition: two of twelve cases share almost no vocabulary with
-   * their clause ("factuur in dollars" → Artikel 7 Valuta), and those are exactly the cases a real
-   * embedder should win. Missing more than that means the chunker or the Dutch configuration is wrong,
-   * not that the queries are hard.
+   * A comparison that lowered the bar to whatever won would stop being a gate. The floor is set on
+   * lexical recall because that is the number this embedder can honestly report.
    */
   const FLOOR = 0.75
-  if (lexical.recall < FLOOR) {
+  const production = all.find((row) => row.depth === GATE_DEPTH && row.strategy === STRATEGIES[0]!.label)!
+
+  if (production.lexical.recall < FLOOR) {
     console.error(
-      `\n✗ GATE FAILED: lexical recall@${GATE_DEPTH} is ${percent(lexical.recall)}, below the ${
-        percent(FLOOR)
-      } floor.\n` +
+      `\n✗ GATE FAILED: ${production.strategy} lexical recall@${GATE_DEPTH} is ` +
+        `${percent(production.lexical.recall)}, below the ${percent(FLOOR)} floor.\n` +
         "  Fix retrieval before building the decide pipeline on it. A queue full of needs_human will\n" +
         "  not tell you this is why."
     )
@@ -242,10 +304,8 @@ const main = async () => {
   }
 
   console.log(
-    `\n✓ gate passed: lexical recall@${GATE_DEPTH} ${percent(lexical.recall)} >= ${percent(FLOOR)}`
-  )
-  console.log(
-    `  Corpus is ${indexed.chunks} chunks, so recall@${K} is weak evidence — watch the k=${GATE_DEPTH} row.`
+    `\n✓ gate passed: ${production.strategy} lexical recall@${GATE_DEPTH} ` +
+      `${percent(production.lexical.recall)} >= ${percent(FLOOR)}`
   )
   console.log(
     "  Not comparable to docket's 33/99, which is an end-to-end grounded rate. They meet at step 11."

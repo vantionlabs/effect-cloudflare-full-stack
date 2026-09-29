@@ -59,6 +59,7 @@
   },
   "devDependencies": {
     "@effect/tsgo": "0.46.1",
+    "@langchain/textsplitters": "^1.0.2",
     "@secretlint/secretlint-rule-preset-recommend": "13.0.6",
     "@types/node": "catalog:",
     "better-auth": "1.7.6",

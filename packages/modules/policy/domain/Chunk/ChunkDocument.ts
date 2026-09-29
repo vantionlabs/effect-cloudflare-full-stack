@@ -1,3 +1,6 @@
+import { Effect, Layer } from "effect"
+import { Chunker } from "./Chunker.ts"
+
 /**
  * Splitting a policy document into retrievable, citable pieces.
  *
@@ -162,3 +165,14 @@ export const chunkDocument = (
 
   return chunks
 }
+
+/**
+ * The heading-based chunker as a layer.
+ *
+ * Pure, so it needs no platform and is safe to memoise. The alternative implementation
+ * (`ChunkerLangChain`) lives in `server/` because it wraps a third-party library.
+ */
+export const ChunkerHeading: Layer.Layer<Chunker> = Layer.succeed(Chunker)({
+  strategy: "heading",
+  chunk: (markdown, options) => Effect.sync(() => chunkDocument(markdown, options))
+})

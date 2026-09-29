@@ -6,6 +6,7 @@
  * catch an HNSW index built for the wrong operator class, a `security definer` slip on the function,
  * or a `collection` filter that stopped applying.
  */
+import { type Chunker, ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
 import type { EmbeddingProfile } from "@ea/modules/policy/domain/Embedding"
 import { EmbedderDeterministic } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
@@ -38,14 +39,20 @@ const IdsLive = Layer.succeed(Ids)({ next: Effect.sync(() => crypto.randomUUID()
 const identity = (orgId: OrgId) =>
   new Identity({ userId: UserId.make("u1"), orgId, email: "r@example.com", role: "reviewer" })
 
-const layers = Layer.mergeAll(Db.layer, IdsLive, EmbedderDeterministic).pipe(Layer.provideMerge(Admin))
+const layers = Layer.mergeAll(Db.layer, IdsLive, EmbedderDeterministic, ChunkerHeading).pipe(Layer.provideMerge(Admin))
 
 const run = <A, E>(
   orgId: OrgId,
   effect: Effect.Effect<
     A,
     E,
-    Db | Ids | CurrentUser | SqlClient.SqlClient | EmbeddingModel.EmbeddingModel | EmbeddingProfile
+    | Db
+    | Ids
+    | CurrentUser
+    | SqlClient.SqlClient
+    | EmbeddingModel.EmbeddingModel
+    | EmbeddingProfile
+    | Chunker
   >
 ) =>
   Effect.runPromise(

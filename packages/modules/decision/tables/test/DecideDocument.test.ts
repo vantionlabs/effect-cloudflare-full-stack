@@ -11,6 +11,7 @@
  */
 import { WorkflowEnginePg } from "@ea/modules/decision/server/Workflow"
 import { DecideDocumentLayer, DecideDocumentWorkflow, decideKey } from "@ea/modules/decision/use-cases/Decision"
+import { ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
 import { EmbedderDeterministic } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
@@ -123,7 +124,8 @@ const base = (model: Layer.Layer<LanguageModel.LanguageModel>) =>
     IdsLive,
     EmbedderDeterministic,
     model,
-    Layer.succeed(CurrentUser)(identity)
+    Layer.succeed(CurrentUser)(identity),
+    ChunkerHeading
   ).pipe(Layer.provideMerge(Admin))
 
 const provide = <A, E>(model: Layer.Layer<LanguageModel.LanguageModel>, effect: Effect.Effect<A, E, any>) =>
