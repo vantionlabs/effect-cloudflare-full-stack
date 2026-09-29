@@ -27,8 +27,19 @@
   // The top level is LOCAL DEVELOPMENT. `wrangler dev` takes the Postgres connection string
   // from CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE in .env (gitignored), so
   // nothing needs provisioning on Cloudflare to run or test locally.
+  /*
+   * The Hyperdrive config created from the Cloudflare dashboard, pointing at PlanetScale Postgres.
+   *
+   * Local dev ignores this id: `wrangler dev` substitutes
+   * CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE from .env and talks to the compose container, so
+   * tests keep running against a database that can be dropped and reseeded. The id matters for
+   * `wrangler dev --remote` and for a deploy.
+   *
+   * Not a secret: an account-scoped identifier. Cloudflare holds the credentials behind it, which is the
+   * point of Hyperdrive — the Worker never sees them except through the binding.
+   */
   "hyperdrive": [
-    { "binding": "HYPERDRIVE", "id": "local-dev-overridden-by-dotenv" },
+    { "binding": "HYPERDRIVE", "id": "3a73f8a5ca0b4d6dbc83acff72dc0529" },
   ],
   // `wrangler dev` emulates R2 locally via miniflare, so nothing needs provisioning to develop
   // or test. The real bucket is created by Pulumi (infra/index.ts).

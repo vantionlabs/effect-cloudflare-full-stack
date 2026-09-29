@@ -91,12 +91,12 @@ export const ExecuteDecision = (input: ExecuteDecisionInput) =>
     )
 
     if (result._tag === "Success") {
-      yield* db.scoped((sql) =>
+      yield* db.scoped((sql, orgId) =>
         sql`
           update executions
              set status = 'succeeded', response = ${JSON.stringify(result.success)}::jsonb,
                  finished_at = now()
-           where id = ${executionId}
+           where id = ${executionId} and organization_id = ${orgId}
         `
       )
       return { _tag: "Executed", executionId } satisfies ExecuteOutcome
@@ -110,15 +110,16 @@ export const ExecuteDecision = (input: ExecuteDecisionInput) =>
      * Either way the answer is a human, which is why `decisions.status` moves too.
      */
     const reason = result.failure.message
-    yield* db.scoped((sql) =>
+    yield* db.scoped((sql, orgId) =>
       Effect.gen(function*() {
         yield* sql`
           update executions
              set status = 'needs_attention', error = ${reason}, finished_at = now()
-           where id = ${executionId}
+           where id = ${executionId} and organization_id = ${orgId}
         `
         yield* sql`
-          update decisions set status = 'needs_attention' where id = ${input.decisionId}
+          update decisions set status = 'needs_attention'
+           where id = ${input.decisionId} and organization_id = ${orgId}
         `
       })
     )

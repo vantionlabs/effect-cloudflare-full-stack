@@ -1,19 +1,20 @@
 /**
  * The org-scoping seam. Every tenant-scoped query in the application goes through here.
  *
- * Two layers of defence, because only one of them is checkable by the compiler:
+ * **There is one net, and this is it.** There used to be two — row-level security policies keyed on a
+ * transaction-local GUC, plus the predicate — and RLS was removed deliberately (ADR-0014). So the honest
+ * description of the guarantee is:
  *
- * **1. The type system.** Every method returns an effect requiring `CurrentUser`, and none
- * accepts an `orgId` argument. So a caller cannot name a tenant — the org is read from the
- * authenticated identity or the query cannot be written at all.
+ * **What this seam does give you.** Every method hands `orgId` to its callback, and none accepts one as an
+ * argument. There is no overload taking an `orgId`, so **a caller cannot name a tenant** — the organization
+ * comes from the authenticated session or from an explicit non-interactive tag, never from a parameter a bug
+ * or a crafted request could influence. That is structural, and it is the part worth having.
  *
- * **2. Row-level security.** `scoped` opens a transaction and sets `app.current_org`, which the
- * `current_org()` function and every table policy read. A forgotten `WHERE organization_id = …`
- * therefore returns nothing rather than another tenant's rows.
- *
- * Neither is trusted alone. The type system cannot see inside a SQL string, and an RLS policy
- * can be missing from a new table — so the tenancy test asserts the *behaviour* for every store
- * method, and `bun run dep:check` asserts nothing reaches SQL outside this seam.
+ * **What it does not.** A query that simply omits `and organization_id = ${orgId}` will return other tenants'
+ * rows. Under RLS it returned nothing. That property is now enforced by `bun run dep:check`, which fails on
+ * any statement touching a tenant table without the predicate — and which found **16 such statements** the
+ * day RLS came out, including reads of `extractions` and `workflow_activities`, both of which hold extracted
+ * invoice fields. Treat that check as load-bearing rather than tidy.
  */
 import { CurrentOrg, CurrentUser, type OrgId } from "@ea/modules/shared/domain/Identity"
 import { Context, Effect, Layer } from "effect"
@@ -21,10 +22,10 @@ import { SqlClient, type SqlError } from "effect/sql"
 
 export interface DbService {
   /**
-   * Runs `f` inside a transaction with `app.current_org` set, so RLS applies.
+   * Runs `f` inside a transaction, with the caller's organization id.
    *
-   * The org id is handed to `f` for use in explicit `WHERE` clauses — defence in depth, not a
-   * substitute for the policy. `f` cannot choose a different one.
+   * The id is handed to `f` for its `WHERE` clauses and is the ONLY thing scoping the query. `f` cannot
+   * choose a different one — that is the guarantee this seam provides.
    */
   readonly scoped: <A, E>(
     f: (sql: SqlClient.SqlClient, orgId: OrgId) => Effect.Effect<A, E>
@@ -53,10 +54,13 @@ export interface DbService {
 }
 
 /**
- * Opens a transaction with `app.current_org` set, so RLS applies for its duration.
+ * Opens a transaction and runs `f` with the organization id.
  *
- * Module scope rather than inside the layer: it captures nothing, and hoisting it makes clear
- * that setting the GUC is one shared mechanism rather than per-construction behaviour.
+ * A transaction even though nothing here sets session state any more: the callbacks frequently write more
+ * than one row — a document and its intake, a decision and its citations — and those must land together.
+ *
+ * Module scope rather than inside the layer because it captures nothing, which makes clear that this is one
+ * shared mechanism rather than per-construction behaviour.
  */
 const withOrg = <A, E>(
   orgId: OrgId,
@@ -66,21 +70,6 @@ const withOrg = <A, E>(
     const sql = yield* SqlClient.SqlClient
     return yield* sql.withTransaction(
       Effect.gen(function*() {
-        /*
-         * Drop to the non-superuser role for the life of this transaction.
-         *
-         * Not belt-and-braces: **a superuser bypasses row-level security entirely, FORCE or not.**
-         * Locally the Worker connects as the bootstrap user, so without this every policy in the
-         * database is decoration and the app-layer predicate is the only thing standing between two
-         * tenants. That is exactly how `Intake.list` came to return another organization's rows.
-         *
-         * `local` so it reverts with the transaction — the connection must not be left as a
-         * different role for whatever runs next on it.
-         */
-        yield* sql`set local role effect_ai_app`
-        // `true` scopes the setting to this transaction, so it cannot leak to the next user of
-        // a pooled connection — which would attribute one tenant's queries to another.
-        yield* sql`select set_config('app.current_org', ${orgId}, true)`
         return yield* f(sql, orgId)
       })
     )

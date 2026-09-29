@@ -27,11 +27,13 @@ const settle = (decisionId: string, status: "approved" | "rejected") =>
     const identity = yield* CurrentUser
 
     // The CAS. `pending_review` is the only state a review may act on.
-    const changed = yield* db.scoped((sql) =>
+    const changed = yield* db.scoped((sql, orgId) =>
       sql<{ id: string }>`
         update decisions
            set status = ${status}, reviewed_by = ${identity.userId}, reviewed_at = now()
-         where id = ${decisionId} and status = 'pending_review'
+         where id = ${decisionId}
+           and organization_id = ${orgId}
+           and status = 'pending_review'
         returning id
       `
     )

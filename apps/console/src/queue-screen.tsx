@@ -24,14 +24,20 @@ export function QueueScreen() {
   const items = queue._tag === "Success" ? queue.value : []
   const current = items[selected]
 
-  const approve = useAtomSet(Api.mutation("Decision.approve"), { mode: "promise" })
-  const reject = useAtomSet(Api.mutation("Decision.reject"), { mode: "promise" })
+  const approve = useAtomSet(Api.mutation("Decision.approve"), {
+    mode: "promise"
+  })
+  const reject = useAtomSet(Api.mutation("Decision.reject"), {
+    mode: "promise"
+  })
 
   const review = useCallback(
     async (action: "approve" | "reject") => {
       if (current === undefined) return
       const send = action === "approve" ? approve : reject
-      const result = await send({ payload: { decisionId: current.decisionId } })
+      const result = await send({
+        payload: { decisionId: current.decisionId }
+      })
       /*
        * `not_pending` means somebody else got there first — the CAS on the server rejected this review.
        * Refreshing rather than showing an error is the right response: the queue has moved on, and the
@@ -51,7 +57,9 @@ export function QueueScreen() {
       // Never hijack typing. A reviewer writing a note must be able to type "a".
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
-      if (target !== null && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return
+      if (target !== null && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) {
+        return
+      }
 
       switch (event.key) {
         case "j":
@@ -78,11 +86,21 @@ export function QueueScreen() {
   }
 
   return (
-    <main style={{ display: "grid", gridTemplateColumns: "26rem 1fr", height: "100vh" }}>
+    <main
+      style={{
+        display: "grid",
+        gridTemplateColumns: "26rem 1fr",
+        height: "100vh"
+      }}
+    >
       <QueueGrid items={items} selected={selected} onSelect={setSelected} />
-      {current === undefined
-        ? <section style={{ padding: "2rem", color: "#666" }}>the queue is empty</section>
-        : <Inspector decisionId={current.decisionId} />}
+      {current === undefined ?
+        (
+          <section style={{ padding: "2rem", color: "#666" }}>
+            the queue is empty
+          </section>
+        ) :
+        <Inspector decisionId={current.decisionId} />}
     </main>
   )
 }
@@ -103,7 +121,14 @@ interface QueueGridProps {
 function QueueGrid({ items, onSelect, selected }: QueueGridProps) {
   return (
     <nav style={{ borderRight: "1px solid #ddd", overflowY: "auto" }}>
-      <h1 style={{ font: "600 0.8rem ui-sans-serif", padding: "1rem", margin: 0, color: "#666" }}>
+      <h1
+        style={{
+          font: "600 0.8rem ui-sans-serif",
+          padding: "1rem",
+          margin: 0,
+          color: "#666"
+        }}
+      >
         REVIEW QUEUE · {items.length} · oldest first
       </h1>
       <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
@@ -129,7 +154,9 @@ function QueueGrid({ items, onSelect, selected }: QueueGridProps) {
               {item.outcome}
               {!item.grounded && <span style={{ color: "#b00" }}>· ungrounded</span>}
               {item.retrievalMode !== "hybrid" && (
-                <span style={{ color: "#a60" }}>· {item.retrievalMode} retrieval</span>
+                <span style={{ color: "#a60" }}>
+                  · {item.retrievalMode} retrieval
+                </span>
               )}
               {item.railsFired.length > 0 && <span>· {item.railsFired.length} rail(s)</span>}
             </div>
@@ -157,8 +184,17 @@ function Inspector({ decisionId }: { readonly decisionId: string }) {
       </p>
 
       {decision.railsFired.length > 0 && (
-        <div style={{ background: "#fff8e6", border: "1px solid #e8d8a8", padding: "1rem", marginBottom: "1.5rem" }}>
-          <strong style={{ fontSize: "0.85rem" }}>why this is not automatic</strong>
+        <div
+          style={{
+            background: "#fff8e6",
+            border: "1px solid #e8d8a8",
+            padding: "1rem",
+            marginBottom: "1.5rem"
+          }}
+        >
+          <strong style={{ fontSize: "0.85rem" }}>
+            why this is not automatic
+          </strong>
           <ul style={{ margin: "0.5rem 0 0", paddingLeft: "1.2rem" }}>
             {decision.railsFired.map((rail) => <li key={rail}>{rail}</li>)}
           </ul>
@@ -167,24 +203,44 @@ function Inspector({ decisionId }: { readonly decisionId: string }) {
 
       <p style={{ marginBottom: "1.5rem" }}>{decision.rationale}</p>
 
-      <h3 style={{ font: "600 0.8rem ui-sans-serif", color: "#666" }}>CITATIONS</h3>
+      <h3 style={{ font: "600 0.8rem ui-sans-serif", color: "#666" }}>
+        CITATIONS
+      </h3>
       {decision.citations.length === 0 && <p style={{ color: "#b00" }}>none — nothing to check against</p>}
       {decision.citations.map((cited, index) => (
-        <article key={index} style={{ border: "1px solid #ddd", padding: "1rem", marginBottom: "1rem" }}>
-          <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.5rem" }}>
+        <article
+          key={index}
+          style={{
+            border: "1px solid #ddd",
+            padding: "1rem",
+            marginBottom: "1rem"
+          }}
+        >
+          <div
+            style={{
+              fontSize: "0.8rem",
+              color: "#666",
+              marginBottom: "0.5rem"
+            }}
+          >
             {cited.citation.clause_ref ?? cited.citation.chunk_id}
           </div>
-          {cited.clauseText === null
-            /*
-             * The chunk is gone — re-indexed or deleted. Worth saying rather than hiding: a decision whose
-             * clause no longer exists cannot be audited the way it was made.
-             */
-            ? (
+          {cited.clauseText === null ?
+            (
+              /*
+               * The chunk is gone — re-indexed or deleted. Worth saying rather than hiding: a decision whose
+               * clause no longer exists cannot be audited the way it was made.
+               */
               <p style={{ color: "#b00", margin: 0 }}>
                 the cited clause is no longer in the corpus, so this citation cannot be re-checked
               </p>
-            )
-            : <Highlight text={cited.clauseText} excerpt={cited.citation.excerpt} />}
+            ) :
+            (
+              <Highlight
+                text={cited.clauseText}
+                excerpt={cited.citation.excerpt}
+              />
+            )}
         </article>
       ))}
 

@@ -95,10 +95,11 @@ export const DecideDocumentLayer = DecideDocumentWorkflow.toLayer(
      * and strictly earlier: the memo saves re-running a step, this saves entering the workflow at all.
      */
     const existing = yield* Effect.orDie(
-      db.scoped((sql) =>
+      db.scoped((sql, orgId) =>
         sql<{ id: string; outcome: Outcome; rails_fired: ReadonlyArray<string>; retrieval_mode: string }>`
         select id, outcome, rails_fired, retrieval_mode from decisions
-         where decide_key = ${decideKey(payload.documentId, payload.vertical)}
+         where organization_id = ${orgId}
+           and decide_key = ${decideKey(payload.documentId, payload.vertical)}
       `
       )
     )
@@ -191,10 +192,10 @@ export const DecideDocumentLayer = DecideDocumentWorkflow.toLayer(
      * allowed several and silently took the newest, so "which rule authorised this" had no single answer.
      * Absent means not armed, which is the correct default for a product that authorises payments.
      */
-    const rules = yield* Effect.orDie(db.scoped((sql) =>
+    const rules = yield* Effect.orDie(db.scoped((sql, orgId) =>
       sql<{ id: string }>`
         select id from rules
-         where vertical = ${payload.vertical} and armed
+         where organization_id = ${orgId} and vertical = ${payload.vertical} and armed
       `
     ))
     const armed = rules.length > 0

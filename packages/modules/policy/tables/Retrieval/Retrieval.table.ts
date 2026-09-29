@@ -14,11 +14,12 @@
  *
  * **Three things this function must get right, and one it must not do:**
  *
- * - `security invoker` (the default, stated explicitly). A `security definer` function would run as
- *   its owner and **bypass row-level security entirely** — every tenant would retrieve every other
- *   tenant's policy. This is the single most dangerous line in the file, so it is written down.
- * - The org filter is `current_org()`, not a parameter. A caller that could name a tenant would be a
- *   hole in the seam; the GUC is set by `Db.scoped` and read by the policy.
+ * - `security invoker` remains stated explicitly. It mattered enormously under RLS, where `security
+ *   definer` would have run as the owner and bypassed every policy. With the filter now a parameter it
+ *   matters less, and it is kept because a future reader restoring RLS should not have to rediscover it.
+ * - The org is a PARAMETER now, not `current_org()`. It was a GUC read by both this function and the RLS
+ *   policies; with RLS removed the GUC has no other reader, and an invisible filter is worse than an
+ *   argument. `Db.scoped` still supplies it, so a caller cannot name a tenant.
  * - `collection` is filtered here rather than at call sites, so a transactional document cannot be
  *   retrieved as policy even by a caller who forgot.
  * - It does **not** decide the retrieval mode. It returns the per-half ranks and lets the caller
@@ -33,11 +34,32 @@ export const RetrievalTable = Effect.gen(function*() {
   const sql = yield* SqlClient.SqlClient
   const dimensions = sql.literal(String(EMBEDDING_DIMENSIONS))
 
+  /*
+   * Dropped before creating, because the SIGNATURE changed.
+   *
+   * `create or replace function` replaces only a function with the same argument list. Adding
+   * `p_organization_id` would have created an OVERLOAD, leaving the old `current_org()`-filtered version
+   * callable — and after RLS is removed that version returns every tenant's policy. A stale overload is a
+   * far worse outcome than a failed migration.
+   */
+  yield* sql`
+    drop function if exists retrieve_policy(text, vector, text, integer, integer, double precision, double precision, integer)
+  `
+
   yield* sql`
     create or replace function retrieve_policy(
       p_query       text,
       p_embedding   vector(${dimensions}),
       p_collection  text,
+      /*
+       * The organization, passed explicitly.
+       *
+       * This was current_org() reading a transaction-local GUC, which RLS policies also read. With RLS
+       * removed the GUC has no other reader, and an implicit filter nobody can see in the call is worse than
+       * a parameter — so the tenant is now an argument. A caller still cannot choose it freely: Db.scoped
+       * supplies it from the session and there is no overload taking one.
+       */
+      p_organization_id text,
       p_limit       integer,
       -- The RRF constant. 60 is the value from the original paper and the de facto default; it
       -- flattens the contribution curve so ranks 1 and 2 are not wildly far apart.
@@ -92,7 +114,8 @@ export const RetrievalTable = Effect.gen(function*() {
           c.id,
           row_number() over (order by c.embedding <=> p_embedding)::integer as rank
         from document_chunks c
-        where c.collection = p_collection
+        where c.organization_id = p_organization_id
+          and c.collection = p_collection
           and c.in_force
           and c.embedding is not null
           and p_embedding is not null
@@ -104,7 +127,8 @@ export const RetrievalTable = Effect.gen(function*() {
           c.id,
           row_number() over (order by ts_rank_cd(c.tsv, q.tsq) desc)::integer as rank
         from document_chunks c, query q
-        where c.collection = p_collection
+        where c.organization_id = p_organization_id
+          and c.collection = p_collection
           and c.in_force
           and c.tsv @@ q.tsq
         order by ts_rank_cd(c.tsv, q.tsq) desc
@@ -123,13 +147,12 @@ export const RetrievalTable = Effect.gen(function*() {
       from document_chunks c
       left join semantic s on s.id = c.id
       left join lexical  l on l.id = c.id
-      where s.id is not null or l.id is not null
+      where c.organization_id = p_organization_id
+        and (s.id is not null or l.id is not null)
       -- id as a tiebreak so equal scores return in a stable order; a retrieval that reshuffles
       -- between identical calls makes an eval run unreproducible.
       order by score desc, c.id
       limit p_limit
     $$
   `
-
-  yield* sql`grant execute on function retrieve_policy to effect_ai_app`
 })

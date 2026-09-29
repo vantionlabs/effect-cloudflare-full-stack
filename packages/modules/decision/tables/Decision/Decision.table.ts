@@ -86,18 +86,4 @@ export const DecisionTable = Effect.gen(function*() {
       unique (decision_id, ordinal)
     )
   `
-
-  for (
-    const table of ["decisions", "decision_citations"]
-  ) {
-    yield* sql`alter table ${sql.literal(table)} enable row level security`
-    yield* sql`alter table ${sql.literal(table)} force row level security`
-    yield* sql`drop policy if exists ${sql.literal(`${table}_tenant`)} on ${sql.literal(table)}`
-    yield* sql`
-      create policy ${sql.literal(`${table}_tenant`)} on ${sql.literal(table)}
-        using (organization_id = current_org())
-        with check (organization_id = current_org())
-    `
-    yield* sql`grant select, insert, update, delete on ${sql.literal(table)} to effect_ai_app`
-  }
 })

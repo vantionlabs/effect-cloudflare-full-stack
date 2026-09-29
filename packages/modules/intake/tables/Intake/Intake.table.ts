@@ -45,15 +45,4 @@ export const IntakeTable = Effect.gen(function*() {
       on intakes (organization_id, external_ref)
       where external_ref is not null
   `
-
-  yield* sql`alter table intakes enable row level security`
-  yield* sql`alter table intakes force row level security`
-  yield* sql`drop policy if exists intakes_tenant on intakes`
-  yield* sql`
-    create policy intakes_tenant on intakes
-      using (organization_id = current_org())
-      with check (organization_id = current_org())
-  `
-
-  yield* sql`grant select, insert, update, delete on intakes to effect_ai_app`
 })

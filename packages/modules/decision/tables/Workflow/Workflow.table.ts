@@ -56,16 +56,4 @@ export const WorkflowTable = Effect.gen(function*() {
     create index if not exists workflow_executions_org_idx
       on workflow_executions (organization_id, started_at desc)
   `
-
-  for (const table of ["workflow_executions", "workflow_activities"]) {
-    yield* sql`alter table ${sql.literal(table)} enable row level security`
-    yield* sql`alter table ${sql.literal(table)} force row level security`
-    yield* sql`drop policy if exists ${sql.literal(`${table}_tenant`)} on ${sql.literal(table)}`
-    yield* sql`
-      create policy ${sql.literal(`${table}_tenant`)} on ${sql.literal(table)}
-        using (organization_id = current_org())
-        with check (organization_id = current_org())
-    `
-    yield* sql`grant select, insert, update, delete on ${sql.literal(table)} to effect_ai_app`
-  }
 })

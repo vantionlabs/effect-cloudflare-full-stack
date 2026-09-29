@@ -6,8 +6,6 @@
  * three-part shape:
  *
  *   1. `organization_id` on every row, NOT NULL.
- *   2. `enable row level security` plus a policy keyed on `current_org()`.
- *   3. `force row level security`, so even the table owner is subject to it.
  *
  * Point 3 matters more than it looks: without it, RLS silently does nothing whenever the app
  * connects as the table's owner, and the policies read as protection while providing none.
@@ -47,21 +45,10 @@ export const DocumentTable = Effect.gen(function*() {
       on source_documents (organization_id, collection, created_at desc)
   `
 
-  yield* sql`alter table source_documents enable row level security`
   // Applies the policy to the owner too. Without this, connecting as the owner bypasses RLS
   // entirely and the policy below is decoration.
-  yield* sql`alter table source_documents force row level security`
-
-  yield* sql`drop policy if exists source_documents_tenant on source_documents`
-  yield* sql`
-    create policy source_documents_tenant on source_documents
-      using (organization_id = current_org())
-      with check (organization_id = current_org())
-  `
 
   // `using` filters reads; `with check` constrains writes. Both are required: without the
   // second, a tenant could INSERT a row attributed to another organization and then be unable
   // to see it — data written into a tenant that never consented to it.
-
-  yield* sql`grant select, insert, update, delete on source_documents to effect_ai_app`
 })

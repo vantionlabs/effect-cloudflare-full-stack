@@ -91,15 +91,4 @@ export const ChunkTable = Effect.gen(function*() {
     create index if not exists document_chunks_org_collection_idx
       on document_chunks (organization_id, collection, in_force)
   `
-
-  yield* sql`alter table document_chunks enable row level security`
-  yield* sql`alter table document_chunks force row level security`
-  yield* sql`drop policy if exists document_chunks_tenant on document_chunks`
-  yield* sql`
-    create policy document_chunks_tenant on document_chunks
-      using (organization_id = current_org())
-      with check (organization_id = current_org())
-  `
-
-  yield* sql`grant select, insert, update, delete on document_chunks to effect_ai_app`
 })

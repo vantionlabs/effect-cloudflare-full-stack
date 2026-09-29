@@ -67,9 +67,10 @@ export const EmitEvent = (input: EmitEventInput) =>
 
     if (inserted.length === 0) {
       // Already emitted. Return the existing id so a caller can still correlate, and send nothing.
-      const existing = yield* db.scoped((sql) =>
+      const existing = yield* db.scoped((sql, orgId) =>
         sql<{ id: string }>`
-          select id from events where idempotency_key = ${input.idempotencyKey}
+          select id from events
+           where idempotency_key = ${input.idempotencyKey} and organization_id = ${orgId}
         `
       )
       return {

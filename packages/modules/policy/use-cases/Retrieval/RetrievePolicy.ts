@@ -53,7 +53,7 @@ export const RetrievePolicy = (input: RetrievePolicyInput) =>
     )
     const vector = embedding._tag === "Some" ? `[${embedding.value.join(",")}]` : null
 
-    const rows = yield* db.scoped((sql) =>
+    const rows = yield* db.scoped((sql, orgId) =>
       sql<{
         chunk_id: string
         document_id: string
@@ -68,6 +68,7 @@ export const RetrievePolicy = (input: RetrievePolicyInput) =>
           ${input.query},
           ${vector}::vector,
           ${input.collection ?? "policy"},
+          ${orgId},
           ${input.limit ?? DEFAULT_LIMIT}
         )
       `

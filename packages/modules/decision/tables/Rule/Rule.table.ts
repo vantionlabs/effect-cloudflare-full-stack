@@ -49,14 +49,4 @@ export const RuleTable = Effect.gen(function*() {
       on rules (organization_id, vertical)
       where armed
   `
-
-  yield* sql`alter table rules enable row level security`
-  yield* sql`alter table rules force row level security`
-  yield* sql`drop policy if exists rules_tenant on rules`
-  yield* sql`
-    create policy rules_tenant on rules
-      using (organization_id = current_org())
-      with check (organization_id = current_org())
-  `
-  yield* sql`grant select, insert, update, delete on rules to effect_ai_app`
 })

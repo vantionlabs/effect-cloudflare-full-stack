@@ -48,15 +48,4 @@ export const ExtractionTable = Effect.gen(function*() {
     create index if not exists extractions_org_document_idx
       on extractions (organization_id, document_id)
   `
-
-  yield* sql`alter table extractions enable row level security`
-  yield* sql`alter table extractions force row level security`
-  yield* sql`drop policy if exists extractions_tenant on extractions`
-  yield* sql`
-    create policy extractions_tenant on extractions
-      using (organization_id = current_org())
-      with check (organization_id = current_org())
-  `
-
-  yield* sql`grant select, insert, update, delete on extractions to effect_ai_app`
 })

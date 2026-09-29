@@ -84,14 +84,4 @@ export const ExecutionTable = Effect.gen(function*() {
     create index if not exists executions_decision_idx
       on executions (organization_id, decision_id)
   `
-
-  yield* sql`alter table executions enable row level security`
-  yield* sql`alter table executions force row level security`
-  yield* sql`drop policy if exists executions_tenant on executions`
-  yield* sql`
-    create policy executions_tenant on executions
-      using (organization_id = current_org())
-      with check (organization_id = current_org())
-  `
-  yield* sql`grant select, insert, update, delete on executions to effect_ai_app`
 })

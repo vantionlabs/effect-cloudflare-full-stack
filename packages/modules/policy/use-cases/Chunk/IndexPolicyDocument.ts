@@ -84,7 +84,10 @@ export const IndexPolicyDocument = (input: IndexPolicyDocumentInput) =>
       Effect.gen(function*() {
         // Replace rather than append: re-indexing must be idempotent, and a stale chunk that is
         // still retrievable is a citation to policy that no longer exists.
-        yield* sql`delete from document_chunks where document_id = ${input.documentId}`
+        yield* sql`
+          delete from document_chunks
+           where document_id = ${input.documentId} and organization_id = ${orgId}
+        `
 
         for (const [index, chunk] of chunks.entries()) {
           const vector = vectors?.[index]

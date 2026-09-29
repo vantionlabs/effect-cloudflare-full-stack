@@ -157,9 +157,10 @@ export const WorkflowEnginePg: Layer.Layer<
 
           // A completed run replays from its stored result without touching the body — which is what
           // makes a redelivered message free rather than merely idempotent.
-          const existing = yield* scoped((sql) =>
+          const existing = yield* scoped((sql, orgId) =>
             sql<{ result: StoredResult | null }>`
-              select result from workflow_executions where execution_id = ${options.executionId}
+              select result from workflow_executions
+               where execution_id = ${options.executionId} and organization_id = ${orgId}
             `
           )
           const stored = existing[0]?.result
@@ -190,11 +191,11 @@ export const WorkflowEnginePg: Layer.Layer<
           // redelivery re-enters the body, which is what makes a transient failure recoverable.
           const envelope = toStored(result)
           if (envelope !== undefined) {
-            yield* scoped((sql) =>
+            yield* scoped((sql, orgId) =>
               sql`
                 update workflow_executions
                    set result = ${JSON.stringify(envelope)}::jsonb, completed_at = now()
-                 where execution_id = ${options.executionId}
+                 where execution_id = ${options.executionId} and organization_id = ${orgId}
               `
             )
           }
@@ -212,12 +213,13 @@ export const WorkflowEnginePg: Layer.Layer<
         Effect.gen(function*() {
           const instance = yield* WorkflowEngine.WorkflowInstance
 
-          const hit = yield* scoped((sql) =>
+          const hit = yield* scoped((sql, orgId) =>
             sql<{ result: StoredResult }>`
               select result from workflow_activities
                where execution_id = ${instance.executionId}
                  and name = ${activity.name}
                  and attempt = ${attempt}
+                 and organization_id = ${orgId}
             `
           )
           if (hit.length > 0) return fromStored(hit[0]!.result)
@@ -255,9 +257,10 @@ export const WorkflowEnginePg: Layer.Layer<
         }).pipe(Effect.orDie),
 
       poll: (_workflow, executionId) =>
-        scoped((sql) =>
+        scoped((sql, orgId) =>
           sql<{ result: StoredResult | null }>`
-            select result from workflow_executions where execution_id = ${executionId}
+            select result from workflow_executions
+             where execution_id = ${executionId} and organization_id = ${orgId}
           `
         ).pipe(
           Effect.map((rows) => {

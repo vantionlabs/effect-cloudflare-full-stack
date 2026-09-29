@@ -156,8 +156,11 @@ describe("retrieval", () => {
       Effect.flatMap(
         Db,
         (db) =>
-          db.scoped((sql) =>
-            sql`update document_chunks set embedding = null, embedded_at = null where document_id = 'retrieval_doc_a'`
+          db.scoped((sql, orgId) =>
+            sql`
+              update document_chunks set embedding = null, embedded_at = null
+               where document_id = 'retrieval_doc_a' and organization_id = ${orgId}
+            `
           )
       )
     )

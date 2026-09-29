@@ -79,14 +79,4 @@ export const EventTable = Effect.gen(function*() {
     create index if not exists events_org_created_idx
       on events (organization_id, created_at desc)
   `
-
-  yield* sql`alter table events enable row level security`
-  yield* sql`alter table events force row level security`
-  yield* sql`drop policy if exists events_tenant on events`
-  yield* sql`
-    create policy events_tenant on events
-      using (organization_id = current_org())
-      with check (organization_id = current_org())
-  `
-  yield* sql`grant select, insert, update, delete on events to effect_ai_app`
 })

@@ -54,7 +54,9 @@ export const migrations = {
   "0010_rule": RuleTable,
   "0011_decision": DecisionTable,
   "0012_event": EventTable,
-  "0013_execution": ExecutionTable
+  "0013_execution": ExecutionTable,
+  // Re-applied: retrieve_policy takes the organization as a parameter now, not current_org().
+  "0014_retrieval_org_param": RetrievalTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

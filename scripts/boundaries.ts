@@ -242,6 +242,72 @@ const executeEventConstructors = (): Array<string> => {
   return sites
 }
 
+/*
+ * Every SQL statement touching a tenant table must filter on the organization.
+ *
+ * This check IS the tenancy guarantee now. Row-level security used to be the second net — a forgotten
+ * predicate returned nothing instead of another tenant's rows — and it was removed deliberately (ADR-0014)
+ * because better-auth provides the organization but not the isolation, and the role machinery it needed was
+ * refused by the managed provider anyway.
+ *
+ * So the property RLS gave for free is checked here instead. When it was written, **16 statements across 8
+ * files had no predicate** and RLS was silently carrying all of them, including reads of `extractions` and
+ * `workflow_activities` — both of which hold extracted invoice fields. That is the size of the hole this
+ * closes, and the reason it is a hard failure rather than a warning.
+ *
+ * Writes are satisfied by supplying `organization_id` as a column; reads, updates and deletes need a WHERE.
+ */
+const TENANT_TABLES = new Set([
+  "source_documents",
+  "intakes",
+  "document_chunks",
+  "extractions",
+  "decisions",
+  "decision_citations",
+  "rules",
+  "executions",
+  "events",
+  "workflow_executions",
+  "workflow_activities"
+])
+
+const unscopedTenantQueries = (): Array<string> => {
+  const found: Array<string> = []
+  for (const absolute of walk(join(root, "packages"))) {
+    const path = relative(root, absolute)
+    // Migrations legitimately touch these tables without a tenant: they create them.
+    if (path.includes("/test/") || path.includes("/tables/") || path.endsWith("Db.ts")) continue
+    const source = readFileSync(absolute, "utf8")
+
+    for (const match of source.matchAll(/sql(?:<[^>]*>)?`([^`]*)`/g)) {
+      const body = match[1]!
+      const lower = body.toLowerCase()
+      const tables = [...body.matchAll(/(?:from|into|update)\s+([a-z_]+)/g)]
+        .map((table) => table[1]!)
+        .filter((table) => TENANT_TABLES.has(table))
+      if (tables.length === 0) continue
+
+      const isInsert = lower.includes("insert into")
+      const scoped = isInsert
+        ? lower.includes("organization_id") && lower.includes("${orgid}")
+        : /organization_id\s*=\s*\$\{orgId\}/.test(body)
+
+      if (!scoped) {
+        found.push(`${path}\n      touches ${[...new Set(tables)].join(", ")} without an organization filter`)
+      }
+    }
+  }
+  return found
+}
+
+for (const unscoped of unscopedTenantQueries()) {
+  failures.push(
+    `${unscoped}\n    Reads, updates and deletes need \`and organization_id = \${orgId}\`; inserts need the\n` +
+      "    column supplied. `Db.scoped` hands you orgId as the second argument — use it. There is no RLS\n" +
+      "    behind this any more (ADR-0014)."
+  )
+}
+
 const emitSites = executeEventConstructors()
 if (emitSites.length !== 1) {
   failures.push(

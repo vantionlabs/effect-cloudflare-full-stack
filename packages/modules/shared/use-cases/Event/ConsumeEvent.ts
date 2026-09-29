@@ -61,9 +61,10 @@ export const ConsumeEvent = (
   Effect.gen(function*() {
     const db = yield* Db
 
-    const rows = yield* db.scoped((sql) =>
+    const rows = yield* db.scoped((sql, orgId) =>
       sql<EventRow>`
-        select id, type, idempotency_key, status, payload from events where id = ${eventId}
+        select id, type, idempotency_key, status, payload from events
+         where id = ${eventId} and organization_id = ${orgId}
       `
     )
     const row = rows[0]
@@ -82,18 +83,23 @@ export const ConsumeEvent = (
       return { _tag: "Done" } satisfies Disposition
     }
 
-    yield* db.scoped((sql) =>
+    yield* db.scoped((sql, orgId) =>
       sql`
         update events
            set status = 'processing', started_at = coalesce(started_at, now()), deliveries = deliveries + 1
-         where id = ${eventId}
+         where id = ${eventId} and organization_id = ${orgId}
       `
     )
 
     const result = yield* Effect.result(work(row))
 
     if (result._tag === "Success") {
-      yield* db.scoped((sql) => sql`update events set status = 'done', finished_at = now() where id = ${eventId}`)
+      yield* db.scoped((sql, orgId) =>
+        sql`
+          update events set status = 'done', finished_at = now()
+           where id = ${eventId} and organization_id = ${orgId}
+        `
+      )
       return { _tag: "Done" } satisfies Disposition
     }
 
@@ -103,9 +109,10 @@ export const ConsumeEvent = (
     if (isTerminal(failure)) {
       // Recorded in the product, not just in a dashboard: `failed` rows are queryable beside the
       // documents they concern, which is the whole reason this table exists.
-      yield* db.scoped((sql) =>
+      yield* db.scoped((sql, orgId) =>
         sql`
-          update events set status = 'failed', error = ${reason}, finished_at = now() where id = ${eventId}
+          update events set status = 'failed', error = ${reason}, finished_at = now()
+           where id = ${eventId} and organization_id = ${orgId}
         `
       )
       return { _tag: "Terminal", reason } satisfies Disposition
