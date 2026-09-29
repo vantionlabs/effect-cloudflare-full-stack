@@ -39,12 +39,6 @@
   // No account id or token needed from inside the Worker: the binding IS the authorisation. The
   // eval harness cannot use a binding, so it reaches the same model over REST with a token.
   "ai": { "binding": "AI" },
-  // Vectorize, for the managed-store arm of the retrieval comparison — NOT the production store.
-  // It has no lexical half, so retrieval_mode can never be "hybrid" and rail 4 refuses to
-  // auto-approve anything retrieved through it. See PolicySearchVectorize.ts.
-  "vectorize": [
-    { "binding": "VECTORIZE", "index_name": "effect-ai-policy-dev" },
-  ],
 
   // Each environment deploys as its own Worker: effect-ai-staging, effect-ai-production.
   // Separate bindings, separate secrets, separate logs.
@@ -58,9 +52,6 @@
         { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-staging" },
       ],
       "ai": { "binding": "AI" },
-      "vectorize": [
-        { "binding": "VECTORIZE", "index_name": "effect-ai-policy-staging" },
-      ],
     },
     "production": {
       "vars": { "ENVIRONMENT": "production" },
@@ -71,9 +62,6 @@
         { "binding": "DOCUMENTS", "bucket_name": "effect-ai-documents-production" },
       ],
       "ai": { "binding": "AI" },
-      "vectorize": [
-        { "binding": "VECTORIZE", "index_name": "effect-ai-policy-production" },
-      ],
     },
   },
 }
