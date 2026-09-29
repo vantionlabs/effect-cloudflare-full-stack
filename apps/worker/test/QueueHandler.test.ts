@@ -83,3 +83,35 @@ describe("consumeBatch", () => {
     expect(batch[3]!.calls).toEqual(["retry"])
   })
 })
+
+describe("the outbound connection bound", () => {
+  it("never holds more than six messages in flight at once", async () => {
+    /*
+     * The platform limit, asserted rather than assumed.
+     *
+     * Workers allows six simultaneous outgoing connections per invocation and each message opens a scoped
+     * database connection. Before the semaphore this was `concurrency: 1` — safe, but it serialised a
+     * batch of ten for no reason. The assertion is the ceiling, not the serialisation.
+     */
+    let inFlight = 0
+    let peak = 0
+    const batch = Array.from({ length: 10 }, (_, i) => message(valid(`e${i}`)))
+
+    await Effect.runPromise(
+      consumeBatch({ messages: batch.map((entry) => entry.msg) }, () =>
+        Effect.gen(function*() {
+          inFlight++
+          peak = Math.max(peak, inFlight)
+          // Yield, so the scheduler can start others if the bound allows it.
+          yield* Effect.yieldNow
+          inFlight--
+          return { _tag: "Done" as const }
+        })) as Effect.Effect<void, never, never>
+    )
+
+    expect(peak).toBeLessThanOrEqual(6)
+    // And genuinely parallel: a serialised implementation would peak at 1.
+    expect(peak).toBeGreaterThan(1)
+    expect(batch.every((entry) => entry.calls.length === 1)).toBe(true)
+  })
+})

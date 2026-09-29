@@ -10,9 +10,15 @@
  * `Disposition` into an `ack()` or a `retry()`, which is the part that needs real Cloudflare message
  * objects and therefore a real Worker.
  *
- * Messages are processed **sequentially**, not concurrently. Each one opens a scoped database connection,
- * and Workers allows six simultaneous outgoing connections per invocation — a batch of ten in parallel
- * would exhaust that and fail in a way that looks like a database problem.
+ * Concurrency is bounded by a `Semaphore` at the platform's actual limit rather than serialised by guess.
+ * **Workers allows six simultaneous outgoing connections per invocation**, and each message opens a scoped
+ * database connection — so a batch of ten in parallel exhausts that and fails in a way that looks like a
+ * database problem. Six permits express the real constraint: a batch of ten proceeds with genuine
+ * parallelism up to the ceiling, which `concurrency: 1` threw away for no reason.
+ *
+ * The semaphore is created **per batch**, not per isolate, because the limit is per *invocation*. A
+ * module-scope one would be shared by concurrent invocations in the same isolate and would throttle them
+ * against each other.
  *
  * One thing this file does NOT do: decide which organization the work belongs to. A queue consumer has no
  * session, so it cannot provide `CurrentUser`, and it deliberately gets a different tag — `CurrentOrg`,
@@ -22,7 +28,7 @@
  */
 import { QueueMessage } from "@ea/modules/shared/domain/Event"
 import type { Disposition } from "@ea/modules/shared/use-cases/Event"
-import { Effect, Schema } from "effect"
+import { Effect, Schema, Semaphore } from "effect"
 
 /** The slice of a Cloudflare queue message this handler uses. */
 export interface QueueMessageLike {
@@ -42,43 +48,53 @@ export interface QueueBatchLike {
  * not decode: it is **acked**, not retried. A malformed message will not become well-formed on
  * redelivery, and retrying it five times before the DLQ accomplishes nothing but delay.
  */
+/**
+ * Simultaneous outgoing connections a Worker invocation may hold open.
+ *
+ * A platform limit, not a tuning knob. Raising it does not make the platform allow more; it makes the
+ * seventh connection fail.
+ */
+const OUTBOUND_CONNECTION_LIMIT = 6
+
 export const consumeBatch = (
   batch: QueueBatchLike,
   handle: (message: QueueMessage) => Effect.Effect<Disposition>
 ) =>
-  Effect.forEach(
-    batch.messages,
-    (raw) =>
-      Effect.gen(function*() {
-        const decoded = yield* Effect.result(Schema.decodeUnknownEffect(QueueMessage)(raw.body))
+  Effect.flatMap(Semaphore.make(OUTBOUND_CONNECTION_LIMIT), (connections) =>
+    Effect.forEach(
+      batch.messages,
+      (raw) =>
+        connections.withPermit(Effect.gen(function*() {
+          const decoded = yield* Effect.result(Schema.decodeUnknownEffect(QueueMessage)(raw.body))
 
-        if (decoded._tag === "Failure") {
-          // Unparseable: ack. It cannot succeed later, and the DLQ would only see it five deliveries on.
-          yield* Effect.logWarning("queue.message.undecodable").pipe(
-            Effect.annotateLogs({ body: JSON.stringify(raw.body) })
+          if (decoded._tag === "Failure") {
+            // Unparseable: ack. It cannot succeed later, and the DLQ would only see it five deliveries on.
+            yield* Effect.logWarning("queue.message.undecodable").pipe(
+              Effect.annotateLogs({ body: JSON.stringify(raw.body) })
+            )
+            return yield* Effect.sync(() => raw.ack())
+          }
+
+          const message = decoded.success
+          const disposition = yield* handle(message)
+
+          // Correlated by event id on every line, which is the only way to reassemble one document's
+          // journey from three separate invocations.
+          yield* Effect.logInfo("queue.message.handled").pipe(
+            Effect.annotateLogs({
+              eventId: message.eventId,
+              type: message.type,
+              disposition: disposition._tag,
+              ...(disposition._tag === "Done" ? {} : { reason: disposition.reason })
+            })
           )
-          return yield* Effect.sync(() => raw.ack())
-        }
 
-        const message = decoded.success
-        const disposition = yield* handle(message)
-
-        // Correlated by event id on every line, which is the only way to reassemble one document's
-        // journey from three separate invocations.
-        yield* Effect.logInfo("queue.message.handled").pipe(
-          Effect.annotateLogs({
-            eventId: message.eventId,
-            type: message.type,
-            disposition: disposition._tag,
-            ...(disposition._tag === "Done" ? {} : { reason: disposition.reason })
-          })
-        )
-
-        return yield* Effect.sync(() =>
-          // Terminal is acked: it is recorded, and it would fail identically next time.
-          disposition._tag === "Retry" ? raw.retry() : raw.ack()
-        )
-      }),
-    // Sequential. See the module docstring: six outgoing connections per invocation is the ceiling.
-    { concurrency: 1, discard: true }
-  )
+          return yield* Effect.sync(() =>
+            // Terminal is acked: it is recorded, and it would fail identically next time.
+            disposition._tag === "Retry" ? raw.retry() : raw.ack()
+          )
+        })),
+      // Unbounded here because the SEMAPHORE is the bound. Expressing the limit once, where the reason
+      // lives, beats a number repeated at every call site.
+      { concurrency: "unbounded", discard: true }
+    ))
