@@ -82,6 +82,16 @@ export interface Env {
    * The spans already exist — `Activity`, `effect/sql`, `LanguageModel` and `RpcServer` all create them — so
    * this is the drain, not the instrumentation.
    */
+  /**
+   * The console's origin, when the API is on its own subdomain.
+   *
+   * Set it and three things turn on together — CORS, better-auth's `trustedOrigins`, and the cookie domain —
+   * because a deployment with two of the three produces "login works and then I am logged out", with nothing
+   * in the logs. Absent means same-origin: local `vite dev`, or the Pages Function proxy.
+   */
+  readonly CONSOLE_ORIGIN?: string | undefined
+  /** `.example.com`, when the console and the API are sibling subdomains. */
+  readonly COOKIE_DOMAIN?: string | undefined
   readonly OTLP_ENDPOINT?: string | undefined
   /** `k=v,k=v` auth headers for the OTLP endpoint. A secret. */
   readonly OTLP_HEADERS?: string | undefined

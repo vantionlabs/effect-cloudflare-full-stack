@@ -9,7 +9,22 @@
   // nodejs_compat is on by default from 2026-08-04 but stays explicit to document
   // that node:stream (Duplex.fromWeb) is load-bearing here.
   "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
-  "observability": { "enabled": true },
+  /*
+   * Logs AND traces. `traces` needs its own flag — verified against the docs, which say the top-level
+   * setting "will not enable tracing by default, and will only enable logs". Cloudflare plans to change
+   * that; until it does, `observability.enabled` alone is a Worker with no traces and nothing saying so.
+   *
+   * This matters more here than it would elsewhere: `Activity` wraps every workflow step in a span,
+   * `effect/sql` traces queries and `LanguageModel` traces model calls, so the decide pipeline is fully
+   * instrumented and was producing nothing on the Cloudflare side.
+   *
+   * `head_sampling_rate: 1` in dev because volume is nil and a missing trace while debugging is the
+   * expensive kind of missing. Lower it per environment when traffic justifies it.
+   */
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true, "head_sampling_rate": 1 },
+  },
 
   /*
    * Smart placement, and it is motivated by a measurement rather than by a feeling.
@@ -83,23 +98,25 @@
   // No account id or token needed from inside the Worker: the binding IS the authorisation. The
   // eval harness cannot use a binding, so it reaches the same model over REST with a token.
   /*
-   * The reviewer console, built by `apps/console` and served as static assets.
+   * The console is NOT served here any more — it deploys to Cloudflare Pages (`apps/console/wrangler.jsonc`).
    *
-   * ONE deploy, TWO packages. ADR-0001 keeps a single Worker — one origin, one auth seam, no CORS, assets
-   * served before the Worker runs — and that never required a single package. The console has its own
-   * `tsconfig` with DOM and no workers-types, which is a boundary a package can express and two tsconfigs in
-   * one package could only approximate.
+   * There used to be an `assets` binding pointing at `../console/dist`, and ADR-0001 chose it for one origin,
+   * no CORS and one deploy. The console moved to Pages as a product decision; the same-origin property was
+   * kept rather than traded, by a Pages Function that forwards `/api/*` here over a service binding. So this
+   * Worker now serves only the API, and the browser still only ever talks to one host.
+   *
+   * What changed in practice: two deploys instead of one, and the console can now be rolled back
+   * independently — which is the upside ADR-0001 listed under plan risk R11 as the reason the split was a
+   * pre-approved escape hatch.
    */
-  "assets": { "directory": "../console/dist", "binding": "ASSETS" },
   /*
-   * The read-through cache. `wrangler dev` emulates KV locally, so nothing needs provisioning to develop
-   * or test.
+   * The read-through cache. `wrangler dev` emulates KV locally, so nothing needs provisioning to develop.
    *
    * What lives here is constrained by what KV is: eventually consistent, no atomic primitives, eviction at
-   * the platform's discretion. `shared/domain/Cache/Cache.ts` carries the rule — the key must make
-   * staleness impossible — and the list of things that therefore may NOT be cached, including better-auth
-   * sessions (`secondaryStorage` needs atomic `getAndDelete`/`increment`, so KV would silently break rate
-   * limiting) and the armed auto-approve rule (disarming must be immediate).
+   * the platform's discretion. `shared/domain/Cache/Cache.ts` carries the rule — the key must make staleness
+   * impossible — and the list of what therefore may NOT be cached, including better-auth sessions
+   * (`secondaryStorage` needs atomic `getAndDelete`/`increment`, so KV would silently break rate limiting)
+   * and the armed auto-approve rule (disarming must be immediate).
    *
    * Today it holds exactly one thing: parsed document text, keyed by document id AND parser version.
    */
@@ -149,6 +166,21 @@
   "env": {
     "staging": {
       "vars": { "ENVIRONMENT": "staging" },
+      /*
+       * The API on its own subdomain — the real-world shape.
+       *
+       * `custom_domain: true` makes Cloudflare create and manage the DNS record and the certificate, rather
+       * than requiring a proxied record to exist first. It needs a ZONE: this account has none yet (verified
+       * against the API), so these are commented with the domain to fill in rather than left as a
+       * placeholder that would fail at deploy with a confusing error.
+       *
+       * Activating this means setting CONSOLE_ORIGIN and COOKIE_DOMAIN as well. All three together — a
+       * deployment with two of the three logs a user in and then silently logs them out, because the cookie
+       * is set for a host the browser does not send it to, and nothing errors.
+       */
+      // "routes": [
+      //   { "pattern": "api-staging.example.com", "custom_domain": true },
+      // ],
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "PULUMI_hyperdriveId" },
       ],
@@ -178,6 +210,21 @@
     },
     "production": {
       "vars": { "ENVIRONMENT": "production" },
+      /*
+       * The API on its own subdomain — the real-world shape.
+       *
+       * `custom_domain: true` makes Cloudflare create and manage the DNS record and the certificate, rather
+       * than requiring a proxied record to exist first. It needs a ZONE: this account has none yet (verified
+       * against the API), so these are commented with the domain to fill in rather than left as a
+       * placeholder that would fail at deploy with a confusing error.
+       *
+       * Activating this means setting CONSOLE_ORIGIN and COOKIE_DOMAIN as well. All three together — a
+       * deployment with two of the three logs a user in and then silently logs them out, because the cookie
+       * is set for a host the browser does not send it to, and nothing errors.
+       */
+      // "routes": [
+      //   { "pattern": "api.example.com", "custom_domain": true },
+      // ],
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "PULUMI_hyperdriveId" },
       ],

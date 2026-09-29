@@ -1,0 +1,37 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "effect-ai-console",
+  // `pages_build_output_dir` is what marks this a PAGES project rather than a Worker. Wrangler switches to
+  // Pages-specific validation on seeing it, so this file cannot also declare `main`, `queues` or `hyperdrive`.
+  "pages_build_output_dir": "dist",
+  "compatibility_date": "2026-09-26",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // ───────────────────────────────────────────────────────────────────────────────────────
+  // SAME ORIGIN, ON PAGES.
+  //
+  // The console deploys to Pages, and `/api/*` is forwarded to the Worker over a SERVICE BINDING
+  // by `functions/api/[[path]].ts`. So the browser only ever talks to one origin — the property
+  // ADR-0001 was protecting, preserved rather than traded away.
+  //
+  // Why a proxy and not two origins: this account has ZERO zones (verified against the API), so
+  // there is no custom domain to put both behind. Without one, Pages is `*.pages.dev` and the
+  // Worker is `*.workers.dev` — cross-origin, which would mean a CORS layer, a trusted-origins
+  // list, and `SameSite=None; Secure` cookies. Those are the three settings most likely to be
+  // subtly and silently wrong. A service binding avoids all three for one in-network hop.
+  //
+  // A service binding is Worker-to-Worker inside Cloudflare's network: no public request, no
+  // egress, no token.
+  // ───────────────────────────────────────────────────────────────────────────────────────
+  "services": [
+    { "binding": "API", "service": "effect-ai" },
+  ],
+
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true, "head_sampling_rate": 1 },
+  },
+  // Pages supports ONLY `production` and `preview` as environment names — not arbitrary ones like the
+  // Worker's `staging`. Verified against the docs. `services` is non-inheritable here too, so a future
+  // `env.preview` must repeat it rather than expecting to inherit.
+}

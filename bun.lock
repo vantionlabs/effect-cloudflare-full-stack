@@ -39,6 +39,7 @@
         "@types/react-dom": "^19.3.0",
         "vite": "catalog:",
         "vitest": "catalog:",
+        "wrangler": "catalog:",
       },
     },
     "apps/worker": {

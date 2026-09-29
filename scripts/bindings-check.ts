@@ -218,7 +218,9 @@ const RESOURCE_TO_BINDING: Record<string, string> = {
 const RESOURCE_NEEDS_NO_BINDING: Record<string, string> = {
   AiGateway: "reached through the `ai` binding's gateway option, or a gateway URL — not a binding of its own",
   AiGatewayDynamicRouting: "configuration on a gateway",
-  R2CustomDomain: "configuration on a bucket"
+  R2CustomDomain: "configuration on a bucket",
+  PagesProject: "a separate deploy target, not a binding of the API Worker. Its own bindings live in " +
+    "apps/console/wrangler.jsonc, which `wrangler pages deploy` reads"
 }
 
 /**

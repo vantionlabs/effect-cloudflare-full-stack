@@ -75,10 +75,43 @@ export const authSettings: Effect.Effect<AuthConfig, never, SessionStore> = Effe
   const baseURL = yield* Effect.orDie(
     Config.String("BASE_URL").pipe(Config.withDefault("http://localhost:8799"))
   )
+  /*
+   * The console's origin, when it is a DIFFERENT origin from the API.
+   *
+   * Empty means same-origin, which is local `vite dev` and the Pages-Function-proxy shape. In the real-world
+   * deployment the API is its own subdomain — `api.example.com` serving `app.example.com` — and then this has
+   * to be set, because better-auth rejects a request whose `Origin` is not trusted and that rejection is
+   * correct: an untrusted origin posting credentialed requests is CSRF.
+   *
+   * An explicit allowlist, never a wildcard. `Access-Control-Allow-Origin: *` is invalid with credentials and
+   * browsers refuse the response, so a wildcard here would not be lax — it would simply not work, after
+   * looking like it should.
+   */
+  const consoleOrigin = yield* Effect.orDie(
+    Config.String("CONSOLE_ORIGIN").pipe(Config.withDefault(""))
+  )
+  /*
+   * The cookie's `Domain`, when the console and the API are different SUBDOMAINS of one domain.
+   *
+   * `.example.com` lets `app.example.com` send the session cookie to `api.example.com`, which works because
+   * they are the same *site* — so `SameSite=Lax` still applies and no third-party-cookie blocking is
+   * involved. That distinction is the whole reason a subdomain API is workable where a genuinely
+   * cross-site one is not: `effect-ai.pages.dev` and `effect-ai.workers.dev` are different registrable
+   * domains, and no `Domain` value can bridge them.
+   *
+   * Empty means "host-only cookie", which is correct for same-origin and is the safer default: a `Domain`
+   * cookie is sent to every subdomain, so setting it wider than necessary hands the session to anything
+   * hosted under the domain.
+   */
+  const cookieDomain = yield* Effect.orDie(
+    Config.String("COOKIE_DOMAIN").pipe(Config.withDefault(""))
+  )
   return {
     connectionString: store.connectionString,
     baseURL,
-    secret: Redacted.value(secret)
+    secret: Redacted.value(secret),
+    consoleOrigin: consoleOrigin === "" ? undefined : consoleOrigin,
+    cookieDomain: cookieDomain === "" ? undefined : cookieDomain
   }
 })
 

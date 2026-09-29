@@ -53,28 +53,47 @@ is absent from the 38 keys carrying "not automatically inherited" and sits with 
 
 ---
 
-## 2. The frontend is already on Cloudflare — via Static Assets, not Pages
+## 2. The console is on Pages; the API is its own subdomain
 
-The ask was "including the frontend on CF Pages". It is already on Cloudflare, and **Static Assets is the
-better answer here than Pages**, which is why ADR-0001 chose it:
+Decided 2026-09-29, reversing the single-Worker-with-Assets arrangement. **ADR-0001 carries the reasoning,
+the costs and the revisit triggers** — this section is the operational summary.
 
-- **Cloudflare now directs new projects to Workers, not Pages.** Pages remains supported; Static Assets is
-  where the investment goes. Building onto Pages now would be adopting the path being wound down.
-- **One origin.** `apps/console` is served by the same Worker that serves `/api`. So: no CORS on the
-  first-party path, no cookie-domain configuration, no trusted-origins list — the three settings most
-  likely to be subtly and silently wrong. Pages would make the console a second origin and hand all three
-  back.
-- **Assets are served before the Worker runs**, so static files cost no Worker invocation.
-- **One deploy, one rollback.** A Pages split means the console and the API can disagree about the wire
-  schema, and R11 in `PLAN.md` already tracks the reverse risk.
+|                       |                                                                                                          |
+| --------------------- | -------------------------------------------------------------------------------------------------------- |
+| console               | Cloudflare **Pages** project, `apps/console/wrangler.jsonc`                                              |
+| API                   | the Worker, on `api.<domain>` (routes commented pending a zone)                                          |
+| today, with no domain | Pages Function proxies `/api/*` to the Worker over a **service binding**, so the browser sees one origin |
 
-`apps/console` is nonetheless its own package, with its own `tsconfig` (DOM, no workers-types) and
-kebab-case files. Two packages, one deploy. The `assets` binding points at `../console/dist`.
+**A correction to an earlier claim in this document.** It previously said Cloudflare "directs new projects to
+Workers rather than Pages" and that Static Assets is where the investment goes. That was checked against the
+documentation and **is not supported** — the Pages-to-Workers guide is aimed at existing Pages users and
+states no deprecation; service bindings and `_routes.json` are documented as supported. The claim was mine,
+not Cloudflare's.
 
-**What is genuinely missing is not Pages** — it is that the console has never been run against a live
-Worker. `vite dev` proxying `/api` to `wrangler dev` is unexercised.
+What the docs _do_ say is narrower and still relevant: they recommend against **file-based routing via a
+`functions/` folder**. Our single Function is a three-line proxy with a deletion trigger (ADR-0001), not an
+architecture.
 
----
+**The three cross-origin settings are one switch.** `CONSOLE_ORIGIN`, `COOKIE_DOMAIN` and `VITE_API_ORIGIN`
+are set together or not at all: a deployment with two of the three logs a user in and then silently logs them
+out, with nothing in the logs. Absent means same-origin, which is `vite dev` and the proxy shape.
+
+Two facts that decide the design, both verified rather than assumed:
+
+- **Sibling subdomains are the same _site_.** `app.example.com` and `api.example.com` share a registrable
+  domain, so `Domain=.example.com` works with `SameSite=Lax` — no third-party-cookie territory. This is why a
+  subdomain API is workable where a genuinely cross-site one is not.
+- **`*.pages.dev` and `*.workers.dev` are different registrable domains**, so with no zone no `Domain` value
+  can bridge them. That is the whole reason the proxy exists.
+
+Verified against the docs while building this: `_routes.json` belongs in the **build output** directory
+(`public/` → `dist/` via Vite, so ours lands correctly); Pages supports only `production` and `preview` as
+environment names, not the Worker's `staging`; and `services` is non-inheritable on Pages too.
+
+**Also fixed while checking:** `observability.enabled` enables **logs only** — traces need
+`observability.traces.enabled` separately. Both Workers had logs on and traces off, which mattered because
+`Activity`, `effect/sql` and `LanguageModel` all create spans, so the decide pipeline was fully instrumented
+and reporting nothing to Cloudflare.
 
 ## 3. KV: declared and unwired, then removed, now wired for a different job
 

@@ -183,9 +183,31 @@ const AppLayer = (env: Env) =>
        */
       protocol: "http"
     }),
-    // better-auth's own routes, mounted on the same router so there is one origin and no CORS.
+    // better-auth's own routes, on the same router as the API — they must share an origin with each other
+    // whatever the console does, because the session cookie is set by one and read by the other.
     SessionHttp
   ).pipe(
+    /*
+     * CORS, and ONLY when the console is a different origin.
+     *
+     * `Layer.empty` otherwise, which is the local and proxied shapes — ADR-0001's point was that the settings
+     * you do not have cannot be wrong. When the API is its own subdomain they are unavoidable, so they are
+     * here, narrow:
+     *
+     *   - an explicit origin, never `*`. A wildcard is INVALID with credentials: browsers refuse the response,
+     *     so it would not be permissive, it would be broken while looking permissive.
+     *   - `credentials: true`, because the session is a cookie.
+     *
+     * Note this is a GLOBAL middleware on the router, so it also covers better-auth's mounted routes and the
+     * RPC endpoint. A CORS policy that covered the API but not the login route would fail at exactly the
+     * moment a user tried to sign in.
+     */
+    Layer.provide(
+      env.CONSOLE_ORIGIN === undefined ? Layer.empty : HttpRouter.cors({
+        allowedOrigins: [env.CONSOLE_ORIGIN],
+        credentials: true
+      })
+    ),
     Layer.provide(HealthHttp),
     Layer.provide(IdentityHttp),
     Layer.provide(IntakeHttp),

@@ -168,6 +168,28 @@ const aiGateway = new cloudflare.AiGateway("ai", {
   rateLimitingTechnique: "sliding"
 })
 
+// ─── The console, on Pages ────────────────────────────────────────────────────────────────
+/*
+ * Declared here because the provider HAS it — `PagesProject`, unlike Vectorize. So the project is
+ * reproducible and reviewable rather than a thing somebody made in the dashboard once.
+ *
+ * Deliberately NOT configured with a build command or a git connection. `wrangler pages deploy` uploads a
+ * directory built by our own CI, which keeps one build pipeline instead of two — Pages' own builder would be
+ * a second place the console gets built, with its own Node version and its own cache, and the two would
+ * eventually disagree about a lockfile.
+ *
+ * `productionBranch` is what Pages uses to decide production versus preview, so it has to match the
+ * repository's default branch or every deploy silently lands as a preview.
+ *
+ * The service binding to the API Worker lives in `apps/console/wrangler.jsonc`, not here: `wrangler pages
+ * deploy` reads it from that file at deploy time. Two places would be two sources of truth for one binding.
+ */
+const console_ = new cloudflare.PagesProject("console", {
+  accountId,
+  name: name("console"),
+  productionBranch: "main"
+})
+
 // ─── Outputs ──────────────────────────────────────────────────────────────────────────────
 // Consumed by apps/worker/wrangler.jsonc. `pulumi stack output --json` feeds the deploy
 // workflow, so binding ids are never hand-transcribed.
@@ -201,3 +223,5 @@ export const hyperdriveId = hyperdrive.id
 export const hyperdriveCachedId = hyperdriveCached.id
 export const aiGatewayId = aiGateway.aiGatewayId
 export const cacheNamespaceId = cache.id
+export const consoleProjectName = console_.name
+export const consoleSubdomain = console_.subdomain

@@ -15,9 +15,37 @@ import { FetchHttpClient } from "effect/http"
 import { AtomRpc } from "effect/reactivity"
 import { RpcClient, RpcSerialization } from "effect/rpc"
 
+/**
+ * Where the API lives, and it is a build-time choice rather than a runtime one.
+ *
+ * Three deployment shapes, and the value of this variable is what distinguishes them:
+ *
+ *   unset                       same-origin. `vite dev` proxies `/api` to `wrangler dev`, and on Pages the
+ *                               `functions/api/[[path]].ts` proxy forwards to the Worker over a service
+ *                               binding. No CORS, no cookie domain, nothing to configure.
+ *   `https://api.example.com`   the real-world shape: the API on its own subdomain. Then the Worker needs
+ *                               `CONSOLE_ORIGIN` and `COOKIE_DOMAIN` set too — all three together, because a
+ *                               deployment with two of the three logs in and then silently logs out.
+ *
+ * `import.meta.env` rather than a runtime fetch of configuration: the URL is needed before the first request,
+ * and an app that has to ask where its API is cannot render until it knows.
+ */
+const API_BASE = (import.meta.env["VITE_API_ORIGIN"] as string | undefined) ?? ""
+
 export class Api extends AtomRpc.Service<Api>()("console/Api", {
   group: RpcV1,
-  protocol: RpcClient.layerProtocolHttp({ url: RPC_V1_PATH }).pipe(
+  /*
+   * `credentials: "include"` is NOT set here, and that is deliberate rather than an omission.
+   *
+   * Same-origin sends cookies without it. Cross-origin needs it — and it needs the server's CORS to allow
+   * credentials and name this exact origin, which `Main.ts` does only when `CONSOLE_ORIGIN` is set. Adding it
+   * unconditionally would make the same-origin case send credentials it did not need to declare, and would
+   * hide the fact that the cross-origin case has three coupled settings rather than one.
+   *
+   * When the subdomain shape is activated, this gains a `fetch` wrapper that sets it; the comment is here so
+   * that whoever does it sees the other two settings named.
+   */
+  protocol: RpcClient.layerProtocolHttp({ url: `${API_BASE}${RPC_V1_PATH}` }).pipe(
     // JSON, matching the server. Readable in devtools, which for an internal tool is worth more than bytes.
     Layer.provide(Layer.mergeAll(FetchHttpClient.layer, RpcSerialization.layerJson))
   )

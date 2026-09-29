@@ -24,6 +24,10 @@ export interface AuthConfig {
   readonly connectionString: string
   readonly baseURL: string
   readonly secret: string
+  /** The console's origin when it differs from the API's. Undefined means same-origin. */
+  readonly consoleOrigin?: string | undefined
+  /** `.example.com`, when console and API are sibling subdomains. Undefined means a host-only cookie. */
+  readonly cookieDomain?: string | undefined
 }
 
 /**
@@ -40,9 +44,25 @@ export const makeAuth = (config: AuthConfig) =>
     baseURL: config.baseURL,
     secret: config.secret,
 
-    // Same-origin means no trustedOrigins list, no cookie domain, and no CORS layer — the
-    // three settings most likely to be subtly wrong. CSRF protection stays on.
     emailAndPassword: { enabled: true },
+
+    /*
+     * Cross-origin, only when it actually is.
+     *
+     * Same-origin needs none of this and gets none of it: no trusted-origins list, no cookie domain, no CORS
+     * — the three settings most likely to be subtly wrong, absent rather than defaulted. That is the local
+     * `vite dev` shape and the Pages-proxy shape.
+     *
+     * The real-world shape is an API on its own subdomain (`api.example.com` serving `app.example.com`), and
+     * then all three are required together. They are set from one config each so that a deployment cannot
+     * have two of the three — which is the state that produces "login works and then I am logged out",
+     * because the cookie is set for the wrong host and nothing errors.
+     *
+     * CSRF protection stays on in every shape. `trustedOrigins` is what makes it correct rather than
+     * disabled: the check is "did this credentialed request come from an origin we recognise", and the answer
+     * for an API on its own subdomain is "yes, from the console" — not "stop asking".
+     */
+    ...config.consoleOrigin === undefined ? {} : { trustedOrigins: [config.consoleOrigin] },
 
     plugins: [
       // Organizations are the tenant boundary. better-auth owns `organization`, `member` and
@@ -57,6 +77,19 @@ export const makeAuth = (config: AuthConfig) =>
       // short: revocation should be near-immediate, and membership is re-checked every request
       // regardless (see AuthenticatedLive).
       cookieCache: { enabled: true, maxAge: 60 }
+    },
+
+    ...config.cookieDomain === undefined ? {} : {
+      advanced: {
+        /*
+         * `Domain=.example.com`, so a sibling subdomain can send the session cookie.
+         *
+         * Note what is NOT set: `sameSite: "none"`. Sibling subdomains are the same *site*, so `Lax` still
+         * applies and the cookie survives without opting into third-party-cookie territory — which browsers
+         * are actively restricting and which would make the product depend on a setting being reversed.
+         */
+        crossSubDomainCookies: { enabled: true, domain: config.cookieDomain }
+      }
     }
     // NOT using `secondaryStorage` (better-auth's Redis-style session store), deliberately.
     // Its interface requires ATOMIC operations:

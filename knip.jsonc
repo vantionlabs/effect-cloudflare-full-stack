@@ -26,7 +26,16 @@
     },
     "apps/console": {
       // Vite's entry is index.html; routes are discovered by the router plugin, not imported.
-      "entry": ["index.html", "src/routes/**/*.tsx", "test/**/*.tsx"],
+      //
+      // `functions/**` is Pages' file-based routing: Cloudflare discovers a Function by its PATH, so nothing
+      // imports it and knip is right that it looks dead. Declaring it an entry point is the honest fix — the
+      // alternative, an ignore, would also hide a genuinely dead Function later.
+      "entry": [
+        "index.html",
+        "src/routes/**/*.tsx",
+        "test/**/*.tsx",
+        "functions/**/*.ts",
+      ],
     },
     "evals": {
       // Standalone gates, invoked by package.json scripts rather than imported.
