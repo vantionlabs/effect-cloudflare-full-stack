@@ -24,7 +24,7 @@ import { chunkerLangChain } from "@ea/modules/policy/server/Chunk"
 import { EmbedderDeterministic, EmbedderWorkersAiRest } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
 import { RetrievePolicy } from "@ea/modules/policy/use-cases/Retrieval"
-import { CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
+import { CurrentOrgFromUser, CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
 import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db, migrate } from "@ea/modules/shared/tables/Database"
 import { PgClient } from "@effect/sql-pg"
@@ -113,6 +113,17 @@ const hasWorkersAi = process.env["CLOUDFLARE_ACCOUNT_ID"] !== undefined &&
 const Embedder = hasWorkersAi ? EmbedderWorkersAiRest : EmbedderDeterministic
 
 /**
+ * Read at module scope because `measure` needs it too: it asserts that a `semantic: true` profile
+ * actually produced embeddings, and that check belongs next to the ingest it is checking rather
+ * than in the reporting code, which runs too late to stop a bad number being printed.
+ */
+const profile = await Effect.runPromise(
+  Effect.flatMap(EmbeddingProfile, (value) => Effect.succeed(value)).pipe(
+    Effect.provide(Embedder)
+  ) as Effect.Effect<typeof EmbeddingProfile["Service"], unknown, never>
+)
+
+/**
  * The strategies under comparison.
  *
  * Only the chunker varies: same corpus, same embedder, same store, same SQL function, same gold set.
@@ -137,6 +148,17 @@ const STRATEGIES: ReadonlyArray<{ readonly label: string; readonly layer: Layer.
 const run = <A, E>(chunker: Layer.Layer<Chunker>, effect: Effect.Effect<A, E, any>) =>
   Effect.runPromise(
     effect.pipe(
+      /*
+       * `CurrentOrg` via the bridge rather than provided directly.
+       *
+       * `Db.scoped` requires the TENANT, not the person, so providing only `CurrentUser` failed with
+       * "Service not found: iam/CurrentOrg" — this harness was never updated when the tenancy
+       * requirement was inverted, and nothing noticed because nothing ran it. Deriving it from the
+       * identity rather than passing ORG twice means the two cannot disagree, which is the reason
+       * `CurrentOrgFromUser` exists. It must be provided INSIDE the `CurrentUser` service below,
+       * since that is what it reads.
+       */
+      Effect.provide(CurrentOrgFromUser),
       Effect.provideService(
         CurrentUser,
         new Identity({ userId: UserId.make("eval"), orgId: ORG, email: "eval@example.com", role: "reviewer" })
@@ -214,6 +236,48 @@ const measure = async (
   )
 
   /*
+   * Did the semantic half actually happen?
+   *
+   * This exists because the report lied. Every row printed identical lexical and hybrid recall —
+   * 84.6/84.6, 100/100, 69.2/69.2, 38.5/38.5, 7.7/7.7 — which is not a plausible coincidence across
+   * five chunkers and two depths. Every embedding in the corpus was NULL: the embed calls were
+   * failing, `document_chunks.embedding` is nullable BY DESIGN so a chunk degrades to lexical-only
+   * rather than destroying the audit trail, and RRF over an empty semantic CTE quietly reduces to
+   * lexical ranking. So the gate was measuring lexical retrieval and calling it "what production
+   * delivers".
+   *
+   * The existing guard only covered the case where credentials are ABSENT and the deterministic
+   * embedder is substituted. It could not see the case where the real embedder is selected, claims
+   * `semantic: true`, and then fails on every call — which is the one that actually happened, and the
+   * more dangerous one, because it reports a number instead of a warning.
+   *
+   * This is the product's own thesis applied to its harness: a measurement that cannot fail is not a
+   * measurement, and degraded retrieval that nobody can see is the failure this codebase exists to
+   * refuse. So it throws rather than warns.
+   */
+  const embedded = await run(
+    strategy.layer,
+    Effect.flatMap(Db, (db) =>
+      db.scoped((sql) =>
+        sql<{ total: number; embedded: number }>`
+          select count(*)::int as total, count(embedding)::int as embedded
+            from document_chunks
+           where document_id = ${DOCUMENT_ID}
+        `
+      ))
+  )
+  const counts = embedded[0] ?? { total: 0, embedded: 0 }
+  if (profile.semantic && counts.embedded < counts.total) {
+    throw new Error(
+      `${strategy.label}: the embedder reports semantic=true, but only ${counts.embedded} of ` +
+        `${counts.total} chunks have an embedding.\n` +
+        "RRF over an empty semantic side silently degrades to lexical, so the hybrid column would be " +
+        "a lexical number wearing a semantic label. Refusing to report it.\n" +
+        "Check that CLOUDFLARE_AI_TOKEN is valid and that the Workers AI account has neurons available."
+    )
+  }
+
+  /*
    * How many chunks carry a citable reference.
    *
    * Reported alongside recall because it is the thing recall cannot show. The obligations index
@@ -238,7 +302,14 @@ const measure = async (
         Effect.flatMap(Db, (db) =>
           db.scoped((sql) =>
             sql<{ clause_ref: string | null }>`
-              select clause_ref from retrieve_policy(${query}, null::vector, 'policy', ${limit})
+              -- The organization is the FOURTH argument and the limit the fifth. This call omitted the
+              -- organization entirely until CI ran it: ADR-0014 moved the tenant from a transaction-local
+              -- GUC that current_org() read into an explicit parameter, and this baseline was never
+              -- updated with it. Postgres answered "function retrieve_policy(unknown, vector, unknown,
+              -- integer) does not exist", which reads like a missing migration rather than a wrong
+              -- argument list -- the limit was being offered where the tenant belongs.
+              select clause_ref
+                from retrieve_policy(${query}, null::vector, 'policy', ${ORG}, ${limit})
             `
           ))
       )
@@ -280,12 +351,6 @@ const main = async () => {
         values (${DOCUMENT_ID}, ${ORG}, 'policy', 'inkoopbeleid.md', ${`${ORG}/${DOCUMENT_ID}`}, 'text/markdown')
         on conflict (id) do nothing
       `).pipe(Effect.provide(Pg))
-  )
-
-  const profile = await Effect.runPromise(
-    Effect.flatMap(EmbeddingProfile, (value) => Effect.succeed(value)).pipe(
-      Effect.provide(Embedder)
-    ) as Effect.Effect<typeof EmbeddingProfile["Service"], unknown, never>
   )
 
   console.log(`embedder:  ${profile.modelId} (${profile.dimensions}d, semantic=${profile.semantic})`)

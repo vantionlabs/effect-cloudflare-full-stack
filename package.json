@@ -49,7 +49,7 @@
     "deps:update": "syncpack update",
     "dep:check": "bun scripts/boundaries.ts",
     "hygiene": "bun run knip && bun run deps:check && bun run secrets && bun run dep:check && bun run bindings:check && bun run auth:check",
-    "preflight": "bun run format && bun run check && bun run lint && bun run hygiene && bun run test",
+    "preflight": "bun run format && bun run check && bun run lint && bun run hygiene && bun run test && bun run evals:retrieval",
     "effect:verify": "bun scripts/verify-effect-api.ts",
     "evals": "bun evals/Decisions.ts",
     "evals:rule": "bun evals/CheckRule.ts",
