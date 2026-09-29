@@ -251,8 +251,24 @@ export const makeAuth = (config: AuthConfig) => {
       cookieCache: { enabled: false }
     },
 
-    ...config.cookieDomain === undefined ? {} : {
-      advanced: {
+    advanced: {
+      /*
+       * `Secure` decided by the CANONICAL origin, not by the scheme of the request that arrived.
+       *
+       * better-auth otherwise derives it from the per-request protocol, and behind the Pages Function proxy
+       * that protocol is `http`: a service-binding dispatch is internal to Cloudflare's network, so it
+       * carries no TLS and `request.url` says `http://` even though the browser is on https. The result was
+       * a session cookie served over https with **no `Secure` flag** — verified on the deployed site, which
+       * answered `HttpOnly; SameSite=Lax` and nothing else.
+       *
+       * `baseURL` is the right input because it is what the deployment says it is reachable as: `https://`
+       * for anything deployed, `http://localhost:8799` locally. Deriving from it keeps local development
+       * working — a `Secure` cookie on an http origin is dropped by the browser, which is the same silent
+       * "signed in, then anonymous" failure from the other direction — without trusting a forwarded header,
+       * which would be a header an attacker can also send.
+       */
+      useSecureCookies: config.baseURL.startsWith("https://"),
+      ...config.cookieDomain === undefined ? {} : {
         /*
          * `Domain=.example.com`, so a sibling subdomain can send the session cookie.
          *

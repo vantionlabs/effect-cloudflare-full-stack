@@ -73,6 +73,36 @@ to an empty string and extracts nothing.
 `VITE_API_ORIGIN` is what selects between the two shapes in the console, and it is a build-time value
 because an app that has to ask where its API is cannot render until it knows.
 
+## Verified by execution, and what that found
+
+The interim shape has now been exercised against the deployed site rather than reasoned about. Through
+`https://effect-ai-console-dev.pages.dev`: static assets 200, `/api/v1/health` returns the PlanetScale
+payload (`18.6`, pgvector `0.8.5`, Dutch stemming) proving the service-binding hop, sign-up 200, a
+subsequent `/api/v1/me` returns the identity with a personal organisation and `role: owner`, and `/api/v1/me`
+with no cookie still 401.
+
+Two things only a deployment could reveal, both in the "logs you in and then silently logs you out" family
+this ADR warns about:
+
+**Sign-up returned 403 `INVALID_ORIGIN`.** The claim above that same-origin "needs none of this" was too
+strong. Same-origin means the browser's origin equals the server's `baseURL` — and `BASE_URL` was unset, so
+better-auth defaulted to `http://localhost:8799` while the browser was on `*.pages.dev`. Pages makes this
+worse than a one-line fix: every preview deployment has its own hostname, per hash and per branch, so no
+single string can name the origin. `ALLOWED_HOSTS` now carries the set, via better-auth's dynamic `baseURL`
+config, which derives the trusted-origin list from the same list so the two cannot disagree. This is a
+different concern from the three coupled settings above — which hostnames serve this deployment, not which
+foreign origin to admit — and `CONSOLE_ORIGIN` and `COOKIE_DOMAIN` remain absent.
+
+**The session cookie had no `Secure` flag.** This one is caused by the proxy itself and is the strongest
+argument for deleting it when a domain lands. A service-binding dispatch is internal to Cloudflare's
+network, so it carries no TLS: the Worker sees `http://` in `request.url` even though the browser is on
+https, and better-auth derives cookie security from the per-request protocol. The deployed site answered
+`HttpOnly; SameSite=Lax` and nothing else. `advanced.useSecureCookies` is now set from `baseURL` — the
+canonical origin, https when deployed and http locally — rather than from a forwarded header, which would
+be a header an attacker can also send. Verified: the cookie is now `__Secure-`prefixed with `Secure` set,
+and the local suite still passes over http, which is the other half (a `Secure` cookie on an http origin is
+dropped by the browser, the same silent failure from the other direction).
+
 ## What this costs, stated plainly
 
 - **Two deploys**, and they can disagree. RPC carries domain types rather than a frozen wire schema — that

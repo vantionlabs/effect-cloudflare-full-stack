@@ -14,12 +14,18 @@
  *     in successfully and then be anonymous on the next request.
  *   - **better-auth's `baseURL` and its CSRF origin check** both read the request URL.
  *
- * So there is no rewriting, no header surgery and no `X-Forwarded-*`. The Worker cannot tell it was proxied,
- * which is exactly what makes this equivalent to having been served from one origin.
+ * So there is no rewriting, no header surgery and no `X-Forwarded-*`.
  *
- * **Unverified by execution**, like the AI Gateway URL: a Pages deployment and a service binding to a
- * deployed Worker are both required to exercise it, and neither exists yet. The failure modes are listed
- * above rather than discovered.
+ * **Verified by execution against the deployed site** (see ADR-0001): health, sign-up, `/api/v1/me` with the
+ * resulting cookie, and a 401 without one.
+ *
+ * That verification corrected an earlier claim here, which said the Worker "cannot tell it was proxied".
+ * **It can, from the scheme.** A service-binding dispatch is internal to Cloudflare's network and carries no
+ * TLS, so `request.url` reads `http://` even though the browser is on https. Nothing about the request is
+ * altered by this file — but the hop is not invisible, and one thing did depend on the difference: better-auth
+ * derives cookie security from the per-request protocol, so the session cookie shipped without `Secure`.
+ * It is now set from the canonical `BASE_URL` instead. If anything else is ever made to depend on the request
+ * scheme, this is the reason it will be wrong here and right on a subdomain.
  */
 
 interface Env {
