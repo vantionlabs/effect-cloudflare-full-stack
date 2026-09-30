@@ -76,14 +76,18 @@ import { AgentModel } from "@ea/modules/policy/domain/Ask"
 import { AssistantConversationsAgent } from "@ea/modules/policy/server/Assistant"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
+import { isTerminal } from "@ea/modules/shared/domain/Errors"
 import type { Retrieval } from "@ea/modules/shared/domain/Retrieval"
 import { CacheKv } from "@ea/modules/shared/server/Cache"
 import { EventQueue, QueueBus } from "@ea/modules/shared/server/Event"
 import { IdsUuid } from "@ea/modules/shared/server/Ids"
 import { TelemetryOtlp } from "@ea/modules/shared/server/Telemetry"
+import { describeFailure } from "@ea/modules/shared/use-cases/Event"
 import { SweepEnqueueGap } from "@ea/modules/shared/use-cases/Event"
 import { RealtimeUpgrade, RoomsLive } from "@ea/realtime/Server"
 import anydocWasm from "@firecrawl/anydoc-wasm/anydoc_wasm_bg.wasm"
+import { NonRetryableError } from "cloudflare:workflows"
+import type { Result } from "effect"
 import { Effect, Layer, ManagedRuntime, Redacted } from "effect"
 import { LanguageModel } from "effect/ai"
 import { HttpRouter } from "effect/http"
@@ -98,7 +102,7 @@ import {
 } from "./DecideWorkflow.ts"
 import { AuthenticatedLive } from "./platform/AuthenticatedLive.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
-import { dispatchEvent } from "./platform/DispatchEvent.ts"
+import { dispatchEvent, documentTextFor } from "./platform/DispatchEvent.ts"
 import { ConnectHyperdrive, ReactivityLive } from "./platform/HyperdriveConnect.ts"
 import { consumeBatch, type QueueBatchLike } from "./platform/QueueHandler.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
@@ -463,13 +467,41 @@ const DocumentParserTiers = (wasmModule: unknown) =>
  */
 const decideWork = (env: Env, orgId: string): DecideWork => {
   const runtime = getQueueRuntime(env)
-  const run = <A, R>(effect: Effect.Effect<A, never, R>) =>
+
+  /**
+   * Runs one step's effect, and **translates its typed failure into the platform's retry vocabulary.**
+   *
+   * This is where ADR-0024's hardest loss is paid. A step boundary is a `Promise`, so
+   * `shared/domain/Errors/Terminal.ts`'s terminal-versus-retryable union cannot cross it as a typed channel
+   * — and losing the distinction would be a real regression, because the queue consumer branches on it
+   * today. docket burned three model calls on every deterministic bug for exactly this reason.
+   *
+   * `Effect.result` converts the failure into a value so nothing is lost, and then the SAME `isTerminal`
+   * predicate the queue uses decides which error class to throw:
+   *
+   *   terminal   → `NonRetryableError`, which fails the instance immediately. A `DocumentRowMissing` will
+   *                fail identically on every attempt, so five attempts is five times the cost of one.
+   *   otherwise  → a plain `Error`, which the step's retry policy handles.
+   *
+   * `describeFailure` rather than `failure.message`, and imported rather than rewritten: a
+   * `Schema.TaggedError` is an `Error` whose `.message` is usually EMPTY, so the obvious version records a
+   * blank reason (AGENTS.md records this trap). One definition, shared with the queue path, so the two
+   * cannot describe the same failure differently.
+   */
+  const run = <A, E, R>(effect: Effect.Effect<A, E, R>): Promise<A> =>
     runtime.runPromise(
-      withDatabase(effect).pipe(
-        Effect.provideService(CurrentOrg, OrgId.make(orgId)),
-        Effect.provide(PolicySearchLive)
-      ) as Effect.Effect<A, never, never>
-    )
+      Effect.result(
+        withDatabase(effect).pipe(
+          Effect.provideService(CurrentOrg, OrgId.make(orgId)),
+          Effect.provide(PolicySearchLive)
+        )
+      ) as Effect.Effect<Result.Result<A, E>, never, never>
+    ).then((result) => {
+      if (result._tag === "Success") return result.success
+      const reason = describeFailure(result.failure)
+      throw isTerminal(result.failure) ? new NonRetryableError(reason) : new Error(reason)
+    })
+
   /*
    * The casts are all here, and all in one direction: the module's typed values into the platform's
    * serialised view, and back. `DecideWorkflow.ts` declares that view because `step.do` checks
@@ -478,7 +510,10 @@ const decideWork = (env: Env, orgId: string): DecideWork => {
    */
   return {
     existing: (params) => run(existingDecision(params)),
-    extract: (params) => run(extractStep(params)) as Promise<ExtractedFields>,
+    // The same derivation the queue path runs, so a document parsed by the workflow and one parsed by the
+    // queue are the same bytes — which is what `source_span` is checked against.
+    parse: (params) => run(documentTextFor(params.documentId)),
+    extract: (_params, documentText) => run(extractStep({ documentText })) as Promise<ExtractedFields>,
     retrieve: (_params, query) => run(retrieveStep(query)) as Promise<RetrievedPolicy>,
     decide: (_params, fields, policy) =>
       run(decideStep({ fields, chunks: (policy as unknown as Retrieval).chunks })) as Promise<ProposedValue>,

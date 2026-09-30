@@ -40,22 +40,21 @@ import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep, type Workflo
 import type { Env } from "./platform/Bindings.ts"
 
 /**
- * What the workflow is asked to do, including the tenant.
+ * What the workflow is asked to do — three ids and a tenant, never a document.
  *
- * `orgId` is in the params because a Workflow instance has no session and no event row to read — the queue
+ * `orgId` is in the params because a Workflow instance has no session and no event row to read: the queue
  * resolves the tenant and passes it. Every bound work function takes it, so there is no path that runs a
  * step without one.
  *
- * **`documentText` in the params is a known limit, and it is what blocks the queue flip.** Workflow params
- * are serialized and persisted, and a step's non-stream return is capped at 1 MiB; a scanned document's text
- * can approach that. The fix is for parsing to become the first step — the workflow would take
- * `{ orgId, documentId, vertical }` and read the blob itself, which also memoises the parse. That is the next
- * commit, and this comment is here so the limit is not discovered by a large invoice in production.
+ * **`documentText` used to be here and is not any more**, which is what unblocked the queue flip. Workflow
+ * params are serialized and persisted, and a step's non-stream return is capped at 1 MiB — a scanned
+ * document's text can approach that, so a large invoice would have failed at instance creation. Parsing is
+ * the first step now, which also memoises it: with OCR configured, re-parsing on a retry is a paid API call
+ * rather than 16 ms of wasm.
  */
 export interface DecideParams {
   readonly orgId: string
   readonly documentId: string
-  readonly documentText: string
   readonly vertical: string
 }
 
@@ -68,7 +67,9 @@ export interface DecideParams {
  */
 export interface DecideWork {
   readonly existing: (params: DecideParams) => Promise<DecideResult | undefined>
-  readonly extract: (params: DecideParams) => Promise<ExtractedFields>
+  /** Reads the blob and parses it. The same derivation the queue path used to run inline. */
+  readonly parse: (params: DecideParams) => Promise<string>
+  readonly extract: (params: DecideParams, documentText: string) => Promise<ExtractedFields>
   readonly retrieve: (params: DecideParams, query: string) => Promise<RetrievedPolicy>
   readonly decide: (params: DecideParams, fields: unknown, policy: RetrievedPolicy) => Promise<ProposedValue>
   readonly settle: (
@@ -181,7 +182,21 @@ export const makeDecideWorkflow = (work: (env: Env, orgId: string) => DecideWork
        * `Retrieval` and `ProposedDecision` are `Schema.Class`es, so a replayed step returns a plain object
        * rather than a class instance — which is why nothing downstream of a step may call a method on one.
        */
-      const extraction = await step.do("Extract", RETRIES, () => bound.extract(params)) as ExtractedFields
+      /*
+       * (1) Parse, and it is a step for a reason that only became true with tier 3.
+       *
+       * Reading and converting a document was 16 ms of wasm; with OCR configured it is a paid API call at
+       * about $4 per 1,000 pages. A retry that re-parsed would re-pay for it, which is precisely what a
+       * memoised step exists to prevent — and it is why the text is derived HERE rather than carried in the
+       * params, where a large document would have hit the 1 MiB cap.
+       */
+      const documentText = await step.do("Parse", RETRIES, () => bound.parse(params)) as string
+
+      const extraction = await step.do(
+        "Extract",
+        RETRIES,
+        () => bound.extract(params, documentText)
+      ) as ExtractedFields
       const retrieval = await step.do(
         "Retrieve",
         RETRIES,

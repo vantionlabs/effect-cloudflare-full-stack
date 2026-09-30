@@ -41,7 +41,7 @@ import { PolicySearch } from "@ea/modules/shared/domain/Retrieval"
 import type { Retrieval } from "@ea/modules/shared/domain/Retrieval"
 import { Effect, Schema } from "effect"
 import { LanguageModel } from "effect/ai"
-import { decideKey, type DecidePayloadValue, DecideResult, proposePrompt } from "./DecideContract.ts"
+import { decideKey, DecideResult, proposePrompt } from "./DecideContract.ts"
 import { EmitExecute } from "./EmitExecute.ts"
 
 /**
@@ -183,7 +183,15 @@ export const existingDecision = (payload: { readonly documentId: string; readonl
  * no query should be able to observe.
  */
 export const settleDecision = (options: {
-  readonly payload: DecidePayloadValue
+  /**
+   * Narrowed to the ids it actually uses, and deliberately NOT the whole payload.
+   *
+   * The full `DecidePayloadValue` carries `documentText`, which this function never reads — and the
+   * Cloudflare orchestration does not have it here at all, because the text is a step result rather than a
+   * parameter. Taking the whole payload meant passing `documentText: ""` to satisfy a type, which is a lie
+   * that later reads as truth.
+   */
+  readonly payload: { readonly documentId: string; readonly vertical: string }
   readonly extraction: ExtractOutputValue
   readonly retrieval: Retrieval
   readonly proposal: ProposedDecision

@@ -52,7 +52,7 @@ export type Disposition =
  * reason is blank, which is worse than useless because it looks like the field works. The tag is the part
  * that names the failure class, and the classification in `isTerminal` keys on it too.
  */
-const describe = (failure: unknown): string => {
+export const describeFailure = (failure: unknown): string => {
   if (typeof failure === "object" && failure !== null && "_tag" in failure) {
     const tag = String((failure as { readonly _tag: unknown })._tag)
     const message = failure instanceof Error && failure.message !== "" ? `: ${failure.message}` : ""
@@ -156,7 +156,7 @@ const handle = <R>(
     }
 
     const failure = result.failure
-    const reason = describe(failure)
+    const reason = describeFailure(failure)
 
     if (isTerminal(failure)) {
       // Recorded in the product, not just in a dashboard: `failed` rows are queryable beside the

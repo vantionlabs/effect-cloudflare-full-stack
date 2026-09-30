@@ -32,27 +32,29 @@ afterAll(async () => {
 
 interface Counts {
   readonly existing: number
+  readonly parse: number
   readonly extract: number
   readonly retrieve: number
   readonly decide: number
   readonly settle: number
   readonly sc_existing: number
   readonly sc_extract: number
+  readonly term_parse: number
+  readonly retry_parse: number
 }
 
 const counts = async (): Promise<Counts> => await (await server.fetch("/counts")).json() as Counts
 
 /** Starts an instance and polls until it settles. A fixed wait would either flake or be slow. */
-const runToCompletion = async (short: boolean): Promise<string> => {
-  const query = short ? "?short=1" : ""
+const runToCompletion = async (which?: "short" | "terminal" | "retryable"): Promise<string> => {
+  const query = which === undefined ? "" : `?which=${which}`
   const started = await server.fetch(`/start${query}`, { method: "POST" })
   expect(started.status).toBe(200)
   const { id } = await started.json() as { readonly id: string }
 
-  for (let attempt = 0; attempt < 80; attempt = attempt + 1) {
-    const body = await (await server.fetch(`/status?id=${id}${short ? "&short=1" : ""}`)).json() as {
-      readonly status: string
-    }
+  const suffix = which === undefined ? "" : `&which=${which}`
+  for (let attempt = 0; attempt < 120; attempt = attempt + 1) {
+    const body = await (await server.fetch(`/status?id=${id}${suffix}`)).json() as { readonly status: string }
     if (["complete", "errored", "terminated"].includes(body.status)) return body.status
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
@@ -63,7 +65,7 @@ describe("the decide orchestration", () => {
   let observed: Counts
 
   beforeAll(async () => {
-    expect(await runToCompletion(false)).toBe("complete")
+    expect(await runToCompletion()).toBe("complete")
     observed = await counts()
   }, 120_000)
 
@@ -71,9 +73,10 @@ describe("the decide orchestration", () => {
     /*
      * The assertion the whole migration rests on. `settle` throws on its first attempt — it is deliberately
      * NOT a `step.do` — so the instance retries and `run()` re-executes from the top. Extraction is the
-     * expensive call (~€0.05); a second one here would mean the memo is not protecting it and
-     * `WorkflowEnginePg` could not be deleted.
+     * expensive call (~€0.05), and with tier 3 configured `Parse` is a paid OCR call too; a second one here
+     * would mean the memo is not protecting them and `WorkflowEnginePg` could not be deleted.
      */
+    expect(observed.parse).toBe(1)
     expect(observed.extract).toBe(1)
     expect(observed.retrieve).toBe(1)
     expect(observed.decide).toBe(1)
@@ -106,9 +109,34 @@ describe("the short circuit", () => {
      * entering the pipeline. The fixture's `extract` THROWS on this path, so if the early return were ever
      * removed this test would fail loudly rather than quietly costing a model call per redelivery.
      */
-    expect(await runToCompletion(true)).toBe("complete")
+    expect(await runToCompletion("short")).toBe("complete")
     const observed = await counts()
     expect(observed.sc_existing).toBe(1)
     expect(observed.sc_extract).toBe(0)
   }, 120_000)
+})
+
+describe("the terminal-versus-retryable classification", () => {
+  /*
+   * ADR-0024's hardest loss, and the proof it was actually paid for rather than dropped.
+   *
+   * A step boundary is a `Promise`, so `Terminal.ts`'s typed union cannot cross it. `Main.ts` translates it
+   * instead: the same `isTerminal` predicate the queue consumer uses decides whether to throw
+   * `NonRetryableError` or a plain `Error`. If that translation were missing, everything would look
+   * retryable and a `DocumentRowMissing` would cost five model-free-but-not-free attempts per document —
+   * which is the mistake docket made and paid three model calls for on every deterministic bug.
+   */
+  it("attempts a terminal failure exactly once", async () => {
+    expect(await runToCompletion("terminal")).toBe("errored")
+    expect((await counts()).term_parse).toBe(1)
+  }, 120_000)
+
+  it("retries a transient failure, which is what makes the contrast meaningful", async () => {
+    /*
+     * The control. Without this, "attempted once" would be indistinguishable from "nothing ever retries",
+     * and the assertion above would prove nothing about the classification.
+     */
+    expect(await runToCompletion("retryable")).toBe("errored")
+    expect((await counts()).retry_parse).toBeGreaterThan(1)
+  }, 180_000)
 })

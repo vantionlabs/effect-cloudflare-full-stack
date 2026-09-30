@@ -14,12 +14,16 @@
  * Counts live in KV rather than module state because a retry may land in a different isolate, and a counter
  * that silently reset would make a memo look like it worked. Same reasoning as the workflow probe beside it.
  */
+import { NonRetryableError } from "cloudflare:workflows"
 import { makeDecideWorkflow } from "../../../src/DecideWorkflow.ts"
 
 interface ProbeEnv {
   readonly DECIDE: Workflow
   /** The same orchestration whose short circuit fires, so the early return is observable. */
   readonly SHORT: Workflow
+  /** The same orchestration whose `Parse` step fails terminally, and retryably. */
+  readonly TERMINAL: Workflow
+  readonly RETRYABLE: Workflow
   readonly COUNTS: KVNamespace
 }
 
@@ -42,6 +46,10 @@ const work = (env: ProbeEnv) => ({
   existing: async () => {
     await bump(env.COUNTS, "existing")
     return undefined
+  },
+  parse: async () => {
+    await bump(env.COUNTS, "parse")
+    return "FACTUUR\nACME\nTotaal: EUR 100,00"
   },
   extract: async () => {
     await bump(env.COUNTS, "extract")
@@ -100,33 +108,92 @@ const shortCircuitWork = (env: ProbeEnv) => ({
   }
 })
 
-// Two classes over one orchestration, because a Workflow's behaviour is only observable through an instance.
+/**
+ * A binding whose `Parse` step fails the way a TERMINAL failure is translated.
+ *
+ * `Main.ts` maps `isTerminal(failure)` to `NonRetryableError`, which is how ADR-0024's typed
+ * terminal-versus-retryable channel survives a step boundary that is only a `Promise`. This proves the
+ * platform honours it: a terminal failure must be attempted ONCE, not five times, because a
+ * `DocumentRowMissing` fails identically on every attempt and five attempts is five times the cost.
+ */
+const terminalWork = (env: ProbeEnv) => ({
+  ...work(env),
+  existing: async () => {
+    await bump(env.COUNTS, "term_existing")
+    return undefined
+  },
+  parse: async () => {
+    await bump(env.COUNTS, "term_parse")
+    throw new NonRetryableError("DocumentRowMissing: doc_probe")
+  }
+})
+
+/**
+ * A binding whose `Parse` step fails RETRYABLY, as the contrast.
+ *
+ * The same failure thrown as a plain `Error` must be retried under the step's policy — otherwise the
+ * classification would be indistinguishable from "nothing retries", and the `NonRetryableError` assertion
+ * above would prove nothing.
+ */
+const retryableWork = (env: ProbeEnv) => ({
+  ...work(env),
+  existing: async () => {
+    await bump(env.COUNTS, "retry_existing")
+    return undefined
+  },
+  parse: async () => {
+    await bump(env.COUNTS, "retry_parse")
+    throw new Error("a transient parse failure")
+  }
+})
+
+// Four classes over one orchestration, because a Workflow's behaviour is only observable through an instance.
 export const DecideWorkflow = makeDecideWorkflow(work as never)
 export const ShortCircuitWorkflow = makeDecideWorkflow(shortCircuitWork as never)
+export const TerminalWorkflow = makeDecideWorkflow(terminalWork as never)
+export const RetryableWorkflow = makeDecideWorkflow(retryableWork as never)
 
 const PARAMS = {
   orgId: "org_probe",
   documentId: "doc_probe",
-  documentText: "FACTUUR\nACME\nTotaal: EUR 100,00",
   vertical: "invoice"
 }
 
 export default {
   async fetch(request: Request, env: ProbeEnv): Promise<Response> {
     const url = new URL(request.url)
+    const bindingFor = (which: string | null): Workflow =>
+      which === "short"
+        ? env.SHORT
+        : which === "terminal"
+        ? env.TERMINAL
+        : which === "retryable"
+        ? env.RETRYABLE
+        : env.DECIDE
+
     if (url.pathname === "/start") {
-      const binding = url.searchParams.get("short") === "1" ? env.SHORT : env.DECIDE
-      const instance = await binding.create({ params: PARAMS })
+      const instance = await bindingFor(url.searchParams.get("which")).create({ params: PARAMS })
       return Response.json({ id: instance.id })
     }
     if (url.pathname === "/status") {
-      const id = url.searchParams.get("id")!
-      const binding = url.searchParams.get("short") === "1" ? env.SHORT : env.DECIDE
-      const instance = await binding.get(id)
+      const instance = await bindingFor(url.searchParams.get("which")).get(url.searchParams.get("id")!)
       return Response.json(await instance.status())
     }
     if (url.pathname === "/counts") {
-      const keys = ["existing", "extract", "retrieve", "decide", "settle", "sc_existing", "sc_extract"]
+      const keys = [
+        "existing",
+        "parse",
+        "extract",
+        "retrieve",
+        "decide",
+        "settle",
+        "sc_existing",
+        "sc_extract",
+        "term_existing",
+        "term_parse",
+        "retry_existing",
+        "retry_parse"
+      ]
       const entries = await Promise.all(
         keys.map(async (key) => [key, Number((await env.COUNTS.get(key)) ?? "0")] as const)
       )

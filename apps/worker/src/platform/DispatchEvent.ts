@@ -82,7 +82,15 @@ const ExecutePayload = Schema.Struct({
  * A missing blob is a **terminal** failure: the document is gone, and no retry brings it back.
  */
 
-const documentTextFor = (documentId: string) =>
+/*
+ * Exported so the Cloudflare Workflow's `Parse` step runs the SAME derivation the queue path runs.
+ *
+ * It stays in `apps/worker` rather than moving to a slice, and that is a boundary decision rather than
+ * laziness: it needs `Blobs` and `DocumentParser` (intake's ports) and fails with `DocumentRowMissing` and
+ * `DocumentBlobMissing` (decision's errors), so any slice it moved into would have to import another
+ * slice's domain. The app is the one place allowed to name both.
+ */
+export const documentTextFor = (documentId: string) =>
   Effect.gen(function*() {
     const db = yield* Db
     const blobs = yield* Blobs

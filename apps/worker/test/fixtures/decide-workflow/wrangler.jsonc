@@ -7,6 +7,8 @@
   "workflows": [
     { "name": "decide-probe", "binding": "DECIDE", "class_name": "DecideWorkflow" },
     { "name": "short-circuit-probe", "binding": "SHORT", "class_name": "ShortCircuitWorkflow" },
+    { "name": "terminal-probe", "binding": "TERMINAL", "class_name": "TerminalWorkflow" },
+    { "name": "retryable-probe", "binding": "RETRYABLE", "class_name": "RetryableWorkflow" },
   ],
   "kv_namespaces": [
     // Local-only: the id is never resolved because this Worker is never deployed.
