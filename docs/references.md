@@ -188,6 +188,43 @@ Four rules constrain the migration, all from
 **Default retry behaviour is not documented**, so the probe sets retries explicitly. A test that depended on an
 undocumented default would be measuring the wrong thing.
 
+### Neuron economics: the retrieval gate is nearly free, the decision eval is not
+
+Measured 2026-09-30 by summing `usage_metadata.neurons` across the AI Gateway's entire log history (178
+entries) — so these are observed costs on this account, not catalogue arithmetic.
+
+| Model                                      | Calls | Uncached | Neurons (total) | Per uncached call |
+| ------------------------------------------ | ----- | -------- | --------------- | ----------------- |
+| `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | 126   | 25       | **1,185.82**    | ≈ **47**          |
+| `@cf/baai/bge-m3` (embeddings)             | 52    | 4        | **0.05**        | ≈ **0.02**        |
+
+Overall cache hit rate: **83.7%**. A cached entry reports `cost: 0` and `latency: 0`.
+
+**This corrects a claim that had been repeated in `AGENTS.md` and `docs/services.md`:** that the retrieval
+gate could not pass because the Workers AI account had no neurons. `evals/RetrievalRecall.ts` **imports no
+language model at all** — only `EmbedderWorkersAiRest` — so a full run costs a fraction of a neuron. It was
+run on 2026-09-30 and passed:
+
+```
+heading (ours)  k=3   lexical 84.6%   hybrid 100.0%   MRR 0.722
+langchain 150   k=3   lexical 84.6%   hybrid 100.0%   MRR 0.694
+langchain 300   k=3   lexical 76.9%   hybrid  84.6%   MRR 0.708
+langchain 600   k=3   lexical 38.5%   hybrid  38.5%   MRR 0.333
+langchain 1200  k=3   lexical  7.7%   hybrid   7.7%   MRR 0.083
+```
+
+So **retrieval quality is now a known number** rather than an assumption, and ADR-0023's claim that the
+LangChain splitter is kept "to lose an eval" is measured: it ties at 150 and degrades sharply above it,
+because a 600- or 1200-character chunk stops aligning with an article boundary.
+
+**What is actually expensive is `bun run evals`**, the decision eval, at several language-model calls per
+case. At ~47 neurons an uncached call, a 99-case run does exceed a day's 10,000 allocation — which is the
+claim that was true and that got generalised to the wrong command. The gateway's 1-hour cache makes a
+_repeat_ of an identical run free, but not the first one.
+
+A caveat on these figures: only calls that go **through the gateway** are logged, so anything that bypassed
+it before 2026-09-30 is not counted. The per-call rates are what to reuse, not the totals.
+
 ### The AI Gateway `effect-ai-ai-dev` exists and is carrying traffic — checked against the account
 
 Checked 2026-09-30 via the `cf-ai-gateway` MCP server (`list_gateways`, `list_logs`). **This row exists

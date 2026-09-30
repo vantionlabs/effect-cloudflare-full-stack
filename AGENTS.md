@@ -178,12 +178,21 @@ the app role cannot discover that production does not.
 So a column like `rails_fired` breaks precisely when it is empty — the happy path breaks and the unhappy
 path works. Use `textArray(sql, values)`.
 
-**`bun run preflight` does NOT include the retrieval gate, on purpose.**
-`bun run evals:retrieval` is a separate command because it needs Workers AI credentials and real embedding
-calls, and CI runs it conditionally on `CLOUDFLARE_AI_TOKEN` with a loud warning when skipped. Putting it
-inside `preflight` made `preflight` permanently red while the Workers AI account has no neurons — a gate
-nobody can pass stops being read. Run it deliberately, and treat a failure as a retrieval-quality finding
-rather than a broken build.
+**`bun run preflight` does NOT include the retrieval gate — and the reason written here was wrong.**
+`bun run evals:retrieval` is a separate command because it needs Workers AI credentials, real embedding calls
+**and the compose Postgres**, and CI runs it conditionally on `CLOUDFLARE_AI_TOKEN` with a loud warning when
+skipped. Run it deliberately, and treat a failure as a retrieval-quality finding rather than a broken build.
+
+This note used to say it was excluded because "the Workers AI account has no neurons — a gate nobody can pass
+stops being read". **Measured 2026-09-30: the retrieval gate is nearly free and it passes.** It imports no
+language model at all — only `EmbedderWorkersAiRest` — and `@cf/baai/bge-m3` costs **0.02 neurons a call**:
+52 embedder calls across the gateway's whole history total **0.05 neurons**, against a 10,000/day allocation.
+It ran clean on the gold set: **lexical 84.6%, hybrid 100.0% at k=3**, beating or matching the LangChain
+splitter at every chunk size and beating it badly above 150.
+
+What IS expensive is `bun run evals`, the decision eval, which makes several language-model calls per case at
+roughly **47 neurons an uncached call**. Conflating the two made a cheap gate look unpassable and left
+retrieval quality unmeasured for longer than it needed to be. Numbers and dates in `docs/references.md`.
 
 **`preflight` does not include `test:e2e` either**, for the related reason that it needs a running Postgres
 container and a Cloudflare token — `preflight` should stay runnable on a laptop with nothing started. Run it
