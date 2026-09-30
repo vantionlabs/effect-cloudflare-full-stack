@@ -9,10 +9,11 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "effect": "catalog:",
-    "uuid": "^14.0.2",
+    "@ea/database": "workspace:*",
     "@ea/domain": "workspace:*",
-    "@ea/database": "workspace:*"
+    "@firecrawl/anydoc-wasm": "0.2.4",
+    "effect": "catalog:",
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@effect/sql-pg": "catalog:",

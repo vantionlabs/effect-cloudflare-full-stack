@@ -47,6 +47,14 @@ import { HealthHttp } from "@ea/api/v1"
 import { IdentityResolverLive, SessionHttp, SessionRpcLive, SessionStore } from "@ea/better-auth/Session"
 import { Db } from "@ea/database/Database"
 import { withDatabase } from "@ea/database/Database"
+/*
+ * The tier-2 parser's WebAssembly module.
+ *
+ * Imported HERE and nowhere else, because a `.wasm` import is resolved and compiled by the bundler — so it
+ * is a platform artifact, and `packages/modules` compiles with `types: []` exactly so those cannot be
+ * ambient there. wrangler compiles it at build time, which is why the adapter's `initSync` costs about a
+ * millisecond rather than the hundreds a runtime compile would.
+ */
 import { CurrentOrg, OrgId } from "@ea/domain/Identity"
 import type { ProposedDecision } from "@ea/modules/decision/domain/Decision"
 import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
@@ -61,8 +69,8 @@ import {
   retrieveStep,
   settleDecision
 } from "@ea/modules/decision/use-cases/Decision"
-import { DocumentParserText } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
+import { DocumentParserAnydoc } from "@ea/modules/intake/server/Document"
 import { AgentModel } from "@ea/modules/policy/domain/Ask"
 import { AssistantConversationsAgent } from "@ea/modules/policy/server/Assistant"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
@@ -74,6 +82,7 @@ import { IdsUuid } from "@ea/modules/shared/server/Ids"
 import { TelemetryOtlp } from "@ea/modules/shared/server/Telemetry"
 import { SweepEnqueueGap } from "@ea/modules/shared/use-cases/Event"
 import { RealtimeUpgrade, RoomsLive } from "@ea/realtime/Server"
+import anydocWasm from "@firecrawl/anydoc-wasm/anydoc_wasm_bg.wasm"
 import { Effect, Layer, ManagedRuntime, Redacted } from "effect"
 import { LanguageModel } from "effect/ai"
 import { HttpRouter } from "effect/http"
@@ -129,7 +138,15 @@ const ServicesLayer = (env: Env) =>
     // Stateless adapters. Only the SQL connection and better-auth's pool are per-request, and both are
     // acquired inside a request scope.
     ConnectHyperdrive,
-    DocumentParserText,
+    /*
+     * Tier 2, replacing the text-only parser: Office formats and text-layer PDFs, converted in-Worker.
+     *
+     * Tier 1 is not gone — `DocumentParserAnydoc` tries `parseText` first and falls through, so a markdown
+     * fixture never reaches the wasm and the eval harness stays on exactly the path it was on. What changed
+     * is that a `.docx` no longer returns `UnsupportedDocument`, which was the gap that made the pipeline
+     * undemonstrable on a real client's documents.
+     */
+    DocumentParserAnydoc(anydocWasm),
     IdsUuid,
     BlobsR2,
     QueueBus,

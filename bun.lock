@@ -70,6 +70,7 @@
         "@ea/modules": "workspace:*",
         "@ea/realtime": "workspace:*",
         "@effect/sql-pg": "catalog:",
+        "@firecrawl/anydoc-wasm": "0.2.4",
         "agents": "^0.24.0",
         "effect": "catalog:",
       },
@@ -170,6 +171,7 @@
       "dependencies": {
         "@ea/database": "workspace:*",
         "@ea/domain": "workspace:*",
+        "@firecrawl/anydoc-wasm": "0.2.4",
         "effect": "catalog:",
         "uuid": "^14.0.2",
       },
@@ -474,6 +476,8 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.28.1", "", { "os": "win32", "cpu": "ia32" }, "sha512-zvb/mB2bSCoJOpoCBgYKKpX6YM6mJBlBUVUtVj41DlZJVEB6/0CKlRYxP5wWl1C1ILiCoAU5wZZ4q1P3qeS6Eg=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.28.1", "", { "os": "win32", "cpu": "x64" }, "sha512-bm4Mowrv+GXMlpWX++EcXw/iLyd1o3+bJkC2DkWXYVvgZCqD/bSj9ctZeAMC3cIxgjRVR2Dufaiu4YPxr5gW1A=="],
+
+    "@firecrawl/anydoc-wasm": ["@firecrawl/anydoc-wasm@0.2.4", "", {}, "sha512-ZqrTXBrwi1Ct4kB5R72KQC9fOxwq4W08bZh6T+o84Mork3xCKLpH8TRe+KM3vJ+XqRVlV1dxHvQp0cnkO2r5TQ=="],
 
     "@floating-ui/core": ["@floating-ui/core@1.8.0", "", { "dependencies": { "@floating-ui/utils": "^0.2.12" } }, "sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ=="],
 

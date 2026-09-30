@@ -1,12 +1,25 @@
 /**
  * The parsing seam, and its text implementation.
  *
- * One port, three planned adapters:
+ * One port, three tiers:
  *
- *   `.md` / `.txt`        → `TextParser` below. Native, free, no platform needed.
- *   Office / text PDF     → Firecrawl `anydoc` WASM, in-Worker (~4.7 ms median)  [slice 1.5]
- *   Scanned PDF           → Mistral OCR, EU-resident, with bounding boxes        [slice 2]
+ *   `.md` / `.txt`        → `parseText` below. Native, free, no platform needed.              [built]
+ *   Office / text PDF     → `DocumentParserAnydoc` in `intake/server`, wasm in-Worker         [built]
+ *   Scanned PDF           → Mistral OCR, EU-resident, with bounding boxes                     [tier 3]
  *   anything else         → `UnsupportedDocument`
+ *
+ * Tier 2 landed 2026-09-30 and **subsumes tier 1 rather than replacing it**: the anydoc adapter tries
+ * `parseText` first and falls through, because anydoc's twelve formats do not include `.md` or `.txt`. So a
+ * markdown fixture never reaches the wasm, and the eval harness stays on exactly the path it was on.
+ *
+ * Measured in `workerd`, not estimated: the module initialises in ~1 ms (wrangler compiles the wasm at
+ * build time), a `.docx` converts in ~16 ms cold and under 1 ms warm, and the 6.38 MiB module takes the
+ * Worker bundle to 16.4 MiB of a 64 MiB limit.
+ *
+ * **A recognised format with no text is a refusal, not an empty document.** That is the scanned-PDF case:
+ * anydoc identifies `pdf` and extracts nothing, and returning an empty `ParsedDocument` would send a blank
+ * string into extraction — the model would answer from nothing while every span trivially failed to verify.
+ * Tier 3 is what turns that refusal into an answer.
  *
  * A parser's output **defines the verbatim contract**: `source_span` is checked against exactly
  * these bytes, so swapping or upgrading a parser changes what verifies. That makes a parser

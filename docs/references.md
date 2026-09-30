@@ -225,6 +225,50 @@ _repeat_ of an identical run free, but not the first one.
 A caveat on these figures: only calls that go **through the gateway** are logged, so anything that bypassed
 it before 2026-09-30 is not counted. The per-call rates are what to reuse, not the totals.
 
+### `anydoc` runs in `workerd` — verified by execution, plus a package-name trap
+
+Checked 2026-09-30 by building `apps/worker/test/fixtures/anydoc/` and running it under `createTestHarness`.
+The plan asserted that anydoc "already ships a WebAssembly build, which is the only version worth having";
+that is true, and it is not the package you get by guessing.
+
+**The name matters.** `npm view anydoc` returns an unrelated package described as a _"node web server"_.
+The real one is **`@firecrawl/anydoc`** — and that ships **native N-API binaries** (`darwin-arm64`,
+`linux-x64-gnu`, …) with `engines: node >= 20`, which cannot run on `workerd`. The WASM build is a THIRD
+package, **`@firecrawl/anydoc-wasm`**, which is not an optional dependency of the other one and does not
+appear in its metadata. Two wrong choices are one keystroke away from the right one.
+
+| Fact              | Value                                                                                        |
+| ----------------- | -------------------------------------------------------------------------------------------- |
+| Package           | `@firecrawl/anydoc-wasm`, pinned **exactly** at `0.2.4` (MIT)                                |
+| Dependencies      | **none**, and no Node builtins — a wasm-bindgen web target, so nothing needs shimming        |
+| Size              | 6.38 MiB raw, 2.79 MiB gzipped; 6 files                                                      |
+| Formats           | `doc docx odt pdf ppt pptx rtf epub xlsx ods odp csv` — **no `.md`/`.txt`**, so tier 1 stays |
+| Init in `workerd` | **~1 ms** via `initSync({ module })`                                                         |
+| Init in Node      | ~15 ms, because the compile happens at runtime there                                         |
+| Parse `.docx`     | ~16 ms cold, <1 ms warm                                                                      |
+| Worker bundle     | 16.4 MiB uncompressed with it, of a **64 MiB** limit                                         |
+
+**`initSync` is the only usable entry point.** wasm-bindgen's default `init()` does
+`fetch(new URL('anydoc_wasm_bg.wasm', import.meta.url))`, which has no meaning in a Worker. `initSync` takes
+a `WebAssembly.Module`, which is exactly what wrangler hands you for a `.wasm` import — and because wrangler
+compiles it at BUILD time, initialisation is ~1 ms rather than the hundreds a runtime compile would cost.
+
+**`formatFromBytes` returns undefined for text formats.** A `.csv` has no magic bytes and is
+indistinguishable from plain text, so the filename extension is a required fallback, not a convenience.
+Sniffing is still tried first, because a container format like `.docx` is identifiable without trusting an
+uploaded filename.
+
+### Worker size limits: the compressed caps were removed on 2026-09-04
+
+Checked 2026-09-30. The 3 MB (Free) / 10 MB (Paid) **compressed** limits are gone; Cloudflare now checks
+only the **uncompressed** bundle, at **64 MiB across all plans**. This is what makes a 6.38 MiB wasm module
+viable, and it is why the plan's "the 64 MiB bundle limit makes size a non-issue" is correct rather than
+optimistic — verified rather than assumed, because it was written before the change.
+
+What replaces it as the real constraint is **startup time: 1 second** for a Worker's global scope. So a
+large module is initialised lazily inside a handler, even though the measured cost here (~1 ms) means the
+budget is not actually at risk.
+
 ### The AI Gateway `effect-ai-ai-dev` exists and is carrying traffic — checked against the account
 
 Checked 2026-09-30 via the `cf-ai-gateway` MCP server (`list_gateways`, `list_logs`). **This row exists

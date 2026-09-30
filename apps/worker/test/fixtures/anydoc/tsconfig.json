@@ -1,0 +1,14 @@
+{
+  /*
+   * Worker source under `test/`, so it needs `@cloudflare/workers-types` — which
+   * `apps/worker/tsconfig.test.json` excludes because workers-types declares a second global `Response`.
+   * Same split as the fixtures beside it.
+   */
+  "extends": "../../../../../tsconfig.base.json",
+  "include": ["**/*.ts", "wasm.d.ts"],
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["@cloudflare/workers-types"]
+  }
+}

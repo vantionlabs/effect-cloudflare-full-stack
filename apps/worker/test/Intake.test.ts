@@ -7,6 +7,7 @@
  */
 import { UnsupportedDocumentV1, UploadAcceptedV1 } from "@ea/modules/intake/domain/Intake"
 import { Schema } from "effect"
+import { readFileSync } from "node:fs"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { type Harness, startHarness } from "./Harness.ts"
 
@@ -84,11 +85,45 @@ describe("POST /api/v1/intakes", () => {
     expect(response.status).toBe(202)
   })
 
+  it("accepts a .docx, which tier 2 made possible", async () => {
+    /*
+     * The gap this closes. Until `DocumentParserAnydoc` was wired, the pipeline could only decide documents
+     * someone handed it as markdown — fine for evals and useless for a client, since real SME invoices
+     * arrive as Office files and scans. This is the same fixture `AnydocParser.test.ts` converts, going
+     * through the real upload endpoint instead of a probe.
+     */
+    const { cookie } = await harness.signedInWithOrg()
+    const bytes = new Uint8Array(
+      readFileSync(new URL("./fixtures/anydoc/invoice.docx", import.meta.url).pathname)
+    )
+
+    const response = await upload({
+      bytes,
+      filename: "invoice.docx",
+      contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      cookie
+    })
+
+    // Read the body ONCE: passing `await response.text()` as the assertion message consumes it, and the
+    // decode below then fails with "Body is unusable" instead of whatever actually went wrong.
+    const body = await response.text()
+    expect(response.status, body).toBe(202)
+    const accepted = Schema.decodeUnknownSync(UploadAcceptedV1)(JSON.parse(body))
+    expect(accepted.intake_id).toBeTruthy()
+  })
+
   it("refuses a PDF with 415 and names what is supported", async () => {
+    /*
+     * Still a refusal, and for a DIFFERENT reason since tier 2 landed. anydoc now RECOGNISES `pdf`, so this
+     * no longer fails at format detection — it fails because there is no text layer to extract, and the
+     * adapter treats an empty conversion as a refusal rather than an empty document. That distinction is
+     * the whole point: a blank string reaching extraction would let the model answer from nothing while
+     * every span trivially failed to verify. Tier 3 (OCR) is what turns this into an answer.
+     */
     const { cookie } = await harness.signedInWithOrg()
 
     const response = await upload({
-      // A real PDF header, so this is a refusal by *format* rather than by unreadable bytes.
+      // A real PDF header, so this is a refusal by *content* rather than by unreadable bytes.
       bytes: "%PDF-1.7\n%âãÏÓ\n",
       filename: "scan.pdf",
       contentType: "application/pdf",

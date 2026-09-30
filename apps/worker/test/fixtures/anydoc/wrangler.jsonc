@@ -1,0 +1,7 @@
+{
+  // A probe, not a deployment. See index.ts for the two things it is testing.
+  "name": "anydoc-probe",
+  "main": "index.ts",
+  "compatibility_date": "2026-09-26",
+  "compatibility_flags": ["nodejs_compat"],
+}

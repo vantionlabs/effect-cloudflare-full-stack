@@ -33,6 +33,7 @@ import { WorkflowEnginePg } from "@ea/modules/decision/server/Workflow"
 import { DecideDocumentLayer, DecideDocumentWorkflow } from "@ea/modules/decision/use-cases/Decision"
 import { ExecuteDecision } from "@ea/modules/decision/use-cases/Execution"
 import { Blobs, DocumentParser } from "@ea/modules/intake/domain/Document"
+import { ANYDOC_PARSER_VERSION } from "@ea/modules/intake/server/Document"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
 import { readThrough } from "@ea/modules/shared/domain/Cache"
 import type { QueueMessage } from "@ea/modules/shared/domain/Event"
@@ -120,7 +121,12 @@ const documentTextFor = (documentId: string) =>
  * parse. The decide path is the hottest thing in the product and this is the only part of it that repeats
  * identical work.
  */
-const PARSER_VERSION = "text-1"
+/*
+ * Imported rather than restated. The version describes the PARSER, so it belongs with the parser — this
+ * constant read "text-1" while the parser was being replaced by tier 2, and nothing in the build would have
+ * noticed the key describing a parser that no longer ran.
+ */
+const PARSER_VERSION = ANYDOC_PARSER_VERSION
 const documentTextKey = (documentId: string) => `doc:${PARSER_VERSION}:${documentId}`
 
 /** One hour. Long enough to cover a redelivery storm, short enough that a stale entry costs nothing. */
