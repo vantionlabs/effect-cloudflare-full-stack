@@ -14,10 +14,10 @@
  * everybody — the worst possible version of this bug, because it would work correctly in a single-tenant test.
  */
 import { AskRpcs } from "@ea/modules/policy/domain/Ask"
-import { AskCorpus, AskToolkitLive } from "@ea/modules/policy/use-cases/Ask"
+import { AskCorpus, AskCorpusStream, AskToolkitLive } from "@ea/modules/policy/use-cases/Ask"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
-import { Effect, Layer } from "effect"
-import { serveForTenant } from "../Serve.ts"
+import { Effect, Layer, Stream } from "effect"
+import { serveForTenant, serveStreamForTenant } from "../Serve.ts"
 
 /**
  * The longest question accepted.
@@ -55,6 +55,36 @@ export const AskRpcLive = AskRpcs.toLayer(
          * published contract would promise not to change something we do not control.
          */
         Effect.catchTag("AiError", Effect.die)
+      ),
+    /*
+     * The streaming half. Same loop, same refusal, same toolkit built per request — the only difference is that
+     * each search is reported as it happens.
+     *
+     * `Stream.provide` rather than `Effect.provide`: the toolkit belongs to the STREAM's requirements. The
+     * stream outlives the effect that built it, so providing around construction would leave the handlers
+     * unsatisfied at pull time — and the tenant capture that makes the toolkit safe would be outside the
+     * stream's scope.
+     */
+    "Ask.stream": (payload: { readonly question: string }) =>
+      /*
+       * The toolkit is provided INSIDE and the tenant OUTSIDE, which is the same nesting the non-streaming
+       * handler uses and is not interchangeable: `PolicySearchLive` needs a `SqlClient` and the tenant, so
+       * providing it outside `serveStreamForTenant` would leave those requirements unsatisfied — which is
+       * exactly what the composition root's per-request door reported.
+       */
+      serveStreamForTenant(
+        AskCorpusStream(payload.question.slice(0, MAX_QUESTION_LENGTH)).pipe(
+          // `Stream.die`, not `Effect.die`: a stream's catch must return a stream. Same intent as the
+          // non-streaming handler — the provider's failure becomes a defect, the refusal stays in the channel.
+          Stream.catchTag("AiError", (error) => Stream.die(error)),
+          /*
+           * `Stream.provide`, not `Effect.provide`: the toolkit belongs to the STREAM's requirements. The
+           * stream outlives the effect that built it, so providing around construction would leave the
+           * handlers unsatisfied at pull time — and the tenant capture that makes the toolkit safe would sit
+           * outside the stream's scope.
+           */
+          Stream.provide(AskToolkitLive.pipe(Layer.provideMerge(PolicySearchLive)))
+        )
       )
   })
 )

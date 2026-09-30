@@ -20,6 +20,13 @@
     "**/.output/**",
     "**/coverage/**",
     "vendor/**",
+    /*
+     * Agent skill packages, installed into the working tree and not part of this repo — they are untracked, so
+     * they never reach CI and only ever broke `preflight` locally. Same reasoning as the vendored Effect source
+     * below: upstream's code, upstream's lint rules, and advice we cannot act on.
+     */
+    ".agents/**",
+    ".claude/skills/**",
     // Vendored Effect source: upstream's lint rules are not ours, and 1652 files of advice we cannot
     // act on would drown the warnings we can.
     "repos/**",

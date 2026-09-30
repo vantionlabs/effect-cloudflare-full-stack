@@ -1,0 +1,15 @@
+{
+  /*
+   * The probe is WORKER source that happens to live under `test/`, so it needs `@cloudflare/workers-types` —
+   * and `apps/worker/tsconfig.test.json` deliberately excludes them, because workers-types declares a second
+   * global `Response`/`RequestInit` and `createTestHarness` needs Node's. Same split as `tsconfig.worker.json`,
+   * for the same reason; `tsconfig.test.json` excludes this directory.
+   */
+  "extends": "../../../../../tsconfig.base.json",
+  "include": ["**/*.ts"],
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["@cloudflare/workers-types"]
+  }
+}

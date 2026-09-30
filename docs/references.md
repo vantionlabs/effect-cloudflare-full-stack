@@ -156,6 +156,38 @@ neurons above it.
 Three ways out, in increasing cost: AI Gateway response caching (identical re-runs stop costing anything),
 a smaller model for the eval loop, or Workers Paid. Only the third also raises the ceiling.
 
+### A completed Cloudflare Workflow step does not re-run — verified by execution
+
+**Measured 2026-09-30** with `apps/worker/test/WorkflowStepMemo.test.ts`, which boots a throwaway Worker in real
+`workerd` and asserts it rather than trusting the docs sentence — the same move ADR-0009 made for the
+`cloudflare:sockets` driver.
+
+A two-step Workflow where the SECOND step fails on its first attempt and succeeds on its retry:
+
+```
+step "one":  executed 1 time     ← had already completed; not re-run
+step "two":  executed 2 times    ← failed once on purpose, then succeeded
+```
+
+**This is the property `WorkflowEnginePg` exists for.** Its `activityExecute` memo keys on
+`(execution_id, name, attempt)`; the Rules of Workflows describe the same mechanism in the same terms —
+_"step names act as the 'cache key' in your Workflow"_, _"successfully cached steps do not re-execute"_. So the
+298 lines of engine, which carry risk R7 (ours to maintain, no conformance suite), can be replaced by the
+platform.
+
+Four rules constrain the migration, all from
+<https://developers.cloudflare.com/workflows/build/rules-of-workflows/>:
+
+| Rule                                                                                        | What it means for the decide pipeline                             |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| "Non-serializable resources, like a database connection, should be executed outside" a step | open the connection in `run()`, use it inside steps               |
+| A non-stream step return value persists up to **1 MiB** (2^20 bytes)                        | fine for an extraction; a large retrieval goes to R2 by reference |
+| Step timeouts **30 minutes or less**; use `waitForEvent` for longer                         | the human pause becomes `waitForEvent`, not a sleep               |
+| Step names are the cache key, so they must be **deterministic**                             | `Extract`/`Retrieve`/`Decide`/`Judge` already are                 |
+
+**Default retry behaviour is not documented**, so the probe sets retries explicitly. A test that depended on an
+undocumented default would be measuring the wrong thing.
+
 ### Workers AI honours OpenAI-compatible `response_format: json_schema`
 
 **Verified by request 2026-09-29** against

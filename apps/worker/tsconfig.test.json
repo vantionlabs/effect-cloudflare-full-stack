@@ -12,6 +12,11 @@
   // `erasableSyntaxOnly` is off here, which PLAN.md always intended ("relaxed in the tests config").
   "extends": "../../tsconfig.base.json",
   "include": ["test/**/*.ts"],
+  /*
+   * The workflow probe is WORKER source living under `test/`, so it needs workers-types and cannot be in this
+   * project — see its own tsconfig.json. `check` compiles it separately.
+   */
+  "exclude": ["test/fixtures/**"],
   "compilerOptions": {
     "composite": false,
     "incremental": false,

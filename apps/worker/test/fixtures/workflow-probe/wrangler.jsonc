@@ -1,0 +1,13 @@
+{
+  // A probe, not a deployment. See index.ts for why it is its own Worker.
+  "name": "workflow-probe",
+  "main": "index.ts",
+  "compatibility_date": "2026-09-26",
+  "workflows": [
+    { "name": "step-memo-probe", "binding": "PROBE", "class_name": "StepMemoWorkflow" },
+  ],
+  "kv_namespaces": [
+    // Local-only: the id is never resolved because this Worker is never deployed.
+    { "binding": "COUNTS", "id": "workflow_probe_counts" },
+  ],
+}

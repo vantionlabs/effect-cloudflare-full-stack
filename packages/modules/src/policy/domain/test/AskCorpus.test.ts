@@ -6,10 +6,10 @@
  * is an unbounded bill, and a tenant the model can influence is a cross-tenant read.
  */
 import { CurrentOrg, OrgId } from "@ea/domain/Identity"
-import { AgentModel } from "@ea/modules/policy/domain/Ask"
-import { AskCorpus, AskToolkit, AskToolkitLive } from "@ea/modules/policy/use-cases/Ask"
+import { AgentModel, AskProgress } from "@ea/modules/policy/domain/Ask"
+import { AskCorpus, AskCorpusStream, AskToolkit, AskToolkitLive } from "@ea/modules/policy/use-cases/Ask"
 import { PolicySearch, type Retrieval } from "@ea/modules/shared/domain/Retrieval"
-import { Effect, Layer, Stream } from "effect"
+import { Effect, Layer, Schema, Stream } from "effect"
 import { LanguageModel } from "effect/ai"
 import { describe, expect, it } from "vitest"
 
@@ -342,5 +342,91 @@ describe("grounding", () => {
 
     expect(failure._tag).toBe("UngroundedAnswer")
     expect(search.queries).toEqual([])
+  })
+})
+
+/**
+ * The stream, and what it deliberately does NOT carry.
+ *
+ * `AskCorpusStream` reports each search and then the finished answer. It does not stream the answer's prose,
+ * and that is the design rather than an omission: the citations are only checkable once the answer is complete,
+ * so streaming text first means an unverifiable claim has been read by the time it is refused. A retraction
+ * after the fact is not a refusal — the reviewer has already seen it.
+ */
+describe("the progress stream", () => {
+  const RETRIEVED = "Een factuur van een leverancier die niet op de lijst staat wordt doorgestuurd."
+
+  const collect = (model: Layer.Layer<AgentModel>, search: Layer.Layer<PolicySearch>) =>
+    Effect.runPromise(
+      Stream.runCollect(
+        AskCorpusStream("Mag ik een factuur van een onbekende leverancier goedkeuren?").pipe(
+          Stream.provide(
+            AskToolkitLive.pipe(
+              Layer.provideMerge(Layer.mergeAll(model, search, Layer.succeed(CurrentOrg)(ORG)))
+            )
+          )
+        )
+      ) as unknown as Effect.Effect<
+        ReadonlyArray<{ _tag: string; query?: string; citations?: ReadonlyArray<unknown> }>
+      >
+    )
+
+  it("reports each search, then the finished answer", async () => {
+    const search = recordingSearch()
+    const frames = await collect(
+      scripted({
+        toolCalls: 2,
+        answer: "Nee — Artikel 4 stuurt die factuur door.",
+        citations: [{ chunk_id: "c1", clause_ref: "Artikel 4", excerpt: RETRIEVED }]
+      }).layer,
+      search.layer
+    )
+
+    expect(frames.map((frame) => frame._tag)).toEqual(["Searching", "Searching", "Answered"])
+    // The model's own query text, which is the useful part of waiting.
+    expect(frames[0]!.query).toBe("zoekterm 1")
+    expect(frames[2]!.citations).toHaveLength(1)
+  })
+
+  /*
+   * The property the whole design rests on. A refused answer must emit NO `Answered` frame — if it did, the
+   * unverifiable claim would have been delivered and the refusal would be decoration.
+   */
+  it("emits NO answer frame when the citations cannot be verified", async () => {
+    const search = recordingSearch()
+    const frames = await Effect.runPromise(
+      Stream.runCollect(
+        AskCorpusStream("vraag").pipe(
+          Stream.provide(
+            AskToolkitLive.pipe(
+              Layer.provideMerge(Layer.mergeAll(
+                scripted({
+                  toolCalls: 1,
+                  answer: "Artikel 9 verbiedt dit.",
+                  citations: [{ chunk_id: "c-invented", clause_ref: "Artikel 9", excerpt: "Dit is verboden." }]
+                }).layer,
+                search.layer,
+                Layer.succeed(CurrentOrg)(ORG)
+              ))
+            )
+          ),
+          // The stream FAILS rather than completing, so the collect below would reject without this.
+          Stream.catchTag("UngroundedAnswer", () => Stream.empty)
+        )
+      ) as unknown as Effect.Effect<ReadonlyArray<{ _tag: string }>>
+    )
+
+    // The search was reported — that happened — and the answer never arrives.
+    expect(frames.map((frame) => frame._tag)).toEqual(["Searching"])
+  })
+
+  it("carries no token or chunk frame at all", () => {
+    // Asserted by DECODING, so adding a prose frame is a deliberate act that fails here first. Streaming the
+    // answer's text is what would reopen the bypass this whole design exists to close.
+    expect(() => Schema.decodeUnknownSync(AskProgress)({ _tag: "Token", text: "Nee" })).toThrow()
+    expect(() => Schema.decodeUnknownSync(AskProgress)({ _tag: "Chunk", text: "Nee" })).toThrow()
+    // And the two that do exist still decode, so the assertion above is not passing for the wrong reason.
+    expect(Schema.decodeUnknownSync(AskProgress)({ _tag: "Searching", query: "x", retrieval_mode: null }))
+      .toBeDefined()
   })
 })

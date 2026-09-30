@@ -24,12 +24,12 @@
  * knowledge of Dutch procurement law is not, and must not leak into an answer a reviewer will act on.
  */
 import { CurrentOrg } from "@ea/domain/Identity"
-import { AgentModel } from "@ea/modules/policy/domain/Ask"
+import { AgentModel, Answered, type AskProgress, Searching } from "@ea/modules/policy/domain/Ask"
 import { UngroundedAnswer } from "@ea/modules/policy/domain/Errors"
 import { PolicySearch } from "@ea/modules/shared/domain/Retrieval"
 import { containsVerbatim } from "@ea/modules/shared/domain/Verbatim"
-import { Effect, Schema } from "effect"
-import { LanguageModel, Prompt, Tool, Toolkit } from "effect/ai"
+import { Effect, Queue, Schema, Stream } from "effect"
+import { type AiError, LanguageModel, Prompt, Tool, Toolkit } from "effect/ai"
 
 /**
  * The hard stop. Four is enough for "search, read, search again with better terms, answer".
@@ -201,7 +201,13 @@ const ungroundedCitations = (
  * per call. So the history is threaded back in and the loop continues while the model is still calling tools,
  * which is where `MAX_STEPS` bites.
  */
-export const AskCorpus = (question: string) =>
+/**
+ * The loop, with a hook for each search it performs.
+ *
+ * Extracted so that `AskCorpus` and `AskCorpusStream` are one implementation rather than two that agree today.
+ * The hook is the only difference between them: one discards it, the other offers a frame to a queue.
+ */
+const runLoop = (question: string, onSearch: (query: string, mode: string | null) => void) =>
   Effect.gen(function*() {
     /*
      * The agent's model, not the decide pipeline's — see `AgentModel.ts` for why they are separate tags.
@@ -236,6 +242,20 @@ export const AskCorpus = (question: string) =>
       for (const part of response.toolResults) {
         const result = part.result as { readonly clauses?: ReadonlyArray<{ chunk_id: string; content: string }> }
         for (const clause of result.clauses ?? []) served.set(clause.chunk_id, clause.content)
+      }
+
+      /*
+       * Progress is reported per SEARCH, which is what a reader is waiting through: a four-step loop is four
+       * model calls and four retrievals, and without this it is ten seconds of nothing.
+       */
+      const mode = response.toolResults.reduce<string | null>(
+        (found, part) => (part.result as { readonly retrieval_mode?: string }).retrieval_mode ?? found,
+        null
+      )
+      for (const part of response.content) {
+        if (part.type === "tool-call") {
+          onSearch(String((part.params as { readonly query?: unknown }).query ?? ""), mode)
+        }
       }
 
       const calledATool = response.content.some((part) => part.type === "tool-call")
@@ -296,3 +316,61 @@ export const AskCorpus = (question: string) =>
       truncated: true
     } satisfies AskResult
   })
+
+/**
+ * The loop's requirements, inferred rather than restated.
+ *
+ * `Stream.callback` needs its context explicitly, and naming the toolkit's handler tag by hand would be a second
+ * place that has to agree with `AskToolkit` — so it is read off `runLoop` instead. One source.
+ */
+type LoopRequirements = ReturnType<typeof runLoop> extends Effect.Effect<infer _A, infer _E, infer R> ? R : never
+
+/** Runs the loop and returns the verified answer. What a non-streaming caller wants. */
+export const AskCorpus = (question: string) => runLoop(question, () => {})
+
+/**
+ * The same loop, reporting each search as it happens.
+ *
+ * **What streams is the PROGRESS, and deliberately not the answer's prose.** Token-streaming the answer is
+ * incompatible with the refusal this use case exists to make: the citations can only be checked once the answer
+ * is complete, so streaming the text first means the unverifiable claim has already been read by the time it is
+ * refused. A retraction after the fact is not a refusal — the reviewer has seen it.
+ *
+ * So the honest thing to stream is what the reader is actually waiting through: four model calls and four
+ * retrievals, which is ten seconds of nothing without this. The answer arrives once, whole, and verified.
+ *
+ * That makes issue 06's "a streamed answer" narrower than it sounds, and the narrowing is the finding: grounding
+ * and token-streaming the same text are mutually exclusive, and grounding is the one this product sells.
+ */
+export const AskCorpusStream = (question: string) =>
+  Stream.callback<AskProgress, UngroundedAnswer | AiError.AiError, LoopRequirements>((queue) =>
+    Effect.gen(function*() {
+      const result = yield* runLoop(question, (query, mode) => {
+        Queue.offerUnsafe(queue, new Searching({ query, retrieval_mode: mode }))
+      })
+      Queue.offerUnsafe(
+        queue,
+        new Answered({
+          answer: result.answer,
+          citations: result.citations,
+          steps: result.steps,
+          truncated: result.truncated
+        })
+      )
+      Queue.endUnsafe(queue)
+    }).pipe(
+      /*
+       * **The queue has to be failed explicitly, and a test found this by hanging.**
+       *
+       * A refused answer makes `runLoop` fail, and the callback's effect ending in failure does not close the
+       * queue — so a consumer waits forever on a stream that will never produce anything. The symptom is a
+       * five-second test timeout with no error, which is the worst way for a refusal to behave: worse than
+       * emitting the bad answer, because nothing says anything at all.
+       *
+       * `onError` rather than `ensuring`: the cause has to reach the queue for the stream to FAIL with
+       * `UngroundedAnswer` rather than merely end, and a caller distinguishing "refused" from "finished" is the
+       * entire point.
+       */
+      Effect.onError((cause) => Effect.sync(() => Queue.failCauseUnsafe(queue, cause)))
+    )
+  )

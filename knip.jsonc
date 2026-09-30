@@ -8,6 +8,13 @@
    */
   "ignore": [
     "repos/**",
+    /*
+     * Agent skill packages, installed into the working tree and not part of this repo. Untracked, so they never
+     * reach CI — they only ever broke `preflight` locally, by being reported as unused files that are not ours
+     * to delete. Same treatment in `.oxlintrc.json`.
+     */
+    ".agents/**",
+    ".claude/skills/**",
   ],
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreDependencies": [

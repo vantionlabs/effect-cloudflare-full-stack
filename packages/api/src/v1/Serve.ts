@@ -10,10 +10,10 @@
  * So the wrappers are named for the decision they encode rather than for the function they call, and there
  * are exactly two of them. A third would mean a third kind of handler, which is worth noticing.
  */
-import { type Connect, withDatabase } from "@ea/database/Database"
-import { CurrentOrg, CurrentUser } from "@ea/domain/Identity"
-import { Effect } from "effect"
-import type { SqlClient, SqlError } from "effect/sql"
+import { Connect, withDatabase } from "@ea/database/Database"
+import { CurrentOrg, CurrentOrgFromUser, CurrentUser } from "@ea/domain/Identity"
+import { Effect, Layer, Stream } from "effect"
+import { SqlClient, type SqlError } from "effect/sql"
 
 /**
  * Supplies the tenant from the authenticated session.
@@ -87,6 +87,40 @@ export const serveForTenant = <A, E, R>(
   Exclude<R, CurrentOrg | SqlClient.SqlClient> | CurrentUser | Connect
 > =>
   Effect.catchTag(withTenant(withDatabase(effect)), "SqlError", Effect.die) as Effect.Effect<
+    A,
+    Exclude<E, SqlError.SqlError>,
+    Exclude<R, CurrentOrg | SqlClient.SqlClient> | CurrentUser | Connect
+  >
+
+/**
+ * As `serveForTenant`, for a **stream**: the connection and the tenant live as long as the stream does.
+ *
+ * `withDatabase` cannot be reused here. It opens a connection inside one effect and releases it when that
+ * effect finishes — which for a stream is when the stream has been *constructed*, not when it has been read.
+ * The pulls that follow would then run against a closed connection, and the symptom is a stream that works in a
+ * test that collects it eagerly and fails wherever it is consumed lazily.
+ *
+ * So the connection is a scoped LAYER instead, because a layer's scope is the stream's scope. Same for the
+ * tenant: `CurrentOrgFromUser` derives it from the authenticated session, so a stream cannot outlive the
+ * identity that started it.
+ */
+export const serveStreamForTenant = <A, E, R>(
+  stream: Stream.Stream<A, E, R | SqlClient.SqlClient | CurrentOrg>
+): Stream.Stream<
+  A,
+  Exclude<E, SqlError.SqlError>,
+  Exclude<R, CurrentOrg | SqlClient.SqlClient> | CurrentUser | Connect
+> =>
+  stream.pipe(
+    Stream.provide(
+      Layer.mergeAll(
+        Layer.effect(SqlClient.SqlClient)(Effect.flatMap(Connect, (connect) => connect.open)),
+        CurrentOrgFromUser
+      )
+    ),
+    // Same reasoning as `serve`: a database failure is not in the contract and a caller cannot act on it.
+    Stream.catchTag("SqlError", (error) => Stream.die(error))
+  ) as Stream.Stream<
     A,
     Exclude<E, SqlError.SqlError>,
     Exclude<R, CurrentOrg | SqlClient.SqlClient> | CurrentUser | Connect

@@ -13,29 +13,8 @@ import { AuthenticatedRpc } from "@ea/domain/Identity"
 import { UngroundedAnswer } from "@ea/modules/policy/domain/Errors"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
-
-/** A clause the answer relied on. Verified before it reaches here — see `ungroundedCitations`. */
-export class AskAnswerCitation extends Schema.Class<AskAnswerCitation>("AskAnswerCitation")({
-  chunk_id: Schema.String,
-  clause_ref: Schema.NullOr(Schema.String),
-  excerpt: Schema.String
-}) {}
-
-export class AskAnswer extends Schema.Class<AskAnswer>("AskAnswer")({
-  answer: Schema.String,
-  /**
-   * The clauses relied on, every one verified against what the search actually returned.
-   *
-   * Published rather than kept server-side because a reviewer has to be able to check the answer — the same
-   * argument as a decision's citations, and the reason this surface was not allowed to stay prose-only. The
-   * console can highlight an excerpt with `containsVerbatim`, which is the function that verified it.
-   */
-  citations: Schema.Array(AskAnswerCitation),
-  /** How many model calls it took. Surfaced so a loop that always hits its bound is visible in the UI. */
-  steps: Schema.Int,
-  /** True when the step bound stopped it. The answer is then partial and the console must say so. */
-  truncated: Schema.Boolean
-}) {}
+import { AskAnswer } from "./AskAnswer.ts"
+import { AskProgress } from "./AskProgress.ts"
 
 export const AskRpcs = RpcGroup.make(
   Rpc.make("Ask.question", {
@@ -50,5 +29,19 @@ export const AskRpcs = RpcGroup.make(
      * cannot check — which is the failure the decide path's rails exist to prevent.
      */
     error: UngroundedAnswer
+  }),
+  /*
+   * The same question, reporting progress.
+   *
+   * `stream: true` and the success is `AskProgress`, not a string of tokens — the answer's prose cannot be
+   * streamed, because its citations are only checkable once it is complete and streaming text first means an
+   * unverifiable claim has been read by the time it is refused. What streams is the searching; the answer
+   * arrives once, whole, and verified. See `AskProgress.ts`.
+   */
+  Rpc.make("Ask.stream", {
+    payload: { question: Schema.String },
+    success: AskProgress,
+    error: UngroundedAnswer,
+    stream: true
   })
 ).middleware(AuthenticatedRpc)

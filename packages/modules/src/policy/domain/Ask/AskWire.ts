@@ -9,7 +9,7 @@ import { Authenticated } from "@ea/domain/Identity"
 import { pickFields, wire, wireFrom } from "@ea/modules/shared/domain/Wire"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
-import { AskAnswer, AskAnswerCitation } from "./AskRpcs.ts"
+import { AskAnswer, AskAnswerCitation } from "./AskAnswer.ts"
 
 /**
  * An answer, with the two numbers that say how much to trust it.
