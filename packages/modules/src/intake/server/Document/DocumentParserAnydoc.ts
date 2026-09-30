@@ -72,6 +72,58 @@ export const SUPPORTED_BY_ANYDOC = [
   ".csv"
 ] as const
 
+/**
+ * Does this conversion look like text a human wrote, or like a failure?
+ *
+ * **The case this exists for is not an empty conversion — it is a bad one.** A PDF whose text layer is
+ * mis-encoded, or a scan that already carries a garbage OCR layer, makes anydoc return plausible-looking
+ * nonsense. Empty output refuses and falls through to OCR; nonsense used to sail past, reach extraction,
+ * and be decided on. The only defence was downstream — the rails refuse because no `source_span` verifies
+ * against nonsense — which is the safe failure and a silent one: a reviewer sees "needs human" rather than
+ * "this document could not be read".
+ *
+ * **The thresholds are biased deliberately, because the two errors are not symmetric.** A false refusal
+ * sends a readable document to OCR: it costs about $0.004 and still produces an answer. A false acceptance
+ * sends nonsense into a paid model and produces a decision nobody can audit. So when in doubt, refuse.
+ *
+ * Two signals, and each is narrow on purpose:
+ */
+export const looksUnreadable = (text: string, filename: string, contentType: string): boolean => {
+  if (text.trim().length === 0) return true
+
+  /*
+   * (1) Replacement characters, for any format.
+   *
+   * U+FFFD means a decoder gave up on a byte sequence. A handful can appear in a legitimate document that
+   * embeds one, so this is a RATIO rather than a presence check — but the bar is low, because a document
+   * that is 2% unrepresentable is not one whose spans should be quoted back to a reviewer as verbatim.
+   */
+  const replacements = (text.match(/\uFFFD/g) ?? []).length
+  if (replacements / text.length > 0.02) return true
+
+  /*
+   * (2) A near-empty text layer, for PDFs ONLY.
+   *
+   * Scoped to PDF because that is where the failure lives, and because the obvious general version of this
+   * check is wrong: a spreadsheet or CSV becomes a markdown TABLE, which is mostly `|` and `-` and would
+   * fail any letter-ratio test while being perfectly readable. Restricting the rule to the format with the
+   * problem avoids inventing a false positive for the formats without it.
+   *
+   * Many scanners embed a few characters — a header, a stamp, a page number — so "has some text" is not
+   * the same as "has a text layer". 200 letters is well under any real invoice and well over a stamp.
+   */
+  const isPdf = contentType === "application/pdf" || filename.toLowerCase().endsWith(".pdf")
+  if (isPdf) {
+    const letters = (text.match(/\p{L}/gu) ?? []).length
+    if (letters < MIN_PDF_LETTERS) return true
+  }
+
+  return false
+}
+
+/** See `looksUnreadable`. Exported so a test can state the boundary rather than guess at it. */
+export const MIN_PDF_LETTERS = 200
+
 /** The last extension, lower-cased and without the dot. `formatFromExtension` wants that shape. */
 const extensionOf = (filename: string): string => {
   const index = filename.lastIndexOf(".")
@@ -148,14 +200,13 @@ export const anydocParse = (wasmModule: unknown): DocumentParserService["parse"]
         })
 
         /*
-         * An empty conversion is a REFUSAL, not an empty document.
+         * Unreadable output is a REFUSAL, not a document.
          *
-         * This is the scanned-PDF case: the format is recognised, the file is valid, and there is no text
-         * layer to extract — so anydoc returns nothing. Returning an empty `ParsedDocument` would send a
-         * blank string into extraction, and the model would answer from nothing while every span
-         * trivially failed to verify. Refusing names the real problem, and tier 3 (OCR) is the fix.
+         * Empty is the obvious case — a scanned PDF has no text layer, so anydoc returns nothing. But the
+         * one that actually matters is worse and used to pass: a PDF with a BAD text layer returns
+         * plausible-looking nonsense, which would reach extraction and be decided on. See `looksUnreadable`.
          */
-        if (text.trim().length === 0) return yield* Effect.fail(unsupported)
+        if (looksUnreadable(text, input.filename, input.contentType)) return yield* Effect.fail(unsupported)
 
         // `pageCount` stays null: `toMarkdownBytes` returns text only, and inventing a count from the
         // markdown would be a guess recorded as a fact.
