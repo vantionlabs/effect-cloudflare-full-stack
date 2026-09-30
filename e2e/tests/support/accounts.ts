@@ -65,6 +65,16 @@ export const signIn = async (page: Page, account: Account): Promise<void> => {
    * Waits for the header, not for the URL. Sign-in ends in a `reloadDocument` navigation, so the URL
    * changes before the new document has been server-rendered — asserting on the URL alone would pass
    * while the page was still the old one.
+   *
+   * **The timeout is 30 s because the FIRST sign-in in a run pays for a cold dev server.** That navigation
+   * is the first request to hit the authenticated route, so vite compiles it on demand and workerd
+   * server-renders it for the first time. It took 8.7 s in CI against Playwright's 5 s default, and it was
+   * the only one of eight specs to fail — every later `signIn` reuses the compiled route and takes
+   * milliseconds, which is exactly the signature of a cold start rather than a product problem.
+   *
+   * Raised rather than replaced with a sleep: the assertion still has to pass, and a `waitForTimeout` would
+   * hide a genuine regression behind a fixed delay — which AGENTS.md says never to do here, because that is
+   * how the hydration race was originally masked.
    */
-  await expect(page.getByText(account.email)).toBeVisible()
+  await expect(page.getByText(account.email)).toBeVisible({ timeout: 30_000 })
 }
