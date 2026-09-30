@@ -20,6 +20,7 @@
 import { UserId } from "@ea/modules/shared/domain/Identity"
 import { Schema } from "effect"
 import { Message } from "../Message/Message.ts"
+import { RoomId } from "./Room.ts"
 
 /**
  * The keepalive pair, as bare strings rather than JSON.
@@ -119,7 +120,30 @@ export class MessagePosted extends Schema.TaggedClass<MessagePosted>("MessagePos
  */
 export class RoomsChanged extends Schema.TaggedClass<RoomsChanged>("RoomsChanged")("RoomsChanged", {}) {}
 
-export const ServerFrame = Schema.Union([Welcome, Presence, QueueChanged, MessagePosted, RoomsChanged])
+/**
+ * A message in this room changed — edited or deleted.
+ *
+ * **A nudge, not the new message, and this is the note in `MessagePosted` coming due.** That docstring said a
+ * carried message would have to become a nudge once editing existed, because a carried value can go stale while
+ * an append never does. Rather than demoting `MessagePosted` — appending is the hot path and the frame IS the
+ * delta there — the mutable case gets its own frame that carries only where to look.
+ *
+ * `messageId` is included for a future targeted update; the client invalidates the room today, which is correct
+ * and one round trip.
+ */
+export class MessageChanged extends Schema.TaggedClass<MessageChanged>("MessageChanged")("MessageChanged", {
+  roomId: RoomId,
+  messageId: Schema.String
+}) {}
+
+export const ServerFrame = Schema.Union([
+  Welcome,
+  Presence,
+  QueueChanged,
+  MessagePosted,
+  MessageChanged,
+  RoomsChanged
+])
 export type ServerFrame = typeof ServerFrame.Type
 
 /** Encoding is JSON both ways: the payloads are tiny and a frame a human can read in devtools is worth more

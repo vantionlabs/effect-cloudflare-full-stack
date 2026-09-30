@@ -38,6 +38,8 @@ export const roomThreadAtom = Atom.family((roomId: string) =>
 )
 
 export const postMessageAtom = Api.mutation("Message.post")
+export const editMessageAtom = Api.mutation("Message.edit")
+export const deleteMessageAtom = Api.mutation("Message.delete")
 
 /** The channel list, and the mutations that change it. */
 export const ROOMS_KEY = "rooms"

@@ -43,8 +43,11 @@ export const ListMessages = (input: {
         author_email: string | null
         body: string
         created_at: Date
+        edited_at: Date | null
+        deleted_at: Date | null
       }>`
-        select m.id, m.author_user_id, u.email as author_email, m.body, m.created_at
+        select m.id, m.author_user_id, u.email as author_email, m.body, m.created_at,
+               m.edited_at, m.deleted_at
           from messages m
           -- A LEFT join into better-auth's own table, read-only. Left, because a deleted user must leave their
           -- messages behind: an audit trail that erases who said something is not one. Our tables carry no
@@ -65,7 +68,9 @@ export const ListMessages = (input: {
         authorUserId: UserId.make(row.author_user_id),
         authorEmail: row.author_email,
         body: row.body,
-        createdAt: row.created_at.toISOString()
+        createdAt: row.created_at.toISOString(),
+        editedAt: row.edited_at === null ? null : row.edited_at.toISOString(),
+        deletedAt: row.deleted_at === null ? null : row.deleted_at.toISOString()
       })
     )
   })

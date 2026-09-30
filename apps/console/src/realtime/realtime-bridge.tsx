@@ -12,7 +12,7 @@
  */
 import { useAtomSet } from "@effect/atom-react"
 import { useIdentity } from "../hooks/use-session.ts"
-import { invalidateDecisionsAtom, invalidateThreadAtom, viewersAtom } from "./realtime-atoms.ts"
+import { invalidateDecisionsAtom, invalidateRoomsAtom, invalidateThreadAtom, viewersAtom } from "./realtime-atoms.ts"
 import { useServerFrame } from "./use-socket.ts"
 
 export const RealtimeBridge = (): null => {
@@ -20,6 +20,7 @@ export const RealtimeBridge = (): null => {
   const setViewers = useAtomSet(viewersAtom)
   const invalidateDecisions = useAtomSet(invalidateDecisionsAtom)
   const invalidateThread = useAtomSet(invalidateThreadAtom)
+  const invalidateRooms = useAtomSet(invalidateRoomsAtom)
 
   useServerFrame("Welcome", (frame) => setViewers(frame.viewers))
   useServerFrame("Presence", (frame) => setViewers(frame.viewers))
@@ -54,6 +55,15 @@ export const RealtimeBridge = (): null => {
      */
     invalidateThread(frame.message.roomId)
   })
+
+  /*
+   * Edit and delete arrive as a nudge carrying no message, unlike `MessagePosted` — see `MessageChanged`. Both
+   * end in the same invalidation, which is why the handler is a one-liner: the thread re-reads and the change
+   * appears, whatever it was.
+   */
+  useServerFrame("MessageChanged", (frame) => invalidateThread(frame.roomId))
+
+  useServerFrame("RoomsChanged", () => invalidateRooms())
 
   return null
 }

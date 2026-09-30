@@ -6,7 +6,7 @@
  * a different generator, a caller passing its own id — a thread silently reorders and a reconnecting client
  * silently skips messages. Neither would fail any other test.
  */
-import { ListMessages, PostMessage } from "@ea/modules/realtime/use-cases/Message"
+import { DeleteMessage, EditMessage, ListMessages, PostMessage } from "@ea/modules/realtime/use-cases/Message"
 import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
 import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
@@ -197,5 +197,79 @@ describe("ListMessages", () => {
       .toEqual(["org A only"])
     expect((await runAs(intruder, ListMessages({ room: thread("dec_shared") }))).map((m) => m.body))
       .toEqual(["org B only"])
+  })
+})
+
+describe("EditMessage and DeleteMessage", () => {
+  it("records that a message was edited, because an edited record is not the original", async () => {
+    const message = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "the PO matches" }))
+    const edited = await runAs(alice, EditMessage({ messageId: message.id, body: "the PO matches, checked twice" }))
+    expect(edited.editedAt).toMatch(/^\d{4}-/)
+
+    const [read] = await runAs(alice, ListMessages({ room: thread("dec_1") }))
+    expect(read?.body).toBe("the PO matches, checked twice")
+    /*
+     * Surfaced, not hidden. In a thread attached to a decision, a reader who cannot tell an edited note from an
+     * original is worse off than one who sees "edited" — the same instinct as recording `retrieval_mode`.
+     */
+    expect(read?.editedAt).not.toBeNull()
+  })
+
+  it("lets only the author edit or delete", async () => {
+    const message = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "mine" }))
+
+    /*
+     * No moderator override, deliberately: somebody who can rewrite what a colleague said in a decision's thread
+     * can rewrite the record of why that decision was made. Administrative deletion is a real requirement and
+     * belongs in its own operation with its own audit row, not as a relaxation of this check.
+     */
+    expect((await failureOf(bob, EditMessage({ messageId: message.id, body: "not mine" })))._tag)
+      .toBe("NotMessageAuthor")
+    expect((await failureOf(bob, DeleteMessage({ messageId: message.id })))._tag).toBe("NotMessageAuthor")
+
+    // And the message is untouched.
+    expect((await runAs(alice, ListMessages({ room: thread("dec_1") })))[0]?.body).toBe("mine")
+  })
+
+  it("redacts the body on delete and keeps the row", async () => {
+    await runAs(alice, PostMessage({ room: thread("dec_1"), body: "first" }))
+    const second = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "sensitive" }))
+
+    await runAs(alice, DeleteMessage({ messageId: second.id }))
+
+    const messages = await runAs(alice, ListMessages({ room: thread("dec_1") }))
+    /*
+     * The row survives and the content does not. Who spoke, when, and that they removed it stay recorded —
+     * which is the auditable part — while "delete" means what a user expects it to mean.
+     */
+    expect(messages).toHaveLength(2)
+    expect(messages[1]?.deletedAt).not.toBeNull()
+    expect(messages[1]?.body).not.toContain("sensitive")
+    expect(messages[1]?.authorUserId).toBe("msg_user_alice")
+  })
+
+  it("treats deleting twice as success, and refuses to edit a deleted message", async () => {
+    const message = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "gone" }))
+    await runAs(alice, DeleteMessage({ messageId: message.id }))
+
+    // Double-clicking a delete button is not an error.
+    await runAs(alice, DeleteMessage({ messageId: message.id }))
+
+    /*
+     * Editing it back would let somebody restore content they had removed, which is the opposite of what
+     * deleting promised. Reported as not found, because from the author's point of view it is gone.
+     */
+    expect((await failureOf(alice, EditMessage({ messageId: message.id, body: "back" })))._tag)
+      .toBe("MessageNotFound")
+  })
+
+  it("refuses to edit another organization's message with the not-found error", async () => {
+    const mine = await runAs(alice, PostMessage({ room: thread("dec_x"), body: "ours" }))
+    /*
+     * Not `NotMessageAuthor`: from another tenant the message is not merely somebody else's, it is invisible, and
+     * saying otherwise would confirm that the id exists.
+     */
+    expect((await failureOf(intruder, EditMessage({ messageId: mine.id, body: "theirs" })))._tag)
+      .toBe("MessageNotFound")
   })
 })

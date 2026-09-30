@@ -40,6 +40,18 @@ export const invalidateThreadAtom = Api.runtime.fn(
 )
 
 /**
+ * Invalidate the channel list.
+ *
+ * Its own atom rather than folding it into the thread invalidation, because the two are triggered by different
+ * frames and a channel being created should not refetch an open thread.
+ */
+export const invalidateRoomsAtom = Api.runtime.fn(
+  Effect.fnUntraced(function*() {
+    yield* Reactivity.invalidate([ROOMS_KEY])
+  })
+)
+
+/**
  * Invalidate everything about decisions, from outside the atom graph.
  *
  * This is the socket's entry point into the data layer. It runs inside the `Api` runtime because that is what

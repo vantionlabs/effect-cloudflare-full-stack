@@ -11,6 +11,13 @@
  * total order. `created_at` exists to be displayed. Having two orderings that can disagree is the bug this
  * avoids: `now()` is the transaction's start time, so two concurrent inserts can share it exactly.
  *
+ * **HISTORICAL. Do not re-apply this file under a new migration key.** It is what `0016_messages` ran, and
+ * `0018_messages_rooms` has since moved the table onto `room_id` and dropped the subject columns — including the
+ * index below, which names them. Re-applying this would fail with `column "subject_kind" does not exist`, which
+ * is exactly what happened when `0019` was first written as a re-application. Additive changes go in their own
+ * file (`MessageLifecycle.ts`); the `0015_rule_conditions` re-application pattern only works for a file whose
+ * definition stays true.
+ *
  * **There is no `seq` column** for the same reason there is no counter anywhere else in this codebase: it
  * would need either a sequence (gaps on rollback, which a catch-up query would read as lost messages) or a
  * `max(seq)+1` read-then-write per insert, which is a contention point on the hottest path in a chat.

@@ -11,7 +11,14 @@
  */
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { useCallback, useMemo, useState } from "react"
-import { decisionThreadAtom, postMessageAtom, roomThreadAtom } from "./thread-atoms.ts"
+import { useIdentity } from "./hooks/use-session.ts"
+import {
+  decisionThreadAtom,
+  deleteMessageAtom,
+  editMessageAtom,
+  postMessageAtom,
+  roomThreadAtom
+} from "./thread-atoms.ts"
 
 export function Thread({
   id,
@@ -28,6 +35,11 @@ export function Thread({
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
   const [rejected, setRejected] = useState<string | undefined>(undefined)
+  const identity = useIdentity()
+  const edit = useAtomSet(editMessageAtom, { mode: "promise" })
+  const remove = useAtomSet(deleteMessageAtom, { mode: "promise" })
+  /** Which message is being edited, and the draft for it. One at a time, which is all anybody does. */
+  const [editing, setEditing] = useState<{ readonly id: string; readonly body: string } | undefined>(undefined)
 
   const messages = thread._tag === "Success" ? thread.value : []
 
@@ -84,7 +96,84 @@ export function Thread({
                 <time dateTime={message.createdAt} style={{ color: "#aaa", fontSize: "0.78rem" }}>
                   {new Date(message.createdAt).toLocaleString()}
                 </time>
-                <div style={{ whiteSpace: "pre-wrap" }}>{message.body}</div>
+                {/* "edited" is shown, not hidden: an edited note and an original are not the same evidence. */}
+                {message.editedAt === null
+                  ? null
+                  : <span style={{ color: "#aaa", fontSize: "0.78rem" }}>{" "}· edited</span>}
+
+                {message.deletedAt !== null
+                  ? <div style={{ color: "#aaa", fontStyle: "italic" }}>message deleted</div>
+                  : editing?.id === message.id
+                  ? (
+                    <form
+                      method="post"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        void (async () => {
+                          const body = editing.body.trim()
+                          if (body === "") return
+                          await edit({ payload: { messageId: message.id, body } })
+                          setEditing(undefined)
+                        })()
+                      }}
+                      style={{ display: "flex", gap: "0.35rem", marginTop: "0.2rem" }}
+                    >
+                      <input
+                        value={editing.body}
+                        onChange={(event) => setEditing({ id: message.id, body: event.target.value })}
+                        aria-label="Edit message"
+                        style={{ flex: 1, font: "inherit", padding: "0.25rem 0.35rem" }}
+                      />
+                      <button type="submit" style={{ font: "inherit" }}>Save</button>
+                      <button type="button" onClick={() => setEditing(undefined)} style={{ font: "inherit" }}>
+                        Cancel
+                      </button>
+                    </form>
+                  )
+                  : (
+                    <div style={{ whiteSpace: "pre-wrap" }}>
+                      {message.body}
+                      {
+                        /*
+                         * Only on your own messages. The server refuses anything else (`NotMessageAuthor`), so
+                         * this is the UI agreeing with the rule rather than enforcing it — there is deliberately
+                         * no moderator override anywhere.
+                         */
+                      }
+                      {message.authorUserId !== identity.id ?
+                        null :
+                        (
+                          <span style={{ marginLeft: "0.5rem", fontSize: "0.78rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => setEditing({ id: message.id, body: message.body })}
+                              style={{
+                                font: "inherit",
+                                border: 0,
+                                background: "none",
+                                color: "#888",
+                                cursor: "pointer"
+                              }}
+                            >
+                              edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void remove({ payload: { messageId: message.id } })}
+                              style={{
+                                font: "inherit",
+                                border: 0,
+                                background: "none",
+                                color: "#888",
+                                cursor: "pointer"
+                              }}
+                            >
+                              delete
+                            </button>
+                          </span>
+                        )}
+                    </div>
+                  )}
               </li>
             ))}
           </ol>

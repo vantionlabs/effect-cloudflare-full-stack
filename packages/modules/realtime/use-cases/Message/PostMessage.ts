@@ -66,6 +66,9 @@ export const PostMessage = (input: {
        */
       authorEmail: identity.email,
       body: input.body,
-      createdAt: row.created_at.toISOString()
+      createdAt: row.created_at.toISOString(),
+      // A message is never born edited or deleted, so these are known rather than read back.
+      editedAt: null,
+      deletedAt: null
     })
   })

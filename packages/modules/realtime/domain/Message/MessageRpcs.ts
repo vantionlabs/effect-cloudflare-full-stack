@@ -6,7 +6,7 @@
  * error channel and a response the caller can act on — all of which the RPC path has and a fire-and-forget
  * frame does not. The socket only carries the notification afterwards.
  */
-import { RoomArchived, RoomNotFound } from "@ea/modules/realtime/domain/Errors"
+import { MessageNotFound, NotMessageAuthor, RoomArchived, RoomNotFound } from "@ea/modules/realtime/domain/Errors"
 import { AuthenticatedRpc } from "@ea/modules/shared/domain/Identity"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
@@ -70,5 +70,20 @@ export const MessageRpcs = RpcGroup.make(
      * would make the console guess which advice to give.
      */
     error: Schema.Union([RoomNotFound, RoomArchived])
+  }),
+  /*
+   * Edit and delete are separate methods rather than one `update` taking an optional body, for the same reason
+   * approve and reject are separate on the decision group: they are different acts. One changes a record, the
+   * other removes it, and a mis-wired button should be a different method rather than a different argument.
+   */
+  Rpc.make("Message.edit", {
+    payload: { messageId: MessageId, body: MessageBody },
+    success: Schema.Struct({ messageId: MessageId, editedAt: Schema.String }),
+    error: Schema.Union([MessageNotFound, NotMessageAuthor])
+  }),
+  Rpc.make("Message.delete", {
+    payload: { messageId: MessageId },
+    success: Schema.Struct({ messageId: MessageId }),
+    error: Schema.Union([MessageNotFound, NotMessageAuthor])
   })
 ).middleware(AuthenticatedRpc)

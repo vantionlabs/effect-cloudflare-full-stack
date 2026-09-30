@@ -25,7 +25,7 @@ import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
-import { MessageRooms, MessageTable } from "@ea/modules/realtime/tables/Message"
+import { MessageLifecycle, MessageRooms, MessageTable } from "@ea/modules/realtime/tables/Message"
 import { RoomTable } from "@ea/modules/realtime/tables/Room"
 import { Migrator } from "effect/sql"
 import { EventTable } from "../Event/EventTable.ts"
@@ -78,7 +78,15 @@ export const migrations = {
    * `0015_rule_conditions` it cannot be expressed by re-running the table's own definition. It must also run
    * after `rooms` exists, which is the other reason it is its own key.
    */
-  "0018_messages_rooms": MessageRooms
+  "0018_messages_rooms": MessageRooms,
+  /*
+   * `messages` gains `edited_at` and `deleted_at`.
+   *
+   * Its OWN file rather than re-applying `MessageTable` — which is the `0015_rule_conditions` pattern and would
+   * be wrong here, because `0018` dropped the columns `MessageTable`'s index names. Writing it the other way is
+   * what produced `column "subject_kind" does not exist`.
+   */
+  "0019_message_lifecycle": MessageLifecycle
 }
 
 export const loader = Migrator.fromRecord(migrations)

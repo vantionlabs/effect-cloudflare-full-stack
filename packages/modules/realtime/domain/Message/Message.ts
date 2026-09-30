@@ -29,6 +29,16 @@ export class Message extends Schema.Class<Message>("Message")({
    * messages behind, which is the correct outcome for an audit trail.
    */
   authorEmail: Schema.NullOr(Schema.String),
+  /**
+   * The text, or the redaction that replaced it.
+   *
+   * A deleted message keeps a row and loses its content — see `MessageTable.ts` for why that is the choice and
+   * what it costs. `deletedAt` is what a client should branch on; the stored body is a sentinel, not something
+   * to render as if it were written.
+   */
   body: Schema.String,
-  createdAt: Schema.String
+  createdAt: Schema.String,
+  /** When the author last changed it, or null. Shown, because an edited record and an original are not the same. */
+  editedAt: Schema.NullOr(Schema.String),
+  deletedAt: Schema.NullOr(Schema.String)
 }) {}
