@@ -308,8 +308,14 @@ export const workersAiChatConfig: Effect.Effect<WorkersAiChatConfig> = Effect.ge
  * rewritten is worth more here than provider-agnosticism we are not using yet — and when a second
  * provider arrives it gets its own path on the same gateway, which is the point of the gateway.
  *
- * Exported for tests: this URL is the whole integration, and it is not currently verified by execution
- * (no gateway exists on the account yet), so it is at least verified by assertion.
+ * Exported for tests: this URL is the whole integration, so it is verified by assertion as well.
+ *
+ * **This comment used to say "no gateway exists on the account yet", and that became false without anyone
+ * noticing** — `effect-ai-ai-dev` was created 2026-09-29 and the gateway's own logs show this adapter's
+ * calls from 14:42 UTC the next day. The stale claim was then read and repeated as a finding, which is
+ * exactly what `AGENTS.md` warns about: an external fact belongs in `docs/references.md` with the date it
+ * was checked, so a stale claim can be told from a wrong one. An inline one has nothing to date it against.
+ * The fact now has a row there.
  */
 export const chatCompletionsUrl = (config: {
   readonly accountId: string

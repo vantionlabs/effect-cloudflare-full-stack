@@ -53,7 +53,13 @@ Two consequences worth stating, because they are the cost of the freeze:
 - **`scripts/bindings-check.ts` becomes more load-bearing, not less.** It was already the answer to "Pulumi
   gives no typed bindings"; with provisioning moving outside the program, comparing `wrangler.jsonc` against
   `Bindings.ts` is the only mechanical check left. Its stated blind spot — a binding pointing at a resource
-  nobody created — is now the _likely_ failure rather than a theoretical one.
+  nobody created — is a real hole and stays one.
+
+  An earlier version of this bullet claimed that hole was "now the _likely_ failure rather than a theoretical
+  one", on the strength of the AI Gateway appearing to be missing. **It was not missing** (services.md §7),
+  and the claim went with it. The blind spot is unchanged either way: the check compares declarations against
+  declarations, so it would pass whether or not the resource exists. What was wrong was treating a guess about
+  one resource as evidence about the check.
 
 Note that this does not change the decision recorded above: Pulumi was chosen because Alchemy would not load,
 and it still will not. This is a decision to stop _editing_ the program, not to replace it.

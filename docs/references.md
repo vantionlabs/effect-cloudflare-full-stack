@@ -188,6 +188,36 @@ Four rules constrain the migration, all from
 **Default retry behaviour is not documented**, so the probe sets retries explicitly. A test that depended on an
 undocumented default would be measuring the wrong thing.
 
+### The AI Gateway `effect-ai-ai-dev` exists and is carrying traffic — checked against the account
+
+Checked 2026-09-30 via the `cf-ai-gateway` MCP server (`list_gateways`, `list_logs`). **This row exists
+because its absence caused a wrong answer**: a code comment said "no gateway exists on the account yet", it
+went stale silently, and it was then read and reported as a current finding. An inline claim has no date to
+be judged against, which is what the rule at the bottom of this file is for.
+
+| Fact                      | Value                                                                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Gateway id                | `effect-ai-ai-dev`                                                                                                                               |
+| Created                   | **2026-09-29 16:18:23** — so Pulumi _was_ applied for this resource                                                                              |
+| Settings                  | `cache_ttl: 3600`, `cache_invalidate_on_update: true`, `collect_logs: true`, rate limit 600/60s sliding — exactly what `infra/index.ts` declares |
+| Log volume                | 63 entries                                                                                                                                       |
+| `workers_ai_billing_mode` | `postpaid` (not unified/prepaid credits)                                                                                                         |
+| `zdr`                     | `false` — as `infra/index.ts` intends, since Zero Data Retention is a per-client decision (plan risk R8)                                         |
+
+**The embedder's routing is verified by execution, with a before/after.** The logs contain only
+`@cf/meta/llama-3.3-70b-instruct-fp8-fast` from 14:42 UTC, and `@cf/baai/bge-m3` appears first at 17:00 UTC —
+after the embedder commit at 16:36 UTC. Before the fix the embedder was invisible to the gateway; after it,
+it is not.
+
+**Caching works, and the numbers are the reason it was wanted.** A cached entry reports `cached: true`,
+`cost: 0` and `latency: 0`. An uncached `llama-3.3-70b` call at 888 in / 32 out cost **30.23 neurons**; one at
+478 in / 361 out cost **86.68 neurons**; an uncached `bge-m3` call cost **0.02 neurons**. So a repeated eval
+run over identical fixtures is free, which is what makes the 10,000-neuron daily allocation survivable.
+
+One thing the logs do NOT show: `request` and `response` are empty strings and `prompts` is null, because
+log storage of bodies is off. Worth knowing before planning to use gateway logs as an eval-run store — they
+give cost, tokens, latency and cache status, not the prompt.
+
 ### Workers AI through AI Gateway: a header on REST, a run option on the binding
 
 Checked 2026-09-30 against `/ai-gateway/usage/providers/workersai/`, `/ai-gateway/usage/rest-api/` and the

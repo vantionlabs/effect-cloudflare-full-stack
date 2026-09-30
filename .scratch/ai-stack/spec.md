@@ -18,8 +18,12 @@ anything, so being wrong in them is expensive:
 - §7 "AI Gateway — Not used" — Pulumi creates the gateway with `cacheTtl: 3600` and `collectLogs: true`, the
   vars are set, and the language model applies `{ gateway: { id } }` on the binding transport.
 
-The one genuine AI Gateway gap is narrower and is issue `01`: **the embedder bypasses the gateway on both
-transports**, which is the call the eval harness makes most.
+The one genuine AI Gateway gap was narrower and is issue `01`, now done: the embedder bypassed the gateway on
+both transports, which is the call the eval harness makes most.
+
+**A fourth stale claim, and this one was mine.** I reported that no gateway existed on the account. It had
+existed since 2026-09-29. The cause was reading an inline code comment as a current fact — the same shape as
+the three above, which is why `docs/references.md` now carries the gateway as a dated row.
 
 ## Order of work
 

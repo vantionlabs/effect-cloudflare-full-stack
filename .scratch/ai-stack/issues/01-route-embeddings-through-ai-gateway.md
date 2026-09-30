@@ -1,6 +1,6 @@
-# Create the AI Gateway — the code routes through one that does not exist
+# Route embeddings through AI Gateway
 
-Status: ready-for-human
+Status: **done 2026-09-30**
 
 ## The code half is done (2026-09-30)
 
@@ -21,33 +21,33 @@ This was the highest-value of the four paths and the last to be fixed, which is 
 harness embeds the corpus plus 99 questions on every run, so the embedder is the most repeated model call
 in the system and its cache is worth the most against a neuron allocation.
 
-## What needs a person
+## The gateway already existed, and I said otherwise
 
-**No gateway named `effect-ai-ai-dev` exists on the account**, and every adapter and every level of
-`wrangler.jsonc` names it. `infra/index.ts` declares it with `cacheTtl: 3600`, `collectLogs: true` and a
-600/min sliding rate limit — and Pulumi has never been applied, and is now frozen (ADR-0007 status note).
+**Corrected against the account on 2026-09-30.** `effect-ai-ai-dev` was created **2026-09-29 16:18:23** with
+exactly the settings `infra/index.ts` declares — `cache_ttl: 3600`, `collect_logs: true`, 600/60s sliding. So
+Pulumi had been applied for it, no MCP authorisation was needed to create anything, and this issue's "what
+needs a person" section was asking for work that was already done.
 
-`wrangler` has no `ai-gateway` command, so this is the `cf-ai-gateway` MCP server, which needs one
-authorisation in a browser:
+How the error happened, because the mechanism matters more than the fact: a comment in
+`LanguageModelWorkersAi.ts` said _"no gateway exists on the account yet"_. It was true when written, went
+stale silently, and I read it, combined it with "Pulumi is frozen", and reported the conclusion as a finding
+rather than as an inference I could not check. `AGENTS.md` names this exact failure — an external fact belongs
+in `docs/references.md` with the date it was checked, _"so a stale claim can be told from a wrong one"_. The
+comment is corrected and the fact has a dated row.
 
-```
-https://ai-gateway.mcp.cloudflare.com/oauth/authorize?...   (regenerate with the authenticate tool;
-                                                             the URL carries a one-time PKCE challenge)
-```
+## Verified by execution
 
-Once authorised, create a gateway with id `effect-ai-ai-dev` and the settings `infra/index.ts` declares.
-**Do not accept the defaults** — an auto-created gateway has no cache, and the cache is the entire reason
-for wanting it.
+The gateway's logs give a clean before/after for the embedder fix:
 
-### Why `default` is not the answer here
+- only `@cf/meta/llama-3.3-70b-instruct-fp8-fast` from 14:42 UTC
+- `@cf/baai/bge-m3` appears first at 17:00 UTC, after the embedder commit at 16:36 UTC
 
-Cloudflare accepts the literal id `default` and creates a gateway on first authenticated request, which
-makes "no gateway exists" a non-blocker in general. It is rejected for this repo because the auto-created
-gateway would not carry `cacheTtl: 3600`, and the eval quota is the problem being solved.
+And the cache does what it was wanted for: cached entries report `cost: 0` and `latency: 0`, where an
+uncached `llama-3.3-70b` call at 888 input tokens costs 30.23 neurons. A repeated eval run over identical
+fixtures is therefore free.
 
-### The check this got past
+## What this leaves for `05`
 
-`scripts/bindings-check.ts` compares `wrangler.jsonc` against `Bindings.ts`, and both agreed. ADR-0007's
-"Revisit when" already named this as its blind spot, as a hypothetical; it is the real state. Worth
-considering whether the check can be taught to ask the account, which would need a token — the same token
-that is missing for everything else.
+Gateway logs give cost, tokens, latency and cache status — **not the prompt**. `request` and `response` come
+back as empty strings and `prompts` is null, because body logging is off. So they are not an eval-run store,
+which is what issue `05` is for.

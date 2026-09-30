@@ -6,6 +6,10 @@
  * only symptom is a bill and a neuron allocation that empties faster than it should. This adapter went
  * direct while the chat adapter one line away in `Main.ts` was routed, for exactly that reason.
  *
+ * **It is now also verified by execution**, which is better than these assertions and does not replace them:
+ * the gateway's logs contain no `@cf/baai/bge-m3` before the fix and contain it afterwards
+ * (`docs/references.md`). That is a one-off observation of one deployment; these run on every commit.
+ *
  * Lives in `domain/test` beside `LanguageModelWorkersAi.test.ts` and for the same reason: it needs
  * nothing — no token, no network, no bindings.
  */

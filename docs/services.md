@@ -33,7 +33,7 @@ Status column, and the distinction matters more than it looks:
 | **Workers KV**            | better-auth session cache                                    | Cloudflare             | ✅      | **planned** — was declared-unwired, now removed (§3) |
 | **Durable Objects**       | exact per-API-key quota                                      | Cloudflare             | ✅      | planned                                              |
 | **Rate Limiting binding** | coarse flood protection                                      | Cloudflare             | ✅      | planned                                              |
-| **AI Gateway**            | caching, retries, cost/limit control in front of the model   | Cloudflare             | ✅      | adapters route; **gateway not created** (§7)         |
+| **AI Gateway**            | caching, retries, cost/limit control in front of the model   | Cloudflare             | ✅      | in use, verified by execution (§7)                   |
 | **Analytics Engine**      | custom metrics at SQL                                        | Cloudflare             | ✅      | planned (§6)                                         |
 | **PlanetScale Postgres**  | relational + pgvector + Dutch FTS                            | **external**           | ❌      | in use (§4.1)                                        |
 | **Postgres in Docker**    | the test database                                            | **local only**         | ❌      | in use (§4.2, ADR-0015)                              |
@@ -392,34 +392,49 @@ signal — a decision with nothing to point at cannot be audited whatever its ou
   failure modes that have no transaction, and they need the cron that does not exist yet.
 - **Web Analytics / RUM** for the console.
 
-## 7. AI Gateway — the code routes through it; the gateway does not exist
+## 7. AI Gateway — in use, and now measured
 
-**Corrected 2026-09-30, twice, and the second correction matters more than the first.** "Not used" was
-stale: every model adapter now routes through a gateway, and as of today so does the embedder, which was
-the last one going direct. But the opposite overstatement is just as wrong, and I made it before checking —
-**AI Gateway is not adopted either.** The honest state is a third thing:
+**Corrected three times in one day, and the third correction is the one to trust because it is the only one
+made against the account rather than against a file.**
 
-| Layer              | State                                                                                                                                           |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| The adapters       | ✅ all four paths route — chat by gateway hostname, embeddings by `cf-aig-gateway-id` header, both bindings by `{ gateway: { id } }` run option |
-| The configuration  | ✅ `CLOUDFLARE_AI_GATEWAY` and `AI_GATEWAY` are set to `effect-ai-ai-dev` at every level of `wrangler.jsonc`                                    |
-| The gateway itself | ❌ **declared in `infra/index.ts`, never applied.** Pulumi has not run, so no gateway by that name exists on the account                        |
+The sequence is worth keeping, because each wrong answer had a different cause:
 
-**So the configuration names a resource nobody created** — which is, verbatim, the blind spot ADR-0007's
-own "Revisit when" lists for `bindings-check`: _"a binding that exists in `wrangler.jsonc` and points at a
-resource nobody created still passes, and the symptom is a runtime failure on the first request that
-touches it."_ It was written as a hypothetical and it is the actual state. That is the whole reason this
-row is worth three lines instead of a tick: a check comparing declarations against declarations agreed with
-itself, and the thing neither declaration touches is whether the gateway is there.
+1. "Not used" — **stale**. Every model adapter routes through a gateway, and the embedder joined them on
+   2026-09-30.
+2. "Already adopted" — **overstated**, said before checking anything.
+3. "The gateway does not exist; the configuration names a resource nobody created" — **wrong, and
+   confidently so.** I read _"(no gateway exists on the account yet)"_ in a code comment in
+   `LanguageModelWorkersAi.ts`, combined it with "Pulumi is frozen", and reported the conclusion as a
+   finding. Both inputs were fine; the inference was not, and I had no way to check when I made it.
 
-Creating it is now an MCP or `wrangler` action rather than a Pulumi one (ADR-0007's status note), and
-`wrangler` has no `ai-gateway` command, so it is the `cf-ai-gateway` MCP server — which needs the user to
-authorise it once. Tracked as `.scratch/ai-stack/issues/01`.
+**What the account actually says** (checked 2026-09-30 via the `cf-ai-gateway` MCP server):
 
-One option worth knowing before creating anything by hand: Cloudflare accepts the literal gateway id
-`default`, which **creates a gateway on the first authenticated request**. That makes "no gateway exists" a
-non-blocker, but it is not a substitute here — an auto-created gateway does not carry the settings
-`infra/index.ts` declares, and `cacheTtl: 3600` is the entire point for the eval harness.
+| Layer             | State                                                                                                                                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The gateway       | ✅ `effect-ai-ai-dev`, created **2026-09-29 16:18**, with `cache_ttl: 3600`, `collect_logs: true`, 600/min sliding — exactly what `infra/index.ts` declares, so Pulumi **was** applied for it |
+| The adapters      | ✅ all four paths route — chat by gateway hostname, embeddings by `cf-aig-gateway-id` header, both bindings by `{ gateway: { id } }` run option                                               |
+| The configuration | ✅ `CLOUDFLARE_AI_GATEWAY` and `AI_GATEWAY` are `effect-ai-ai-dev` at every level of `wrangler.jsonc`                                                                                         |
+| Verified by       | ✅ **execution**, not assertion — 63 log entries, and the before/after below                                                                                                                  |
+
+**The embedder fix is measured rather than argued.** The gateway's logs show only
+`@cf/meta/llama-3.3-70b-instruct-fp8-fast` from 14:42 UTC onward, and `@cf/baai/bge-m3` appears for the first
+time at 17:00 UTC — after the embedder commit at 16:36 UTC. Before the fix the embedder was invisible to the
+gateway; after it, it is not. That is the whole claim, and it needed no argument once the logs were readable.
+
+**And the cache works, which was the point.** Cached entries report `cost: 0` and `latency: 0`, including for
+`bge-m3`. An uncached `llama-3.3-70b` call at 888 input tokens cost **30.2 neurons**; the cached repeats cost
+nothing. That is the mechanism that makes a re-run of the same eval fixtures free against a 10,000-neuron
+daily allocation.
+
+**The lesson is not about AI Gateway.** `AGENTS.md` says to put an external fact in `docs/references.md` with
+the date it was checked _"rather than asserting a version or a provider behaviour inline, so a stale claim can
+be told from a wrong one"_. The inline comment I trusted was a stale claim, and because it was inline there
+was nothing to date it against — so I could not tell. The comments are corrected and the fact now has a dated
+row.
+
+**`bindings-check`'s blind spot is still real**, and this episode is not evidence against it: it compares
+declarations against declarations, so it would pass just as happily if the gateway _had_ been absent. What
+changed is only that this particular resource turns out to exist.
 
 It sits in front of any model provider, Workers AI included, and gives: **caching** of identical requests,
 **rate limiting**, **retries and fallback** to another provider, **per-request logging with tokens and
@@ -504,7 +519,7 @@ full stack, with B2B SaaS basics._ Honest scoring.
 | **End-to-end evals**           | ⚠️ built, blocked on model quota. Real corpus with distractors, scored against docket's 33/99                                                                                                                                                                                                               |
 | **Durable execution**          | ✅ `effect/workflow` on a ~200-line Postgres engine; memoised activities, proven by a "exactly one extraction call" test                                                                                                                                                                                   |
 | **Structured output**          | ✅ native JSON mode with a provider-side JSON schema, measured field ordering                                                                                                                                                                                                                              |
-| **AI Gateway**                 | ⚠️ every adapter routes through it (embeddings included, 2026-09-30) — but **no gateway exists on the account**, so the calls are unmetered. §7                                                                                                                                                             |
+| **AI Gateway**                 | ✅ in use and **verified by execution** — every adapter routes (embeddings joined 2026-09-30, provable from the logs' before/after), the gateway carries `cache_ttl: 3600`, and cached calls report `cost: 0`. §7                                                                                          |
 | **Agents (tool-calling loop)** | ✅ **built 2026-09-29, this row was stale.** `AskCorpus` runs a real `Tool.make("search_policy")` loop under `AgentModel`, streams progress, and **refuses an answer whose citation it cannot verify**. The claim below about `toolChoice: "none"` is true only of the DECIDE adapter, which is deliberate |
 | **Stateful agents**            | ⚠️ `AssistantAgent` on the Agents SDK (2026-09-30): durable per-conversation state, an org-scoped Durable Object name enforced by the port's `CurrentOrg` requirement, reachable over RPC. No resumable streaming and no console surface yet                                                                |
 | **Reranking**                  | ❌ RRF only; no cross-encoder                                                                                                                                                                                                                                                                              |
@@ -560,10 +575,10 @@ Ordered by what unblocks the most, not by size:
 0. **Wire the pipeline into the Worker (§3.1).** Not in the original ordering because I had not yet
    discovered it. Everything below is an improvement to a path production cannot run; this is the one that
    makes the product exist. Mostly composition, not new logic.
-1. **AI Gateway** — unblocks the eval run via caching, gives cost/token observability, and brings external
-   providers under Cloudflare. Smallest change with the widest effect. _All four adapter paths route as of
-   2026-09-30 (the embedder was last, and is the most-repeated call). What remains is **creating the
-   gateway**, which no amount of code can do: `effect-ai-ai-dev` is named everywhere and exists nowhere._
+1. ~~**AI Gateway**~~ — **done.** All four adapter paths route as of 2026-09-30, the embedder last and it is
+   the most-repeated call. The gateway itself has existed since 2026-09-29, which I got wrong twice before
+   reading the account; §7 has the sequence. Cached calls report `cost: 0`, which is the eval-quota
+   mechanism this item existed for.
 2. **Telemetry** — `effect/observability` + Analytics Engine, product metrics before platform ones. An AI
    engineering demo with no observability is not one.
 3. **API keys → quota (DO) → caching**, in that order. Each needs the previous: a quota is per key, and a
