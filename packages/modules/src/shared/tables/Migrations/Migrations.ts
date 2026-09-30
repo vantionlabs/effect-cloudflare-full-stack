@@ -107,7 +107,17 @@ export const migrations = {
    *
    * Pointing at the generated file keeps the schema single-sourced, so `bun run auth:check` covers this table too.
    */
-  "0023_auth_api_key": SessionTable
+  "0023_auth_api_key": SessionTable,
+  /*
+   * `events` gains `workflow_instance_id`, because the queue now hands the decide pipeline to a Cloudflare
+   * Workflow instead of running it inline (ADR-0024).
+   *
+   * Re-applies `EventTable` — the `0015_rule_conditions` pattern — which is safe because the added statement
+   * is `add column if not exists` and every other statement in that file is `if not exists` too. Checked
+   * rather than assumed: re-applying a file that a LATER migration has since altered is what produced
+   * `column "subject_kind" does not exist`, and nothing has altered `events`.
+   */
+  "0024_event_workflow_instance": EventTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

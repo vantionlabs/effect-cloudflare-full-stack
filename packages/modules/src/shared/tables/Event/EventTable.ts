@@ -59,8 +59,37 @@ export const EventTable = Effect.gen(function*() {
       -- Null until a consumer picks it up. The enqueue-gap sweeper looks for queued rows older than
       -- a couple of minutes, which is why this is separate from created_at.
       started_at       timestamptz,
-      finished_at      timestamptz
+      finished_at      timestamptz,
+      /*
+       * The Cloudflare Workflow instance carrying this event's work, when one is.
+       *
+       * The queue consumer no longer runs the decide pipeline inline — it starts a Workflow instance and
+       * acks, and the instance owns the row's finish. So "processing" can now mean "somebody else is
+       * working on this", and without this column that work would be unfindable: the row would say
+       * "processing" and nothing would say by what.
+       *
+       * That matters more here than it would in most systems. This table exists because "Queues has no
+       * queryable history" — the product's own thesis applied to its own machinery — and a decision that is
+       * running is exactly the state an operator asks about. The value is what
+       * "wrangler workflows instances describe" takes.
+       *
+       * (Note the quotes rather than backticks: a backtick in a prose comment INSIDE a sql template closes
+       * the template, and the error lands on a line of English. AGENTS.md's first recorded trap, and I just
+       * walked into it.)
+       */
+      workflow_instance_id text
     )
+  `
+
+  /*
+   * For databases created before the column existed.
+   *
+   * The "0015_rule_conditions" pattern: the definition above is authoritative and this file is re-applied
+   * under a new key, rather than editing an applied migration in place and leaving every existing database
+   * on the old shape. "add column if not exists" makes re-running a no-op.
+   */
+  yield* sql`
+    alter table events add column if not exists workflow_instance_id text
   `
 
   yield* sql`

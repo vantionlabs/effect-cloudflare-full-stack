@@ -122,6 +122,24 @@ jobs:
       #
       # Gated on the secret rather than made conditional in the test file: a suite that silently
       # skips itself is worse than one that visibly does not run, and the step below says so out loud.
+      # The Worker reads its config from its OWN environment, not from this job's.
+      #
+      # `ConfigProvider.fromEnvRecord(env)` means "env" is the Worker's bindings — wrangler.jsonc vars plus
+      # apps/worker/.env — and `createTestHarness` does not read this process's variables. So a secret
+      # exported to the step is invisible to the code under test, and `Config.Redacted("CLOUDFLARE_AI_TOKEN")`
+      # (deliberately undefaulted, so a missing token fails loudly rather than silently falling back to the
+      # deterministic embedder) dies with `ConfigError: Expected string at ["CLOUDFLARE_AI_TOKEN"]`.
+      #
+      # That took three CI rounds to find, because the symptom is 70 failing tests rather than a missing
+      # variable. The e2e job has written this file all along, which is why only this job was affected —
+      # until the same omission was found there too.
+      - name: Write the Worker's own environment
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
+        env:
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+        run: |
+          echo "CLOUDFLARE_AI_TOKEN=$CLOUDFLARE_AI_TOKEN" >> apps/worker/.env
+
       - name: Test (real Worker — needs a remote runtime for the AI binding)
         if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
         env:
@@ -217,6 +235,8 @@ jobs:
       # browser over plain http, and every sign-in would appear to succeed while signing nobody in.
       - name: Write the API's local environment
         if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
+        env:
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
         run: |
           URL="postgres""ql://$PGUSER:$PGPASSWORD@localhost:$PGPORT/$PGDATABASE"
           {
@@ -224,6 +244,11 @@ jobs:
             echo "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED=$URL"
             echo "BETTER_AUTH_SECRET=ci-only-secret-at-least-32-characters-long"
             echo "BASE_URL=http://localhost:5173"
+            # Undefaulted on purpose in the adapters, so its absence is a layer-build defect rather than a
+            # silent fall back to the deterministic embedder. Missing here meant the API died on its first
+            # request, the console's SSR never returned 2xx, and Playwright reported it as
+            # "Timed out waiting 120000ms from config.webServer" — a web-server symptom for a credential cause.
+            echo "CLOUDFLARE_AI_TOKEN=$CLOUDFLARE_AI_TOKEN"
           } >> apps/worker/.env
           echo "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=$URL" >> "$GITHUB_ENV"
 
