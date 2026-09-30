@@ -163,6 +163,16 @@ your disk because you ran `vite` at some point, which is exactly why local green
 `bun run --filter @ea/console build` first; CI does, before `check`, for this reason. Found when the first
 push to the remote failed CI on a tree whose `preflight` had just passed.
 
+**`bun run hygiene` now needs a built console**, because `bundle:check` reads emitted bytes rather than the
+import graph — tree-shaking is the thing being verified, and only the output can answer whether it worked. CI
+already builds the console before `check` for the route-tree reason, so the order is right there; locally, run
+`bun run --filter @ea/console build` first or the check exits telling you to.
+
+That check found a real leak on its first run: the `Db` seam and the migration manifest shared a barrel, so
+`@ea/api`'s `Serve.ts` imported `Db`, the console imported `@ea/api`, and **the browser bundle contained every
+`create table` statement in the repo**. The lesson generalises — a barrel is transitive, so a folder that holds
+both a seam and something heavy exports the heavy thing to everyone who wants the seam.
+
 **`bun run db:migrate` and `bun run test` target DIFFERENT databases by default.** `migrate` prefers
 `DATABASE_URL`, which `apps/worker/.env` sets to the **dev Neon** project; the test suites read the `PG*`
 variables and hit the **compose container**. So "I applied the migration" and "the tests see the new column"

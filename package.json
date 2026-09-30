@@ -55,7 +55,7 @@
     "deps:check": "syncpack lint",
     "deps:update": "syncpack update",
     "dep:check": "bun scripts/boundaries.ts",
-    "hygiene": "bun run knip && bun run deps:check && bun run secrets && bun run dep:check && bun run bindings:check && bun run auth:check",
+    "hygiene": "bun run knip && bun run deps:check && bun run secrets && bun run dep:check && bun run bindings:check && bun run bundle:check && bun run auth:check",
     "preflight": "bun run format && bun run check && bun run lint && bun run hygiene && bun run test",
     "effect:verify": "bun scripts/verify-effect-api.ts",
     "evals": "bun evals/Decisions.ts",
@@ -72,7 +72,8 @@
     "evals:retrieval": "bun evals/RetrievalRecall.ts",
     "db:verify": "bun scripts/verify-postgres.ts",
     "db:migrate": "bun scripts/migrate.ts",
-    "test:e2e": "bun run --filter @ea/e2e test"
+    "test:e2e": "bun run --filter @ea/e2e test",
+    "bundle:check": "bun scripts/bundle-check.ts"
   },
   "devDependencies": {
     "@effect/tsgo": "0.46.1",

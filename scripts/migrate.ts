@@ -15,7 +15,7 @@
  * Run `bun run db:verify` first against an unfamiliar database. Verifying the platform assumptions
  * takes a second; discovering a missing `dutch` configuration from a half-applied migration does not.
  */
-import { migrate } from "@ea/modules/shared/tables/Database"
+import { migrate } from "@ea/modules/shared/tables/Migrations"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Redacted } from "effect"
 import { SqlClient } from "effect/sql"

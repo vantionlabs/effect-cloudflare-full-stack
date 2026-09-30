@@ -20,6 +20,17 @@ import { fileURLToPath } from "node:url"
 import { defineConfig } from "vite"
 
 export default defineConfig({
+  build: {
+    /*
+     * Empty `dist` on every build, EXPLICITLY.
+     *
+     * Vite's default would normally do this for an outDir inside the root, and here it does not — the Cloudflare
+     * plugin writes the Worker bundles alongside the client one and the directory survived. Content-hashed assets
+     * then accumulate, so `bun run bundle:check` scanned files from earlier builds and reported a leak that had
+     * already been fixed. A stale artefact is worse than a missing one: it makes a check lie.
+     */
+    emptyOutDir: true
+  },
   /*
    * `@/` for this app's own src.
    *

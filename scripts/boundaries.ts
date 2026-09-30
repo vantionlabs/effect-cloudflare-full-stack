@@ -223,7 +223,7 @@ const rules: ReadonlyArray<Rule> = [
     // groups into one contract, and `Migrations.ts` is the one place migration order is decided.
     permitted: (path, specifier) => {
       if (path.startsWith("packages/modules/shared/api/")) return true
-      if (path === "packages/modules/shared/tables/Database/Migrations.ts") return true
+      if (path === "packages/modules/shared/tables/Migrations/Migrations.ts") return true
       const target = sliceOfSpecifier(specifier)
       return target === undefined || target === "shared" || target === sliceOf(path)
     }

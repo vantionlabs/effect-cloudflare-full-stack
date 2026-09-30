@@ -8,7 +8,7 @@
  *
  * A global setup makes the dependency explicit and removes the ordering entirely.
  */
-import { migrate } from "@ea/modules/shared/tables/Database"
+import { migrate } from "@ea/modules/shared/tables/Migrations"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Redacted } from "effect"
 
