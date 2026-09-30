@@ -406,6 +406,18 @@ const executeEventConstructors = (): Array<string> => {
  *
  * Writes are satisfied by supplying `organization_id` as a column; reads, updates and deletes need a WHERE.
  */
+/**
+ * Every table carrying `organization_id`. **A table missing from this list is not checked at all.**
+ *
+ * That is this rule's silent failure, and it had already happened: the whole chat slice — `rooms`, `messages`,
+ * `message_reactions`, `message_mentions`, `room_reads` — was absent, so none of its queries were ever read by
+ * the tenancy check. Found while adding `api_keys` and noticing the exempt count had not changed.
+ *
+ * The list is derivable — `rg "create table if not exists" | grep organization_id` — but it stays explicit,
+ * because deriving it would mean a table that FORGOT `organization_id` silently leaves the rule's scope, which
+ * is the same failure one level down. Adding a tenant table means adding a line here, and `scripts/db-verify`
+ * printing a table this list does not name is the signal.
+ */
 const TENANT_TABLES = new Set([
   "source_documents",
   "intakes",
@@ -417,7 +429,15 @@ const TENANT_TABLES = new Set([
   "executions",
   "events",
   "workflow_executions",
-  "workflow_activities"
+  "workflow_activities",
+  // The chat slice. Absent until 2026-09-30, so every query below was unchecked.
+  "rooms",
+  "messages",
+  "message_reactions",
+  "message_mentions",
+  "room_reads",
+  // Keys are per organization, and the resolution lookup is the one place the tenant is the ANSWER.
+  "api_keys"
 ])
 
 /**

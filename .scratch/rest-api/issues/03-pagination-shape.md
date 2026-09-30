@@ -1,6 +1,6 @@
 # One paging shape for every collection, decided before the first one is frozen
 
-Status: ready-for-agent
+Status: done
 
 `ListQueue` and `ListIntakes` both clamp a caller-supplied `limit` against a hard ceiling — the right
 instinct, and already tested — but **neither returns a cursor**, so there is no way to ask for the next page.

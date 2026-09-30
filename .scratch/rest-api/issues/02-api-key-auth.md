@@ -1,6 +1,6 @@
 # X-API-Key: a second auth path resolving to the same Identity
 
-Status: ready-for-agent
+Status: done
 
 Today the only way to authenticate is a better-auth session cookie, which a browser gets by signing in. So
 **no third party can call this API at all** — including the Laravel consumer that is the stated reason the
@@ -42,3 +42,30 @@ The open decision this issue names — a key is not a member, but `Identity` car
 first thing to settle, and it needs an ADR because "what can a key do" is an authorisation question with an
 audit consequence: a key that can approve a payment while recording a human's name in `approved_by` is worse
 than one that cannot approve at all.
+
+Done. A key authenticates a REST request with no cookie, no session and no browser — asserted for a read and a
+write, as `X-API-Key` and as `Authorization: Bearer`.
+
+**The open question this issue named is answered in ADR-0022: a key ACTS AS a member.** No machine role, no
+synthetic user. `acts_as_user_id` names the person, membership is joined on every request rather than copied — so
+removing somebody from an organization revokes their keys with them — and `approved_by` stays a real person, which
+is what makes a program's approval attributable.
+
+Also here: `POST /api-keys`, `GET /api-keys`, `DELETE /api-keys/{id}` (revoke, idempotent, never deletes the row).
+22 operations in the document now.
+
+**A test caught the one thing I had documented and not implemented.** The middleware fell through to the cookie
+when a key was present and wrong — so a browser with a broken key kept working, as whoever was signed in. A client
+would have seen 200s, believed its key worked, and been writing under somebody else's identity. It refuses now,
+and the test is the contract.
+
+Three things this issue asked for that were NOT done, each for a stated reason:
+
+- **`HttpApiSecurity` in the document** — `.scratch/rest-api/issues/06`. Supplying `security` changes the
+  middleware's shape, and refactoring the one seam every protected endpoint goes through, twice in one pass, on a
+  shape not yet verified, is how a subtle auth bug ships. The document's description says what to send in the
+  meantime.
+- **CORS for the key path** — deliberately not added, against `PLAN.md`. A key-authenticated caller is
+  server-to-server and does not need CORS; enabling it would invite putting a bearer credential into frontend
+  code, where it cannot be kept.
+- **Per-key rate limiting** — still `.scratch/chat-realtime/issues/08`, and now it has a real key to limit.

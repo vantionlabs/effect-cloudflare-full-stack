@@ -3,7 +3,7 @@
   "info": {
     "title": "effect-ai",
     "version": "1.0.0",
-    "description": "Document decisioning: upload a document, and read back a decision with citations somebody can audit. Every response under /api/v1 is frozen — fields are added, never renamed or removed.\n\nUploads are asynchronous: POST /api/v1/intakes answers 202 with the ids to read the outcome by, because the decide pipeline runs on a queue after the response is written."
+    "description": "Document decisioning: upload a document, and read back a decision with citations somebody can audit. Every response under /api/v1 is frozen — fields are added, never renamed or removed.\n\nUploads are asynchronous: POST /api/v1/intakes answers 202 with the ids to read the outcome by, because the decide pipeline runs on a queue after the response is written.\n\nAuthentication: send `X-API-Key: ea_...` (or `Authorization: Bearer ea_...`). Issue a key at POST /api/v1/api-keys; the plaintext is returned once and never again. A browser session cookie also works, and is what the console uses. A key acts as the member who created it and has that member's permissions, so revoking their membership revokes the key."
   },
   "paths": {
     "/api/v1/health": {
@@ -53,6 +53,254 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/api-keys": {
+      "post": {
+        "tags": [
+          "api_keys"
+        ],
+        "operationId": "api_keys.issue",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "prefix": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "key",
+                    "prefix",
+                    "created_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "get": {
+        "tags": [
+          "api_keys"
+        ],
+        "operationId": "api_keys.list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "prefix": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "last_used_at": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "revoked_at": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "prefix",
+                          "created_at",
+                          "last_used_at",
+                          "revoked_at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "next_cursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "next_cursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/api-keys/{apiKeyId}": {
+      "delete": {
+        "tags": [
+          "api_keys"
+        ],
+        "operationId": "api_keys.revoke",
+        "parameters": [
+          {
+            "name": "apiKeyId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "api_key_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "api_key_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "ApiKeyNotFoundV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyNotFoundV1Encoded"
                 }
               }
             }
@@ -2344,6 +2592,25 @@
         ],
         "additionalProperties": false
       },
+      "ApiKeyNotFoundV1Encoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "ApiKeyNotFoundV1"
+            ]
+          },
+          "api_key_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "api_key_id"
+        ],
+        "additionalProperties": false
+      },
       "MeV1Encoded": {
         "type": "object",
         "properties": {
@@ -2441,6 +2708,9 @@
     },
     {
       "name": "me"
+    },
+    {
+      "name": "api_keys"
     },
     {
       "name": "intake"

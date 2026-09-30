@@ -25,6 +25,7 @@ import { ExecutionTable } from "@ea/modules/decision/tables/Execution"
 import { ExtractionTable } from "@ea/modules/decision/tables/Extraction"
 import { RuleTable } from "@ea/modules/decision/tables/Rule"
 import { WorkflowTable } from "@ea/modules/decision/tables/Workflow"
+import { ApiKeyTable } from "@ea/modules/iam/tables/ApiKey"
 import { SessionTable } from "@ea/modules/iam/tables/Session"
 import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
@@ -95,7 +96,9 @@ export const migrations = {
   // Read positions, from which unread counts are COUNTED rather than stored.
   "0021_room_reads": RoomReadTable,
   // Mentions, resolved once at write time rather than parsed on every read.
-  "0022_mentions": MentionTable
+  "0022_mentions": MentionTable,
+  // API keys: how a program authenticates. Only the hash is stored, and a key ACTS AS a member.
+  "0023_api_keys": ApiKeyTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

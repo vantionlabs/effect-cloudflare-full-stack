@@ -21,9 +21,21 @@ export const ArchiveRoom = (input: {
   Effect.gen(function*() {
     const db = yield* Db
     const rows = yield* db.scoped((sql, orgId) =>
+      /*
+       * `case when` rather than a NESTED `sql` fragment, and the reason is the tenancy check.
+       *
+       * This was `set archived_at = ${...? sql`now()` : sql`null`}`, which is correct SQL and unreadable to
+       * `scripts/boundaries.ts`: its scanner captures a statement body with `[^`]*`, so a nested template ends
+       * the match early — the body it saw stopped before `where organization_id`, and it reported this
+       * statement as unscoped. A false positive is the *good* outcome there; the same truncation on a statement
+       * that genuinely lacked a tenant filter would have hidden it.
+       *
+       * So the statement is written as one template. `now()` stays, because the archive time should be the
+       * database's clock and not a Worker's.
+       */
       sql<never>`
         update rooms
-           set archived_at = ${input.archived ? sql`now()` : sql`null`}
+           set archived_at = case when ${input.archived} then now() else null end
          where organization_id = ${orgId} and id = ${input.roomId} and kind = 'channel'
         returning ${sql.literal(ROOM_COLUMNS)}
       `

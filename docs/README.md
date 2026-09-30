@@ -49,6 +49,7 @@ Each one ends in **Revisit when**, so these are decisions with expiry dates rath
 | [0018](./adr/0018-rooms-are-stateless-fan-out.md)                  | a room is stateless fan-out; Postgres stays the record                       | presence is derived, so a ghost is not representable                                                                |
 | [0019](./adr/0019-no-database-in-a-durable-object.md)              | no database client in a Durable Object                                       | a 15-minute billing rule, enforced by `dep:check`                                                                   |
 | [0020](./adr/0020-push-only-socket-with-schema-frames.md)          | the socket is push-only, carrying Schema frames                              | hibernation forbids an in-memory RPC session                                                                        |
+| [0022](./adr/0022-an-api-key-acts-as-a-member.md)                  | an API key acts as a member, with no authority of its own                    | revoking the member revokes the key; `approved_by` stays a real person                                              |
 | [0021](./adr/0021-package-taxonomy.md)                             | packages by kind: features, capabilities, integrations                       | executed: six packages, and every package's source under `src/` — refines 0011                                      |
 
 **No gaps left in the numbering.** 0004–0008 were written on 2026-09-30, and three of them do not say what

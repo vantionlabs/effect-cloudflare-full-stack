@@ -12,6 +12,7 @@
 import { MessageGroup } from "@ea/modules/chat/domain/Message"
 import { RoomGroup } from "@ea/modules/chat/domain/Room"
 import { DecisionGroup } from "@ea/modules/decision/domain/Decision"
+import { ApiKeyGroup } from "@ea/modules/iam/domain/ApiKey"
 import { MeGroup } from "@ea/modules/iam/domain/Identity"
 import { IntakeGroup } from "@ea/modules/intake/domain/Intake"
 import { AskGroup } from "@ea/modules/policy/domain/Ask"
@@ -30,6 +31,7 @@ import { HealthGroup } from "./Health/HealthWire.ts"
 export const ApiV1 = HttpApi.make("effect-ai-v1")
   .add(HealthGroup)
   .add(MeGroup)
+  .add(ApiKeyGroup)
   .add(IntakeGroup)
   .add(DecisionGroup)
   .add(RoomGroup)
@@ -43,5 +45,9 @@ export const ApiV1 = HttpApi.make("effect-ai-v1")
     "Document decisioning: upload a document, and read back a decision with citations somebody can " +
       "audit. Every response under /api/v1 is frozen — fields are added, never renamed or removed.\n\n" +
       "Uploads are asynchronous: POST /api/v1/intakes answers 202 with the ids to read the outcome by, " +
-      "because the decide pipeline runs on a queue after the response is written."
+      "because the decide pipeline runs on a queue after the response is written.\n\n" +
+      "Authentication: send `X-API-Key: ea_...` (or `Authorization: Bearer ea_...`). Issue a key at " +
+      "POST /api/v1/api-keys; the plaintext is returned once and never again. A browser session cookie also " +
+      "works, and is what the console uses. A key acts as the member who created it and has that member's " +
+      "permissions, so revoking their membership revokes the key."
   )

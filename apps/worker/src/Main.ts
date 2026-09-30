@@ -26,9 +26,11 @@
  */
 import { LanguageModelWorkersAiOpenAi } from "@ea/ai-openai/Model"
 import {
+  ApiKeyHttp,
   ApiV1,
   AskHttp,
   AskRpcLive,
+  AuthenticatedLive,
   DecisionHttp,
   DecisionRpcLive,
   IdentityHttp,
@@ -43,7 +45,7 @@ import {
   RpcV1
 } from "@ea/api/v1"
 import { HealthHttp } from "@ea/api/v1"
-import { IdentityResolverLive, SessionHttp, SessionLive, SessionRpcLive, SessionStore } from "@ea/better-auth/Session"
+import { IdentityResolverLive, SessionHttp, SessionRpcLive, SessionStore } from "@ea/better-auth/Session"
 import { Db } from "@ea/database/Database"
 import { withDatabase } from "@ea/database/Database"
 import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
@@ -193,6 +195,7 @@ const ServicesLayer = (env: Env) =>
 /** Every v1 HTTP edge. */
 const HttpEdges = Layer.mergeAll(
   HealthHttp,
+  ApiKeyHttp,
   IdentityHttp,
   IntakeHttp,
   DecisionHttp,
@@ -289,6 +292,12 @@ const AppLayer = (env: Env) =>
      */
     Layer.provide(HttpEdges),
     Layer.provide(RpcEdges),
+    /*
+     * The authorization seam, provided HERE rather than beside `IdentityResolverLive` below — order in this pipe
+     * is what satisfies requirements, and this middleware needs the resolver, so it has to come before the layer
+     * that supplies one.
+     */
+    Layer.provide(AuthenticatedLive),
     // JSON rather than msgpack: the console is a browser, the payloads are small, and a wire format a
     // human can read in devtools is worth more here than a few bytes.
     Layer.provide(RpcSerialization.layerJson),
@@ -307,7 +316,6 @@ const AppLayer = (env: Env) =>
      * the graph for the same reason — `ServicesLayer` is merged, not provided.
      */
     Layer.provideMerge(IdentityResolverLive),
-    Layer.provide(SessionLive),
     Layer.provide(SessionRpcLive),
     Layer.provideMerge(ServicesLayer(env)),
     Layer.provide(WorkerPlatform)
