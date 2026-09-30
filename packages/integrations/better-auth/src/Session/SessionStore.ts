@@ -48,9 +48,33 @@ interface ResolvedSession {
   readonly activeOrganizationId: string | null
 }
 
+/**
+ * What a verified API key tells us: who it acts as, and in which organization.
+ *
+ * Deliberately not an `Identity` — the ROLE is missing, because better-auth's key plugin knows the key's owner
+ * and not their membership, and inventing a role here is the mistake ADR-0022 exists to avoid. The role comes
+ * from a membership lookup afterwards.
+ */
+export interface ApiKeyOwner {
+  readonly userId: string
+  readonly organizationId: string
+}
+
 export interface BetterAuthService {
   /** Handles `/api/auth/*`. Web-standard in and out, which is why it mounts cleanly. */
   readonly handler: (request: Request) => Promise<Response>
+  /**
+   * Verifies a presented API key, or `null`.
+   *
+   * **All of the hard parts are the plugin's**: the hash comparison, expiry, the `enabled` flag, the per-key rate
+   * limit and its quota counters. This is the whole reason the hand-rolled version was deleted.
+   *
+   * The organization comes from the key's `metadata`, because the plugin is configured with
+   * `references: "user"` — see `BetterAuth.ts` for why that is not `"organization"`. Metadata is
+   * caller-supplied, so it is a CLAIM: what makes it safe is that the membership is checked afterwards, and a
+   * key naming an organization its user does not belong to resolves to nothing.
+   */
+  readonly verifyApiKey: (key: string) => Effect.Effect<ApiKeyOwner | null>
   /** Resolves the session from request headers, or `null` when there is none. */
   readonly session: (headers: Headers) => Effect.Effect<ResolvedSession | null>
   /**
@@ -153,6 +177,22 @@ export const acquireAuth = (
 
     return {
       handler: (request) => auth.handler(request),
+      verifyApiKey: (key) =>
+        Effect.map(
+          orNull(() => auth.api.verifyApiKey({ body: { key } })),
+          (result) => {
+            const verified = result as {
+              valid?: boolean
+              key?: { referenceId?: string; metadata?: Record<string, unknown> | null } | null
+            } | null
+            if (verified?.valid !== true || verified.key == null) return null
+
+            const userId = verified.key.referenceId
+            const organizationId = verified.key.metadata?.["organizationId"]
+            if (typeof userId !== "string" || typeof organizationId !== "string") return null
+            return { userId, organizationId }
+          }
+        ),
       activeRole: (headers) =>
         Effect.map(
           orNull(() => auth.api.getActiveMemberRole({ headers })),

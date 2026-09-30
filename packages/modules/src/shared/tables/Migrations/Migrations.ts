@@ -25,7 +25,6 @@ import { ExecutionTable } from "@ea/modules/decision/tables/Execution"
 import { ExtractionTable } from "@ea/modules/decision/tables/Extraction"
 import { RuleTable } from "@ea/modules/decision/tables/Rule"
 import { WorkflowTable } from "@ea/modules/decision/tables/Workflow"
-import { ApiKeyTable } from "@ea/modules/iam/tables/ApiKey"
 import { SessionTable } from "@ea/modules/iam/tables/Session"
 import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
@@ -97,8 +96,18 @@ export const migrations = {
   "0021_room_reads": RoomReadTable,
   // Mentions, resolved once at write time rather than parsed on every read.
   "0022_mentions": MentionTable,
-  // API keys: how a program authenticates. Only the hash is stored, and a key ACTS AS a member.
-  "0023_api_keys": ApiKeyTable
+  /*
+   * better-auth's `apikey` table, from the `@better-auth/api-key` plugin.
+   *
+   * Re-applies the GENERATED auth schema rather than writing the DDL again, which is the `0015_rule_conditions`
+   * pattern and is safe here for a reason worth checking before copying it: every statement in that file is
+   * `create table if not exists` or `create index if not exists`, so a second run is a no-op. Re-applying a file
+   * that has since been altered by a later migration is what produced `column "subject_kind" does not exist` —
+   * see `0019_message_lifecycle`.
+   *
+   * Pointing at the generated file keeps the schema single-sourced, so `bun run auth:check` covers this table too.
+   */
+  "0023_auth_api_key": SessionTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

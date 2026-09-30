@@ -26,11 +26,9 @@
  */
 import { LanguageModelWorkersAiOpenAi } from "@ea/ai-openai/Model"
 import {
-  ApiKeyHttp,
   ApiV1,
   AskHttp,
   AskRpcLive,
-  AuthenticatedLive,
   DecisionHttp,
   DecisionRpcLive,
   IdentityHttp,
@@ -67,6 +65,7 @@ import { LanguageModel } from "effect/ai"
 import { HttpRouter } from "effect/http"
 import { HttpApiBuilder, HttpApiScalar } from "effect/http-api"
 import { RpcSerialization, RpcServer } from "effect/rpc"
+import { AuthenticatedLive } from "./platform/AuthenticatedLive.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
 import { dispatchEvent } from "./platform/DispatchEvent.ts"
 import { ConnectHyperdrive, ReactivityLive } from "./platform/HyperdriveConnect.ts"
@@ -195,7 +194,6 @@ const ServicesLayer = (env: Env) =>
 /** Every v1 HTTP edge. */
 const HttpEdges = Layer.mergeAll(
   HealthHttp,
-  ApiKeyHttp,
   IdentityHttp,
   IntakeHttp,
   DecisionHttp,

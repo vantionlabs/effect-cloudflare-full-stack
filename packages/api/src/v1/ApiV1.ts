@@ -12,7 +12,6 @@
 import { MessageGroup } from "@ea/modules/chat/domain/Message"
 import { RoomGroup } from "@ea/modules/chat/domain/Room"
 import { DecisionGroup } from "@ea/modules/decision/domain/Decision"
-import { ApiKeyGroup } from "@ea/modules/iam/domain/ApiKey"
 import { MeGroup } from "@ea/modules/iam/domain/Identity"
 import { IntakeGroup } from "@ea/modules/intake/domain/Intake"
 import { AskGroup } from "@ea/modules/policy/domain/Ask"
@@ -31,7 +30,6 @@ import { HealthGroup } from "./Health/HealthWire.ts"
 export const ApiV1 = HttpApi.make("effect-ai-v1")
   .add(HealthGroup)
   .add(MeGroup)
-  .add(ApiKeyGroup)
   .add(IntakeGroup)
   .add(DecisionGroup)
   .add(RoomGroup)

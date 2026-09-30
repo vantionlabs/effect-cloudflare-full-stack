@@ -12,7 +12,8 @@
     "@ea/domain": "workspace:*",
     "better-auth": "1.7.6",
     "effect": "catalog:",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "@better-auth/api-key": "1.7.6"
   },
   "devDependencies": {
     "@types/pg": "^8.23.1"

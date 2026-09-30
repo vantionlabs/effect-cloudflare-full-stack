@@ -18,7 +18,7 @@
  * because every store method requires `CurrentUser` too, an unauthenticated endpoint *cannot
  * compile* against a tenant-scoped query.
  */
-import { HttpApiError, HttpApiMiddleware } from "effect/http-api"
+import { HttpApiError, HttpApiMiddleware, HttpApiSecurity } from "effect/http-api"
 import { RpcMiddleware } from "effect/rpc"
 import { Unauthenticated } from "../Errors/Unauthenticated.ts"
 import type { CurrentUser } from "./Identity.ts"
@@ -30,10 +30,26 @@ import type { CurrentUser } from "./Identity.ts"
  * 401 rather than 403 because the caller may retry with credentials, and an empty body because
  * distinguishing "no session" from "expired" from "unknown user" is a probing oracle while the
  * client's remedy is identical in every case.
+ *
+ * **One declared security scheme, not three, and the reason is the framework's dispatch.**
+ *
+ * `HttpApiBuilder` tries declared schemes IN ORDER and falls through to the next when a handler fails, and
+ * `securityDecode` never fails — a missing header yields an empty credential. So with `apiKey` and a cookie scheme
+ * declared separately, a presented-but-WRONG key would fall through and be retried as a cookie, which is exactly
+ * the behaviour a test forbids: a browser with a broken key would keep working as whoever was signed in.
+ *
+ * Declaring one scheme removes the fall-through entirely and leaves the chain — key, bearer, cookie — in one
+ * handler that controls it. The cost is that the document names only the header scheme; `Authorization: Bearer`
+ * and the session cookie are described in the API's description instead. That is the honest trade: a correct
+ * behaviour with a partly-prose contract beats a fully-declared contract with an authentication hole.
  */
 export class Authenticated extends HttpApiMiddleware.Service<Authenticated, {
   provides: CurrentUser
-}>()("iam/Authenticated", { error: HttpApiError.Unauthorized }) {}
+  security: { readonly apiKey: HttpApiSecurity.ApiKey }
+}>()("iam/Authenticated", {
+  error: HttpApiError.Unauthorized,
+  security: { apiKey: HttpApiSecurity.apiKey({ key: "x-api-key" }) }
+}) {}
 
 export class AuthenticatedRpc extends RpcMiddleware.Service<AuthenticatedRpc, {
   provides: CurrentUser

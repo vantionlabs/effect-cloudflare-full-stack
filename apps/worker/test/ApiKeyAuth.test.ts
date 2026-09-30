@@ -18,15 +18,25 @@ afterAll(async () => {
   await harness?.dispose()
 })
 
-/** Issues a key the way a client would: once, over the API, with a session. */
-const issueKey = async (cookie: string, name = "Laravel") => {
-  const response = await harness.fetch("/api/v1/api-keys", {
-    method: "POST",
-    headers: { "content-type": "application/json", cookie, origin: harness.origin },
-    body: JSON.stringify({ name })
-  })
-  expect(response.status).toBe(201)
-  return await response.json() as { readonly id: string; readonly key: string; readonly prefix: string }
+/**
+ * Issues a key through **better-auth's own route**, which is where key management lives.
+ *
+ * `metadata.organizationId` is how the key names its tenant: the plugin is configured with
+ * `references: "user"`, so the key belongs to the creating user and the organization travels in metadata. It is a
+ * CLAIM — what makes it safe is that `IdentityForMember` checks the membership on every request, which the
+ * cross-organization test below exercises.
+ */
+const issueKey = async (cookie: string, organizationId: string, name = "Laravel") => {
+  const response = await harness.post(
+    "/api/auth/api-key/create",
+    { name, metadata: { organizationId } },
+    cookie
+  )
+  expect(response.status).toBe(200)
+  const body = await response.json() as { readonly id: string; readonly key: string; readonly start?: string }
+  // The plaintext, returned once by the plugin and never again.
+  expect(body.key.startsWith("ea_")).toBe(true)
+  return body
 }
 
 const withKey = (path: string, key: string, init: { method?: string; body?: unknown } = {}) =>
@@ -42,16 +52,16 @@ const withKey = (path: string, key: string, init: { method?: string; body?: unkn
 
 describe("X-API-Key", () => {
   it("authenticates a read with no cookie at all", async () => {
-    const { cookie } = await harness.signedInWithOrg()
-    const issued = await issueKey(cookie)
+    const { cookie, organizationId } = await harness.signedInWithOrg()
+    const issued = await issueKey(cookie, organizationId)
 
     const response = await withKey("/api/v1/intakes", issued.key)
     expect(response.status).toBe(200)
   })
 
   it("authenticates a WRITE, which is the point of an integration", async () => {
-    const { cookie } = await harness.signedInWithOrg()
-    const issued = await issueKey(cookie)
+    const { cookie, organizationId } = await harness.signedInWithOrg()
+    const issued = await issueKey(cookie, organizationId)
 
     const created = await withKey("/api/v1/rooms", issued.key, { method: "POST", body: { name: "From Laravel" } })
     expect(created.status).toBe(201)
@@ -59,8 +69,8 @@ describe("X-API-Key", () => {
   })
 
   it("works as an Authorization: Bearer header too", async () => {
-    const { cookie } = await harness.signedInWithOrg()
-    const issued = await issueKey(cookie)
+    const { cookie, organizationId } = await harness.signedInWithOrg()
+    const issued = await issueKey(cookie, organizationId)
 
     const response = await harness.fetch("/api/v1/intakes", {
       headers: { authorization: `Bearer ${issued.key}`, origin: harness.origin }
@@ -70,7 +80,7 @@ describe("X-API-Key", () => {
 
   it("resolves to the SAME organization the issuer was in", async () => {
     const first = await harness.signedInWithOrg()
-    const issued = await issueKey(first.cookie)
+    const issued = await issueKey(first.cookie, first.organizationId)
     // Something only the first organization can see.
     await harness.fetch(
       "/api/v1/intakes?collection=transactional&filename=bykey.md&content_type=text%2Fmarkdown",
@@ -78,7 +88,7 @@ describe("X-API-Key", () => {
     )
 
     const second = await harness.signedInWithOrg()
-    const theirKey = await issueKey(second.cookie)
+    const theirKey = await issueKey(second.cookie, second.organizationId)
 
     const mine = await (await withKey("/api/v1/intakes", issued.key)).json() as {
       readonly items: ReadonlyArray<unknown>
@@ -93,15 +103,12 @@ describe("X-API-Key", () => {
   })
 
   it("refuses a revoked key", async () => {
-    const { cookie } = await harness.signedInWithOrg()
-    const issued = await issueKey(cookie)
+    const { cookie, organizationId } = await harness.signedInWithOrg()
+    const issued = await issueKey(cookie, organizationId)
 
     expect((await withKey("/api/v1/intakes", issued.key)).status).toBe(200)
 
-    const revoked = await harness.fetch(`/api/v1/api-keys/${issued.id}`, {
-      method: "DELETE",
-      headers: { cookie, origin: harness.origin }
-    })
+    const revoked = await harness.post("/api/auth/api-key/delete", { keyId: issued.id }, cookie)
     expect(revoked.status).toBe(200)
 
     expect((await withKey("/api/v1/intakes", issued.key)).status).toBe(401)
@@ -130,36 +137,29 @@ describe("X-API-Key", () => {
 
 describe("key management", () => {
   it("lists keys without ever returning the secret again", async () => {
-    const { cookie } = await harness.signedInWithOrg()
-    const issued = await issueKey(cookie, "Visible")
+    const { cookie, organizationId } = await harness.signedInWithOrg()
+    const issued = await issueKey(cookie, organizationId, "Visible")
 
-    const listed = await harness.fetch("/api/v1/api-keys", { headers: { cookie } })
+    // GET, not POST: the plugin uses GET for `list` and `get`, POST for `create`, `delete` and `update`.
+    const listed = await harness.fetch("/api/auth/api-key/list", { headers: { cookie } })
     expect(listed.status).toBe(200)
     const body = await listed.text()
 
     expect(body).toContain("Visible")
-    expect(body).toContain(issued.prefix)
-    // The one assertion that matters most in this file.
+    // The one assertion that matters most in this file: the plaintext is unrecoverable after issue.
     expect(body).not.toContain(issued.key)
   })
 
-  it("revoking is idempotent, and a stranger's key is a 404", async () => {
+  it("another user cannot delete somebody else's key", async () => {
+    // better-auth owns this refusal; asserted because it is the property our tenancy story leans on.
     const first = await harness.signedInWithOrg()
-    const issued = await issueKey(first.cookie)
-
-    const revoke = () =>
-      harness.fetch(`/api/v1/api-keys/${issued.id}`, {
-        method: "DELETE",
-        headers: { cookie: first.cookie, origin: harness.origin }
-      })
-    expect((await revoke()).status).toBe(200)
-    expect((await revoke()).status).toBe(200)
+    const issued = await issueKey(first.cookie, first.organizationId)
 
     const second = await harness.signedInWithOrg()
-    const theirs = await harness.fetch(`/api/v1/api-keys/${issued.id}`, {
-      method: "DELETE",
-      headers: { cookie: second.cookie, origin: harness.origin }
-    })
-    expect(theirs.status).toBe(404)
+    const theirs = await harness.post("/api/auth/api-key/delete", { keyId: issued.id }, second.cookie)
+    expect(theirs.status).not.toBe(200)
+
+    // And it still works, which is what makes the refusal meaningful.
+    expect((await withKey("/api/v1/intakes", issued.key)).status).toBe(200)
   })
 })

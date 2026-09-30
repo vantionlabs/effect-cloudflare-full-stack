@@ -21,7 +21,6 @@
  */
 import { Unauthenticated } from "@ea/domain/Errors"
 import {
-  Authenticated,
   AuthenticatedRpc,
   CurrentUser,
   Identity,
@@ -31,8 +30,6 @@ import {
   UserId
 } from "@ea/domain/Identity"
 import { Effect, Layer, Result, Schema } from "effect"
-import { HttpServerRequest } from "effect/http"
-import { HttpApiError } from "effect/http-api"
 import type { AuthConfig } from "./BetterAuth.ts"
 import { acquireAuth, authSettings } from "./SessionStore.ts"
 
@@ -96,6 +93,16 @@ export const resolveIdentity = (config: AuthConfig, headers: Headers) =>
   }).pipe(Effect.scoped)
 
 /**
+ * A presented API key becomes its owner, or nothing.
+ *
+ * Paired with `IdentityForMember`: this half is better-auth's — the hash comparison, expiry, the `enabled` flag,
+ * the per-key rate limit — and the other half is the membership check that turns a claimed organization into a
+ * verified one. Neither is sufficient alone, which is why they are two calls and not one.
+ */
+export const apiKeyOwner = (config: AuthConfig, key: string) =>
+  Effect.scoped(Effect.flatMap(acquireAuth(config), (auth) => auth.verifyApiKey(key)))
+
+/**
  * The same seam as a plain service, for callers that are not handlers.
  *
  * Three layers now provide from one `resolveIdentity`: HTTP middleware, RPC middleware, and this. Each
@@ -117,18 +124,6 @@ export const IdentityResolverLive = Layer.effect(IdentityResolver)(
        */
       Effect.orDie(resolveIdentity(config, new Headers(headers)))
   }))
-)
-
-export const SessionLive = Layer.effect(Authenticated)(
-  // Settings are read once, when the layer is built: the binding and the secret are stable for an
-  // isolate's lifetime. Only the pool is per request.
-  Effect.map(authSettings, (config) => (httpEffect) =>
-    Effect.gen(function*() {
-      const request = yield* HttpServerRequest.HttpServerRequest
-      const identity = yield* resolveIdentity(config, new Headers(request.headers as Record<string, string>))
-      if (identity === null) return yield* Effect.fail(new HttpApiError.Unauthorized())
-      return yield* Effect.provideService(httpEffect, CurrentUser, identity)
-    }))
 )
 
 /**

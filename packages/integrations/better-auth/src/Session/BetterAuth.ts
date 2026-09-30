@@ -16,6 +16,7 @@
  * and id generation. The cost is two connections per request against Workers' limit of six
  * simultaneous outgoing connections — worth tracking if a request ever needs more.
  */
+import { apiKey } from "@better-auth/api-key"
 import { betterAuth } from "better-auth"
 import { organization } from "better-auth/plugins"
 import { Client, Pool } from "pg"
@@ -220,7 +221,39 @@ export const makeAuth = (config: AuthConfig) => {
       // Organizations are the tenant boundary. better-auth owns `organization`, `member` and
       // `invitation`; our tables carry `organization_id` with no foreign key into them, so its
       // schema upgrades never become our migration problem.
-      organization()
+      organization(),
+      /*
+       * API keys, and the plugin owns all of it: generation, hashing, the display prefix, expiry, per-key rate
+       * limiting, quotas and scopes. This replaced a hand-rolled `api_keys` table — which was a mistake, and the
+       * kind this repo has a standing rule against: the plugin is version-matched (`1.7.6`, same as
+       * `better-auth`) and does strictly more.
+       *
+       * **`references: "user"`, not `"organization"`, and the reason is `approved_by`.** Reading the plugin's
+       * source: with organization-owned keys the creating user is NOT stored — `referenceId` is the organization
+       * and nothing records a person. Our `Identity` needs a `userId`, because a decision approved by a program
+       * still has to be attributable to whoever authorised the automation (ADR-0022). So a key references its
+       * user, and the organization travels in `metadata`, checked against `member` on every request — which is
+       * what makes caller-supplied metadata safe rather than trusted.
+       *
+       * `disableKeyHashing` is left at its default. Saying so because the option exists, and storing these in
+       * plaintext would make one database breach every customer's credentials.
+       */
+      apiKey({
+        references: "user",
+        enableMetadata: true,
+        /*
+         * `ea_` so the string announces itself in a log, a commit or a screenshot — recognisable beats obscure,
+         * and secret scanners key on prefixes.
+         */
+        defaultPrefix: "ea_",
+        /*
+         * The plugin's own per-key rate limit, which is accounting a key can be held to rather than the
+         * per-colo approximation Cloudflare's binding provides (PLAN.md's R-series notes why that binding is
+         * explicitly not an accounting system). 1,000 per hour matches the contractual figure the plan uses as
+         * its example.
+         */
+        rateLimit: { enabled: true, timeWindow: 60 * 60 * 1000, maxRequests: 1000 }
+      })
     ],
 
     session: {

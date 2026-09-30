@@ -107,6 +107,33 @@ export const SessionTable = Effect.gen(function*() {
   `
 
   yield* sql`
+    create table if not exists "apikey" (
+      "id" text primary key,
+      "configId" text not null default 'default',
+      "name" text,
+      "start" text,
+      "referenceId" text not null,
+      "prefix" text,
+      "key" text not null,
+      "refillInterval" integer,
+      "refillAmount" integer,
+      "lastRefillAt" timestamptz,
+      "enabled" boolean default true,
+      "rateLimitEnabled" boolean default true,
+      "rateLimitTimeWindow" integer default 3600000,
+      "rateLimitMax" integer default 1000,
+      "requestCount" integer default 0,
+      "remaining" integer,
+      "lastRequest" timestamptz,
+      "expiresAt" timestamptz,
+      "createdAt" timestamptz not null,
+      "updatedAt" timestamptz not null,
+      "permissions" text,
+      "metadata" text
+    )
+  `
+
+  yield* sql`
     create index if not exists "session_userId_idx" on "session" ("userId")
   `
 
@@ -140,5 +167,17 @@ export const SessionTable = Effect.gen(function*() {
 
   yield* sql`
     create index if not exists "invitation_inviterId_idx" on "invitation" ("inviterId")
+  `
+
+  yield* sql`
+    create index if not exists "apikey_configId_idx" on "apikey" ("configId")
+  `
+
+  yield* sql`
+    create index if not exists "apikey_referenceId_idx" on "apikey" ("referenceId")
+  `
+
+  yield* sql`
+    create index if not exists "apikey_key_idx" on "apikey" ("key")
   `
 })

@@ -51,7 +51,13 @@ const COMPOSITION_ROOT = new Set([
    * construct things, which is `Main.ts`'s job.
    */
   "apps/worker/src/platform/Bindings.ts",
-  "apps/worker/src/RoomDurableObject.ts"
+  "apps/worker/src/RoomDurableObject.ts",
+  /*
+   * The authorization seam. The ONLY file that names a vendor and a feature together, which is what makes it
+   * composition: better-auth verifies an API key, `IdentityForMember` checks the membership, and neither package
+   * may name the other.
+   */
+  "apps/worker/src/platform/AuthenticatedLive.ts"
 ])
 
 const MODULES = "packages/modules/"
@@ -435,9 +441,12 @@ const TENANT_TABLES = new Set([
   "messages",
   "message_reactions",
   "message_mentions",
-  "room_reads",
-  // Keys are per organization, and the resolution lookup is the one place the tenant is the ANSWER.
-  "api_keys"
+  "room_reads"
+  /*
+   * better-auth's `apikey` is deliberately NOT here. It is not ours — the `@better-auth/api-key` plugin owns it,
+   * it has no `organization_id` column (ownership is `referenceId`), and no query in this repo touches it: the
+   * plugin's own API does. The same reasoning as `user`, `session` and `member`.
+   */
 ])
 
 /**
