@@ -72,6 +72,19 @@ export default defineConfig({
         test: {
           name: "worker",
           include: ["apps/worker/test/**/*.test.ts"],
+          /*
+           * The SAME migration the `tables` project runs, and it was missing here.
+           *
+           * This suite boots a real Worker against the compose Postgres, so it needs a schema — and it
+           * silently depended on one already being there. On a developer machine it always is, which is why
+           * nothing noticed: the suite is gated on `CLOUDFLARE_API_TOKEN`, so it had **never run in CI**
+           * until the secret was added, and then 71 of 92 tests failed at once on an empty database.
+           *
+           * Fixed in the config rather than by adding a step to the CI job, so a fresh clone gets it too.
+           * That is the whole lesson AGENTS.md keeps recording under "a developer machine holds state a
+           * fresh one does not" — a CI-only fix would have left the next contributor with the same failure.
+           */
+          globalSetup: ["packages/modules/src/shared/tables/test/migrate.setup.ts"],
           setupFiles: ["apps/worker/test/setup.ts"],
           environment: "node",
           testTimeout: 60_000,
