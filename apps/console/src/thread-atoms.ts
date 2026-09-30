@@ -40,6 +40,16 @@ export const roomThreadAtom = Atom.family((roomId: string) =>
 export const postMessageAtom = Api.mutation("Message.post")
 export const editMessageAtom = Api.mutation("Message.edit")
 export const deleteMessageAtom = Api.mutation("Message.delete")
+export const reactAtom = Api.mutation("Message.react")
+
+/**
+ * The quick picks offered next to a message.
+ *
+ * A short list rather than a picker, because a picker is a component and these four cover what a review thread
+ * actually needs: agreement, disagreement, attention, and "looked at it". The server accepts any short string, so
+ * a real picker is a UI change and not a contract change.
+ */
+export const QUICK_REACTIONS = ["👍", "👀", "🎉", "❓"] as const
 
 /** The channel list, and the mutations that change it. */
 export const ROOMS_KEY = "rooms"

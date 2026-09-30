@@ -17,6 +17,8 @@ import {
   deleteMessageAtom,
   editMessageAtom,
   postMessageAtom,
+  QUICK_REACTIONS,
+  reactAtom,
   roomThreadAtom
 } from "./thread-atoms.ts"
 
@@ -38,6 +40,7 @@ export function Thread({
   const identity = useIdentity()
   const edit = useAtomSet(editMessageAtom, { mode: "promise" })
   const remove = useAtomSet(deleteMessageAtom, { mode: "promise" })
+  const react = useAtomSet(reactAtom, { mode: "promise" })
   /** Which message is being edited, and the draft for it. One at a time, which is all anybody does. */
   const [editing, setEditing] = useState<{ readonly id: string; readonly body: string } | undefined>(undefined)
 
@@ -174,6 +177,58 @@ export function Thread({
                         )}
                     </div>
                   )}
+
+                {
+                  /*
+                   * Reactions: what is already there, then the quick picks.
+                   *
+                   * Rendered for a deleted message too — people did react, and the row still records it. Hiding
+                   * them would be a second, quieter kind of deletion that nobody asked for.
+                   */
+                }
+                <div style={{ display: "flex", gap: "0.25rem", marginTop: "0.2rem", alignItems: "center" }}>
+                  {message.reactions.map((reaction) => (
+                    <button
+                      key={reaction.emoji}
+                      type="button"
+                      aria-pressed={reaction.mine}
+                      title={reaction.mine ? "Remove your reaction" : "Add your reaction"}
+                      onClick={() => void react({ payload: { messageId: message.id, emoji: reaction.emoji } })}
+                      style={{
+                        font: "inherit",
+                        fontSize: "0.78rem",
+                        padding: "0.05rem 0.35rem",
+                        borderRadius: "999px",
+                        // The outline says whether YOU reacted, which is the only part that differs per reader.
+                        border: reaction.mine ? "1px solid #888" : "1px solid #ddd",
+                        background: reaction.mine ? "#eee" : "transparent",
+                        cursor: "pointer"
+                      }}
+                    >
+                      {reaction.emoji} {reaction.count}
+                    </button>
+                  ))}
+
+                  {QUICK_REACTIONS.filter((emoji) => !message.reactions.some((reaction) => reaction.emoji === emoji))
+                    .map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        title={`React with ${emoji}`}
+                        onClick={() => void react({ payload: { messageId: message.id, emoji } })}
+                        style={{
+                          font: "inherit",
+                          fontSize: "0.78rem",
+                          border: 0,
+                          background: "none",
+                          opacity: 0.35,
+                          cursor: "pointer"
+                        }}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                </div>
               </li>
             ))}
           </ol>

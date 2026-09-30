@@ -26,6 +26,7 @@ import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
 import { MessageLifecycle, MessageRooms, MessageTable } from "@ea/modules/realtime/tables/Message"
+import { ReactionTable } from "@ea/modules/realtime/tables/Reaction"
 import { RoomTable } from "@ea/modules/realtime/tables/Room"
 import { Migrator } from "effect/sql"
 import { EventTable } from "../Event/EventTable.ts"
@@ -86,7 +87,9 @@ export const migrations = {
    * be wrong here, because `0018` dropped the columns `MessageTable`'s index names. Writing it the other way is
    * what produced `column "subject_kind" does not exist`.
    */
-  "0019_message_lifecycle": MessageLifecycle
+  "0019_message_lifecycle": MessageLifecycle,
+  // Reactions. Keyed by (message, user, emoji), so reacting twice is a conflict rather than a duplicate.
+  "0020_reactions": ReactionTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

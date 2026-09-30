@@ -7,6 +7,7 @@
  * silently skips messages. Neither would fail any other test.
  */
 import { DeleteMessage, EditMessage, ListMessages, PostMessage } from "@ea/modules/realtime/use-cases/Message"
+import { ToggleReaction } from "@ea/modules/realtime/use-cases/Reaction"
 import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
 import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
@@ -74,6 +75,7 @@ beforeEach(async () => {
   await asAdmin(Effect.gen(function*() {
     const sql = yield* SqlClient.SqlClient
     // Messages cascade from rooms, but delete them first so a failed run cannot leave orphans behind.
+    yield* sql`delete from message_reactions where organization_id in (${ORG_A}, ${ORG_B})`
     yield* sql`delete from messages where id like 'msg_%'`
     yield* sql`delete from rooms where organization_id in (${ORG_A}, ${ORG_B})`
     yield* sql`delete from "user" where id like 'msg_user_%'`
@@ -271,5 +273,80 @@ describe("EditMessage and DeleteMessage", () => {
      */
     expect((await failureOf(intruder, EditMessage({ messageId: mine.id, body: "theirs" })))._tag)
       .toBe("MessageNotFound")
+  })
+})
+
+describe("ToggleReaction", () => {
+  it("adds, then removes, on the same call", async () => {
+    const message = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "nice" }))
+
+    /*
+     * One method for both directions, because to a user it is one button. The key `(message, user, emoji)` makes
+     * the insert idempotent, so the number of rows inserted answers "was it already there" without a read — and
+     * therefore without a window in which somebody else's click changes the answer.
+     */
+    expect((await runAs(alice, ToggleReaction({ messageId: message.id, emoji: "👍" }))).reacted).toBe(true)
+    expect((await runAs(alice, ToggleReaction({ messageId: message.id, emoji: "👍" }))).reacted).toBe(false)
+    expect((await runAs(alice, ToggleReaction({ messageId: message.id, emoji: "👍" }))).reacted).toBe(true)
+
+    const [read] = await runAs(alice, ListMessages({ room: thread("dec_1") }))
+    expect(read?.reactions).toEqual([{ emoji: "👍", count: 1, mine: true }])
+  })
+
+  it("counts people, and reports whether you are one of them", async () => {
+    const message = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "nice" }))
+    await runAs(alice, ToggleReaction({ messageId: message.id, emoji: "👍" }))
+    await runAs(bob, ToggleReaction({ messageId: message.id, emoji: "👍" }))
+    await runAs(bob, ToggleReaction({ messageId: message.id, emoji: "🎉" }))
+
+    const asAlice = (await runAs(alice, ListMessages({ room: thread("dec_1") })))[0]
+    /*
+     * Aggregated per emoji, and `mine` differs per reader — which is why the reader's identity is part of the
+     * query rather than something the client works out from a list of reactors.
+     */
+    expect(asAlice?.reactions).toEqual([
+      { emoji: "🎉", count: 1, mine: false },
+      { emoji: "👍", count: 2, mine: true }
+    ])
+
+    const asBob = (await runAs(bob, ListMessages({ room: thread("dec_1") })))[0]
+    expect(asBob?.reactions.map((reaction) => reaction.mine)).toEqual([true, true])
+  })
+
+  it("removes only your own reaction, not everybody's", async () => {
+    const message = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "nice" }))
+    await runAs(alice, ToggleReaction({ messageId: message.id, emoji: "👍" }))
+    await runAs(bob, ToggleReaction({ messageId: message.id, emoji: "👍" }))
+
+    await runAs(alice, ToggleReaction({ messageId: message.id, emoji: "👍" }))
+
+    // `user_id` is part of the key, so a toggle cannot reach past its own row.
+    const [read] = await runAs(bob, ListMessages({ room: thread("dec_1") }))
+    expect(read?.reactions).toEqual([{ emoji: "👍", count: 1, mine: true }])
+  })
+
+  it("refuses a message it cannot see, rather than failing on a foreign key", async () => {
+    const mine = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "ours" }))
+    /*
+     * The message is checked before the insert. Without that the FK would reject it as a constraint violation —
+     * a 500 for what is really "that message is gone", or in this case "not yours".
+     */
+    expect((await failureOf(intruder, ToggleReaction({ messageId: mine.id, emoji: "👍" })))._tag)
+      .toBe("MessageNotFound")
+  })
+
+  it("disappears with the message it was on", async () => {
+    const message = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "nice" }))
+    await runAs(alice, ToggleReaction({ messageId: message.id, emoji: "👍" }))
+
+    /*
+     * Deleting REDACTS rather than removing the row, so the cascade does not fire — and the reactions stay. That
+     * is the honest outcome: people did react, and the row still records that they did. Asserted so the
+     * interaction between the two features is a decision rather than a surprise.
+     */
+    await runAs(alice, DeleteMessage({ messageId: message.id }))
+    const [read] = await runAs(alice, ListMessages({ room: thread("dec_1") }))
+    expect(read?.deletedAt).not.toBeNull()
+    expect(read?.reactions).toEqual([{ emoji: "👍", count: 1, mine: true }])
   })
 })

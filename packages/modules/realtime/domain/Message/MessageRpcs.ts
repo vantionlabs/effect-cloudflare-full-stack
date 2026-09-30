@@ -11,7 +11,7 @@ import { AuthenticatedRpc } from "@ea/modules/shared/domain/Identity"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { RoomRef } from "../Room/Room.ts"
-import { MAX_BODY_LENGTH, Message, MessageId } from "./Message.ts"
+import { MAX_BODY_LENGTH, MAX_EMOJI_LENGTH, Message, MessageId } from "./Message.ts"
 
 /**
  * A body that is actually a message.
@@ -85,5 +85,19 @@ export const MessageRpcs = RpcGroup.make(
     payload: { messageId: MessageId },
     success: Schema.Struct({ messageId: MessageId }),
     error: Schema.Union([MessageNotFound, NotMessageAuthor])
+  }),
+  /*
+   * ONE method, because to a user a reaction is one button. Separate add and remove would make the client track
+   * which it should call, which is state it would get wrong the moment two people react at once.
+   *
+   * No `NotMessageAuthor` here: reacting to somebody else's message is the entire point.
+   */
+  Rpc.make("Message.react", {
+    payload: {
+      messageId: MessageId,
+      emoji: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(MAX_EMOJI_LENGTH))
+    },
+    success: Schema.Struct({ messageId: MessageId, emoji: Schema.String, reacted: Schema.Boolean }),
+    error: MessageNotFound
   })
 ).middleware(AuthenticatedRpc)

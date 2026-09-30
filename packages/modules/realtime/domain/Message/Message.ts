@@ -15,6 +15,14 @@ export const MessageId = Schema.String.pipe(Schema.brand("MessageId"))
 export type MessageId = typeof MessageId.Type
 
 export const MAX_BODY_LENGTH = 4000
+export const MAX_EMOJI_LENGTH = 32
+
+/** One emoji on one message: how many people used it, and whether you are one of them. */
+export class MessageReaction extends Schema.Class<MessageReaction>("MessageReaction")({
+  emoji: Schema.String,
+  count: Schema.Int,
+  mine: Schema.Boolean
+}) {}
 
 export class Message extends Schema.Class<Message>("Message")({
   id: MessageId,
@@ -40,5 +48,13 @@ export class Message extends Schema.Class<Message>("Message")({
   createdAt: Schema.String,
   /** When the author last changed it, or null. Shown, because an edited record and an original are not the same. */
   editedAt: Schema.NullOr(Schema.String),
-  deletedAt: Schema.NullOr(Schema.String)
+  deletedAt: Schema.NullOr(Schema.String),
+  /**
+   * Reactions, aggregated per emoji rather than listed per person.
+   *
+   * A count and a `mine` flag is everything a client renders, and it keeps the payload flat: listing reactors
+   * would make a busy message's row grow with its popularity, for information nobody shows until they hover.
+   * Who reacted is a query that can be added when something needs it.
+   */
+  reactions: Schema.Array(MessageReaction)
 }) {}

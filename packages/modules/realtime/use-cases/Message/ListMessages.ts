@@ -13,9 +13,9 @@
  * by the first message, so "nobody has said anything" and "there is no row" are the same fact to a reader —
  * and `ResolveRoom` is asked not to create one, so reading never writes.
  */
-import { Message, type MessageId } from "@ea/modules/realtime/domain/Message"
+import { Message, type MessageId, MessageReaction } from "@ea/modules/realtime/domain/Message"
 import type { RoomId, RoomRef } from "@ea/modules/realtime/domain/Room"
-import { UserId } from "@ea/modules/shared/domain/Identity"
+import { CurrentUser, UserId } from "@ea/modules/shared/domain/Identity"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 import { ResolveRoom } from "../Room/ResolveRoom.ts"
@@ -30,6 +30,7 @@ export const ListMessages = (input: {
 }) =>
   Effect.gen(function*() {
     const db = yield* Db
+    const identity = yield* CurrentUser
     const limit = Math.min(Math.max(input.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT)
     const after = input.after
 
@@ -61,6 +62,35 @@ export const ListMessages = (input: {
       `
     )
 
+    /*
+     * Reactions in a SECOND query, not a lateral join.
+     *
+     * A `left join lateral` aggregating to jsonb would fetch this in one round trip and would put a nested
+     * aggregation into the middle of the thread read, where it is the hardest thing on the page to verify. Two
+     * indexed queries are easier to read, easier to explain, and the grouping is three lines of TypeScript.
+     *
+     * Skipped entirely when the page is empty, because `in ()` is not valid SQL.
+     */
+    const ids = rows.map((row) => row.id)
+    const reactionRows = ids.length === 0 ?
+      [] :
+      yield* db.scoped((sql, orgId) =>
+        sql<{ message_id: string; emoji: string; count: number; mine: boolean }>`
+        select message_id, emoji, count(*)::int as count, bool_or(user_id = ${identity.userId}) as mine
+          from message_reactions
+         where organization_id = ${orgId} and ${sql.in("message_id", ids)}
+         group by message_id, emoji
+         order by emoji asc
+      `
+      )
+
+    const reactionsByMessage = new Map<string, Array<MessageReaction>>()
+    for (const row of reactionRows) {
+      const existing = reactionsByMessage.get(row.message_id) ?? []
+      existing.push(new MessageReaction({ emoji: row.emoji, count: row.count, mine: row.mine }))
+      reactionsByMessage.set(row.message_id, existing)
+    }
+
     return rows.map((row) =>
       new Message({
         id: row.id as MessageId,
@@ -70,7 +100,8 @@ export const ListMessages = (input: {
         body: row.body,
         createdAt: row.created_at.toISOString(),
         editedAt: row.edited_at === null ? null : row.edited_at.toISOString(),
-        deletedAt: row.deleted_at === null ? null : row.deleted_at.toISOString()
+        deletedAt: row.deleted_at === null ? null : row.deleted_at.toISOString(),
+        reactions: reactionsByMessage.get(row.id) ?? []
       })
     )
   })

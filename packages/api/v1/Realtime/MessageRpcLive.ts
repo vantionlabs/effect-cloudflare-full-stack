@@ -22,6 +22,7 @@ import {
   PostMessage,
   RoomIdOfMessage
 } from "@ea/modules/realtime/use-cases/Message"
+import { ToggleReaction } from "@ea/modules/realtime/use-cases/Reaction"
 import { CurrentUser } from "@ea/modules/shared/domain/Identity"
 import { Effect } from "effect"
 import { serve } from "../Serve.ts"
@@ -86,6 +87,14 @@ export const MessageRpcLive = MessageRpcs.toLayer(
       Effect.tap(serve(EditMessage(payload)), (result) => announceChange(result.messageId)),
 
     "Message.delete": (payload: { readonly messageId: MessageId }) =>
-      Effect.tap(serve(DeleteMessage(payload)), (result) => announceChange(result.messageId))
+      Effect.tap(serve(DeleteMessage(payload)), (result) => announceChange(result.messageId)),
+
+    /*
+     * A reaction announces with the same `MessageChanged` nudge as an edit. It is a change to a message, and the
+     * client's response is identical: re-read the room. A dedicated frame would carry the same information and
+     * need its own handler.
+     */
+    "Message.react": (payload: { readonly messageId: MessageId; readonly emoji: string }) =>
+      Effect.tap(serve(ToggleReaction(payload)), (result) => announceChange(result.messageId))
   })
 )
