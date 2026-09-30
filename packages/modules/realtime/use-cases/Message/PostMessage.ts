@@ -11,11 +11,11 @@
  * a `RoomRef` rather than a room id: the console opens a decision and wants to post in its thread without
  * first asking whether the thread exists.
  */
+import { CurrentUser, UserId } from "@ea/domain/Identity"
+import { Ids } from "@ea/domain/Ids"
 import { RoomArchived } from "@ea/modules/realtime/domain/Errors"
 import { Message, type MessageId, MessageMention } from "@ea/modules/realtime/domain/Message"
 import type { RoomRef } from "@ea/modules/realtime/domain/Room"
-import { CurrentUser, UserId } from "@ea/modules/shared/domain/Identity"
-import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db, textArray } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 import { ResolveMentions } from "../Mention/ResolveMentions.ts"

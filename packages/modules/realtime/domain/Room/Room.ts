@@ -16,7 +16,7 @@
  * organization's socket room with the room id inside the frame (ADR-0018 and `MessagePosted`), so there is one
  * socket per person and no subscribe protocol. A row per room and a socket per room are separate decisions.
  */
-import { UserId } from "@ea/modules/shared/domain/Identity"
+import { UserId } from "@ea/domain/Identity"
 import { Schema } from "effect"
 
 export const RoomId = Schema.String.pipe(Schema.brand("RoomId"))

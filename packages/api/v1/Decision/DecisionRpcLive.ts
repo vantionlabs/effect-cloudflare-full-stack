@@ -5,10 +5,10 @@
  * supplies the per-request connection, and the use cases do the work. Mapping `ReviewOutcome` to the wire's
  * `ReviewResult` happens here so the use case never learns a transport exists.
  */
+import { CurrentUser } from "@ea/domain/Identity"
 import { DecisionRpcs } from "@ea/modules/decision/domain/Decision"
 import { ApproveDecision, GetDecision, ListQueue, RejectDecision } from "@ea/modules/decision/use-cases/Decision"
 import { orgRoom, QueueChanged, Rooms } from "@ea/modules/realtime/domain/Room"
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
 import { Effect } from "effect"
 import { serve, serveForTenant } from "../Serve.ts"
 

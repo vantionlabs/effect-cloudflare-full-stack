@@ -18,6 +18,7 @@
  *   into here is the mistake this comment exists to prevent.
  */
 
+import { IdentityResolver } from "@ea/domain/Identity"
 import {
   encodeRoomIdentity,
   orgRoom,
@@ -25,7 +26,6 @@ import {
   ROOM_IDENTITY_HEADER,
   RoomIdentity
 } from "@ea/modules/realtime/domain/Room"
-import { IdentityResolver } from "@ea/modules/shared/domain/Identity"
 import { Effect } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import type { RoomsBinding } from "./RoomsLive.ts"

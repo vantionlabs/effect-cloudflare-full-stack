@@ -16,7 +16,7 @@
  * day RLS came out, including reads of `extractions` and `workflow_activities`, both of which hold extracted
  * invoice fields. Treat that check as load-bearing rather than tidy.
  */
-import { CurrentOrg, CurrentUser, type OrgId } from "@ea/modules/shared/domain/Identity"
+import { CurrentOrg, CurrentUser, type OrgId } from "@ea/domain/Identity"
 import { Context, Effect, Layer } from "effect"
 import { SqlClient, type SqlError } from "effect/sql"
 

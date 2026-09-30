@@ -7,8 +7,8 @@
  * `Room.list` deliberately does not take a filter. A channel list is short by nature, and an endpoint that grew
  * options would be answering a question nobody has yet.
  */
+import { AuthenticatedRpc } from "@ea/domain/Identity"
 import { RoomArchived, RoomNameInvalid, RoomNotFound, RoomSlugTaken } from "@ea/modules/realtime/domain/Errors"
-import { AuthenticatedRpc } from "@ea/modules/shared/domain/Identity"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { MessageId } from "../Message/Message.ts"

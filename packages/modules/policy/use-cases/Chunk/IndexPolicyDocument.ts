@@ -15,11 +15,11 @@
  *
  * Re-indexing replaces the document's chunks rather than adding to them, so running it twice is safe.
  */
+import { Ids } from "@ea/domain/Ids"
 import { EMBEDDING_DIMENSIONS } from "@ea/modules/policy/domain/Chunk"
 import { Chunker, embeddableText } from "@ea/modules/policy/domain/Chunk"
 import { EmbeddingProfile } from "@ea/modules/policy/domain/Embedding"
 import { EmbeddingWidthMismatch } from "@ea/modules/policy/domain/Errors"
-import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 import { EmbeddingModel } from "effect/ai"

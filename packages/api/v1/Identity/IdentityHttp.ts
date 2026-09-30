@@ -5,8 +5,8 @@
  * that happened in `AuthenticatedLive`, so the handler simply reads the identity the middleware
  * provided. A handler that tried to authenticate itself would be a second seam.
  */
+import { CurrentUser } from "@ea/domain/Identity"
 import { MeV1 } from "@ea/modules/iam/domain/Identity"
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { ApiV1 } from "../ApiV1.ts"

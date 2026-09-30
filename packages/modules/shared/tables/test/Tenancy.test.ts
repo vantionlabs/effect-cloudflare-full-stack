@@ -10,7 +10,7 @@
  * matters: superusers and (unless forced) table owners bypass RLS entirely, so a suite run as the
  * owner would pass while proving nothing.
  */
-import { CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
+import { CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Layer, Redacted } from "effect"
 import { SqlClient } from "effect/sql"

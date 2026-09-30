@@ -19,7 +19,7 @@
  * A rule follows, and `dep:check` will grow to enforce it: a `*.rpc.ts` contract may reference domain
  * types, and a `*.wire.ts` may not re-export one however convenient.
  */
-import { AuthenticatedRpc, Identity } from "@ea/modules/shared/domain/Identity"
+import { AuthenticatedRpc, Identity } from "@ea/domain/Identity"
 import { Rpc, RpcGroup } from "effect/rpc"
 
 export const IdentityRpcs = RpcGroup.make(

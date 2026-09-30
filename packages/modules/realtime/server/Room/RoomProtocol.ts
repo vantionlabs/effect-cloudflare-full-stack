@@ -12,6 +12,7 @@
  * retired — is now testable in Node against three-line fakes, with no `workerd`, no token and no harness.
  * The class that remains is glue: it wires four handlers to these functions.
  */
+import { UserId } from "@ea/domain/Identity"
 import {
   decodeClientFrame,
   decodeRoomIdentity,
@@ -21,7 +22,6 @@ import {
   Viewer,
   Welcome
 } from "@ea/modules/realtime/domain/Room"
-import { UserId } from "@ea/modules/shared/domain/Identity"
 import { Result } from "effect"
 
 /**

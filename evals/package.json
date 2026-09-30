@@ -6,7 +6,8 @@
   "dependencies": {
     "@ea/modules": "workspace:*",
     "@effect/sql-pg": "catalog:",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "@ea/domain": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:"

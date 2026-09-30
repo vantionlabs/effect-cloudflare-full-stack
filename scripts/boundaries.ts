@@ -169,6 +169,35 @@ const rules: ReadonlyArray<Rule> = [
       }
     ]
   },
+  /**
+   * A capability package may not import a feature.
+   *
+   * This is the DIRECTION half of ADR-0021's rule — the reason `@ea/domain`, `@ea/database` and `@ea/realtime` are
+   * packages at all. They are imported by every slice, so if one of them ever imports a slice the layout inverts
+   * and nothing else in the repo would notice: the cycle typechecks, because it is all one build.
+   *
+   * `@ea/domain` additionally has no dependency to contain — its manifest lists `effect` and nothing else — which
+   * is a property worth being able to read off the file rather than hoping for.
+   */
+  {
+    label: "a capability package never imports a feature",
+    appliesTo: (p) =>
+      p.startsWith("packages/domain/") || p.startsWith("packages/database/") || p.startsWith("packages/realtime/"),
+    forbidden: [
+      {
+        pattern: /^@ea\/modules(\/|$)/,
+        because: "a capability is imported BY features and must never import one. `@ea/domain` holds identity and " +
+          "ids; `@ea/database` holds the Db seam; `@ea/realtime` holds the socket. If one of them needs a " +
+          "feature type, the cut was wrong — move the type down into the capability, do not bend the rule " +
+          "(ADR-0021)"
+      },
+      {
+        pattern: /^@ea\/api(\/|$)/,
+        because: "the api package collects the modules' contracts, so a capability importing it is the same " +
+          "inversion one level further out"
+      }
+    ]
+  },
   {
     label: "modules never depend on the api package",
     appliesTo: (p) => p.startsWith(MODULES),

@@ -8,10 +8,10 @@
  * Batch semantics live in the Worker's `queue` handler and are tested there. This is the half that decides
  * *what happened*, which is the half worth testing without a queue.
  */
+import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
+import { Ids } from "@ea/domain/Ids"
 import { DocumentNotFound } from "@ea/modules/shared/domain/Errors"
 import { EventBus, type EventBusService, EventId, EventSendFailed } from "@ea/modules/shared/domain/Event"
-import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
-import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { ConsumeEvent, EmitEvent, SweepEnqueueGap } from "@ea/modules/shared/use-cases/Event"
 import { PgClient } from "@effect/sql-pg"

@@ -5,9 +5,9 @@
  * a real model. It is the loop's own behaviour, which is where the expensive mistakes live: an unbounded loop
  * is an unbounded bill, and a tenant the model can influence is a cross-tenant read.
  */
+import { CurrentOrg, OrgId } from "@ea/domain/Identity"
 import { AgentModel } from "@ea/modules/policy/domain/Ask"
 import { AskCorpus, AskToolkit, AskToolkitLive } from "@ea/modules/policy/use-cases/Ask"
-import { CurrentOrg, OrgId } from "@ea/modules/shared/domain/Identity"
 import { PolicySearch, type Retrieval } from "@ea/modules/shared/domain/Retrieval"
 import { Effect, Layer, Stream } from "effect"
 import { LanguageModel } from "effect/ai"

@@ -6,6 +6,7 @@
  * one refresh behind; a client that received a frame for a row that was never committed would be showing
  * something that did not happen.
  */
+import { CurrentUser } from "@ea/domain/Identity"
 import { type MessageId, MessageRpcs } from "@ea/modules/realtime/domain/Message"
 import {
   MessageChanged,
@@ -23,7 +24,6 @@ import {
   RoomIdOfMessage
 } from "@ea/modules/realtime/use-cases/Message"
 import { ToggleReaction } from "@ea/modules/realtime/use-cases/Reaction"
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
 import { Effect } from "effect"
 import { serve } from "../Serve.ts"
 

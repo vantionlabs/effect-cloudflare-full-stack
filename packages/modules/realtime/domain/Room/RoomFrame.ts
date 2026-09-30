@@ -17,7 +17,7 @@
  * Both directions are `Schema`, so one definition serves the browser and the room — the property that made
  * RPC attractive, without a session to keep alive.
  */
-import { UserId } from "@ea/modules/shared/domain/Identity"
+import { UserId } from "@ea/domain/Identity"
 import { Schema } from "effect"
 import { Message } from "../Message/Message.ts"
 import { RoomId } from "./Room.ts"

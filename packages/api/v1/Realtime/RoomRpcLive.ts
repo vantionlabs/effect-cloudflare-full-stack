@@ -9,11 +9,11 @@
  * and a room's fields change (rename, topic, archive) — so a carried room could be stale in a way a message
  * never is. That asymmetry is the rule stated in `MessagePosted`, applied in the other direction.
  */
+import { CurrentUser } from "@ea/domain/Identity"
 import { RoomsChanged } from "@ea/modules/realtime/domain/Room"
 import { orgRoom, RoomRpcs, Rooms } from "@ea/modules/realtime/domain/Room"
 import { MarkRead } from "@ea/modules/realtime/use-cases/Read"
 import { ArchiveRoom, CreateRoom, ListRooms } from "@ea/modules/realtime/use-cases/Room"
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
 import { Effect } from "effect"
 import { serve } from "../Serve.ts"
 

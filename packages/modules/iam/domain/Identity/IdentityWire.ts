@@ -6,7 +6,7 @@
  * resolution are all working. A monitor or an integrating client can also use it to confirm a
  * token is valid without guessing at a business endpoint.
  */
-import { Authenticated } from "@ea/modules/shared/domain/Identity"
+import { Authenticated } from "@ea/domain/Identity"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 

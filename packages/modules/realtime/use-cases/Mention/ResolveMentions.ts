@@ -10,7 +10,7 @@
  *
  * Unmatched handles are simply not mentions. A typo should read as text, not fail a message.
  */
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
+import { CurrentUser } from "@ea/domain/Identity"
 import { Db, textArray } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 

@@ -10,7 +10,7 @@
  * A rejection is the same shape and deliberately shares it: the only difference is the target status and
  * that nothing is emitted, and writing them as one function is what stops the two drifting apart.
  */
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
+import { CurrentUser } from "@ea/domain/Identity"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 import { EmitExecute } from "./EmitExecute.ts"

@@ -4,10 +4,10 @@
  * Channels only: a decision's thread is created implicitly by posting in it (`ResolveRoom`), because a row per
  * decision anybody ever opened would mostly be empty.
  */
+import { CurrentUser } from "@ea/domain/Identity"
+import { Ids } from "@ea/domain/Ids"
 import { RoomNameInvalid, RoomSlugTaken } from "@ea/modules/realtime/domain/Errors"
 import { MAX_ROOM_NAME_LENGTH, slugify } from "@ea/modules/realtime/domain/Room"
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
-import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 import { ROOM_COLUMNS, toRoom } from "./ResolveRoom.ts"

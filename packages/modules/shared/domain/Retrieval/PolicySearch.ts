@@ -14,9 +14,9 @@
  * - **The decide pipeline becomes testable against a fake corpus.** A fake returning three clauses and
  *   a mode is four lines, so rail behaviour can be exercised without a database.
  */
+import type { CurrentOrg } from "@ea/domain/Identity"
 import { Context, type Effect } from "effect"
 import type { Collection } from "../Corpus/Collection.ts"
-import type { CurrentOrg } from "../Identity/Identity.ts"
 import type { Retrieval } from "./Retrieval.ts"
 
 export interface PolicySearchService {

@@ -9,7 +9,7 @@
  * Note what the payload does NOT carry: an organization. The tenant comes from the session, and the model
  * never gets to influence it — see `AskCorpus.ts` for why that is the security-relevant property here.
  */
-import { AuthenticatedRpc } from "@ea/modules/shared/domain/Identity"
+import { AuthenticatedRpc } from "@ea/domain/Identity"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 

@@ -9,7 +9,7 @@
  * object storage *is* the key: R2 has no row-level security, so the prefix is the only isolation
  * there is, and it must not vary by adapter.
  */
-import type { OrgId } from "@ea/modules/shared/domain/Identity"
+import type { OrgId } from "@ea/domain/Identity"
 import { Context, type Effect } from "effect"
 import type { DocumentId } from "./Document.ts"
 

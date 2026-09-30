@@ -1,0 +1,19 @@
+{
+  // The primitives every layer shares: identity, ids, and the one failure that is not any slice's.
+  //
+  // `types: []` for the same reason as `packages/modules`: platform globals must not be ambient in code the
+  // browser also imports. Nothing here should ever want one — if a file in this package needs `R2Bucket`, it is
+  // in the wrong package (ADR-0021).
+  "extends": "../../tsconfig.base.json",
+  "include": ["**/*.ts"],
+  // Tests are their own project. Overlapping includes would put a file in two projects, which
+  // `tsc -b` rejects.
+  "exclude": ["**/test/**"],
+  "compilerOptions": {
+    "noEmit": true,
+    // Tests sit beside the code they test, so rootDir is the package rather than a src/ dir.
+    "rootDir": ".",
+    "tsBuildInfoFile": ".tsbuildinfo/src.tsbuildinfo",
+    "types": []
+  }
+}

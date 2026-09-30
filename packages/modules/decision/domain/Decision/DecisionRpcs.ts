@@ -7,7 +7,7 @@
  * `containsVerbatim` rail 2 used, so it must be given the same text the rail checked against — otherwise the
  * highlight could disagree with the decision it is displaying.
  */
-import { AuthenticatedRpc } from "@ea/modules/shared/domain/Identity"
+import { AuthenticatedRpc } from "@ea/domain/Identity"
 import { RetrievalMode } from "@ea/modules/shared/domain/Retrieval"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"

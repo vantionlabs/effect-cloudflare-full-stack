@@ -1,18 +1,14 @@
 {
-  "name": "@ea/api",
+  "name": "@ea/domain",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     "./*": "./*/index.ts",
+    "./internal/*": null,
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@ea/modules": "workspace:*",
-    "effect": "catalog:",
-    "@ea/domain": "workspace:*"
-  },
-  "devDependencies": {
-    "vitest": "catalog:"
+    "effect": "catalog:"
   }
 }

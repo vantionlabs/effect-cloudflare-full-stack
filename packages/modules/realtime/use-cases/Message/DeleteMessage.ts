@@ -8,9 +8,9 @@
  * Idempotent: deleting an already-deleted message succeeds and changes nothing. Double-clicking a delete button
  * is not an error, and the second click must not tell the user something went wrong.
  */
+import { CurrentUser } from "@ea/domain/Identity"
 import { MessageNotFound, NotMessageAuthor } from "@ea/modules/realtime/domain/Errors"
 import { type MessageId } from "@ea/modules/realtime/domain/Message"
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 

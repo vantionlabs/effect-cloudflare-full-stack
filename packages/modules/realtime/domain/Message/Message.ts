@@ -7,7 +7,7 @@
  * moved the existing rows and dropped the subject columns rather than keeping both, because two ways to
  * identify a thread means every query choosing which to trust.
  */
-import { UserId } from "@ea/modules/shared/domain/Identity"
+import { UserId } from "@ea/domain/Identity"
 import { Schema } from "effect"
 import { RoomId } from "../Room/Room.ts"
 

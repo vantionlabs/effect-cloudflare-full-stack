@@ -6,8 +6,8 @@
  * error channel and a response the caller can act on — all of which the RPC path has and a fire-and-forget
  * frame does not. The socket only carries the notification afterwards.
  */
+import { AuthenticatedRpc } from "@ea/domain/Identity"
 import { MessageNotFound, NotMessageAuthor, RoomArchived, RoomNotFound } from "@ea/modules/realtime/domain/Errors"
-import { AuthenticatedRpc } from "@ea/modules/shared/domain/Identity"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { RoomRef } from "../Room/Room.ts"

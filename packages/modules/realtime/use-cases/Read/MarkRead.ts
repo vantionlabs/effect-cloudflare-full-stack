@@ -10,10 +10,10 @@
  * the same property the thread's keyset cursor relies on, and it is worth stating twice: if ids ever stop being
  * time-ordered, both quietly break.
  */
+import { CurrentUser } from "@ea/domain/Identity"
 import { RoomNotFound } from "@ea/modules/realtime/domain/Errors"
 import { MessageId } from "@ea/modules/realtime/domain/Message"
 import type { RoomId } from "@ea/modules/realtime/domain/Room"
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 

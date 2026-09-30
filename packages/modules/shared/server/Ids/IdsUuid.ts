@@ -6,7 +6,7 @@
  * place to be clever: a bit-twiddling mistake produces identifiers that look fine, sort subtly
  * wrong, and collide rarely enough to reach production.
  */
-import { Ids } from "@ea/modules/shared/domain/Ids"
+import { Ids } from "@ea/domain/Ids"
 import { Effect, Layer } from "effect"
 import { v7 as uuidv7 } from "uuid"
 

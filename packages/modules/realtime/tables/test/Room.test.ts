@@ -5,11 +5,11 @@
  * people opening the same decision at the same moment both find no thread and both insert; without the index one
  * of them wins and the other's messages land in a second room holding half the conversation.
  */
+import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
+import { Ids } from "@ea/domain/Ids"
 import { PostMessage } from "@ea/modules/realtime/use-cases/Message"
 import { MarkRead } from "@ea/modules/realtime/use-cases/Read"
 import { ArchiveRoom, CreateRoom, ListRooms, ResolveRoom } from "@ea/modules/realtime/use-cases/Room"
-import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
-import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Layer, Redacted } from "effect"

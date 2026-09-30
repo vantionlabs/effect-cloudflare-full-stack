@@ -6,8 +6,8 @@
  * base64 and a third larger. Transports are additive, so each carries what it is good at rather than
  * mirroring the other for symmetry's sake.
  */
+import { AuthenticatedRpc } from "@ea/domain/Identity"
 import { Collection } from "@ea/modules/shared/domain/Corpus"
-import { AuthenticatedRpc } from "@ea/modules/shared/domain/Identity"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { DocumentId, DocumentStatus } from "../Document/Document.ts"

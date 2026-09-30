@@ -9,9 +9,9 @@
  * The previous text is NOT kept. A revision history is a real feature with its own table and its own reason to
  * exist; storing the old body in a column nobody reads would be the shape of one without the substance.
  */
+import { CurrentUser } from "@ea/domain/Identity"
 import { MessageNotFound, NotMessageAuthor } from "@ea/modules/realtime/domain/Errors"
 import { type MessageId } from "@ea/modules/realtime/domain/Message"
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
 import { Db, textArray } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 import { ResolveMentions } from "../Mention/ResolveMentions.ts"

@@ -27,8 +27,8 @@
  *
  * Getting this wrong pays a supplier twice.
  */
+import { Ids } from "@ea/domain/Ids"
 import { Adapter, AdapterRequest, type ExecutionAction, ExecutionId } from "@ea/modules/decision/domain/Execution"
-import { Ids } from "@ea/modules/shared/domain/Ids"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 

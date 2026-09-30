@@ -19,7 +19,7 @@
  *    it is the authority, and this keeps `SqlClient` out of a middleware whose declaration lives
  *    in the domain package and must not know about SQL.
  */
-import { Unauthenticated } from "@ea/modules/shared/domain/Errors"
+import { Unauthenticated } from "@ea/domain/Errors"
 import {
   Authenticated,
   AuthenticatedRpc,
@@ -29,7 +29,7 @@ import {
   type MemberRole,
   OrgId,
   UserId
-} from "@ea/modules/shared/domain/Identity"
+} from "@ea/domain/Identity"
 import { Effect, Layer } from "effect"
 import { HttpServerRequest } from "effect/http"
 import { HttpApiError } from "effect/http-api"

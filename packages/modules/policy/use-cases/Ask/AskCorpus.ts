@@ -23,8 +23,8 @@
  * **It answers from retrieved clauses or it declines.** The corpus is the authority; the model's own
  * knowledge of Dutch procurement law is not, and must not leak into an answer a reviewer will act on.
  */
+import { CurrentOrg } from "@ea/domain/Identity"
 import { AgentModel } from "@ea/modules/policy/domain/Ask"
-import { CurrentOrg } from "@ea/modules/shared/domain/Identity"
 import { PolicySearch } from "@ea/modules/shared/domain/Retrieval"
 import { Effect, Schema } from "effect"
 import { LanguageModel, Prompt, Tool, Toolkit } from "effect/ai"

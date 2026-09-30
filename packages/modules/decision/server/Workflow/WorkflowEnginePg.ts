@@ -29,7 +29,7 @@
  * to know which tenant and has no business knowing which person; requiring a user made it unreachable from
  * the queue consumer, which is precisely where a durable workflow belongs (docs/services.md §3.1).
  */
-import { CurrentOrg, type OrgId } from "@ea/modules/shared/domain/Identity"
+import { CurrentOrg, type OrgId } from "@ea/domain/Identity"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Cause, Effect, Exit, Layer, Option } from "effect"
 import { SqlClient } from "effect/sql"
