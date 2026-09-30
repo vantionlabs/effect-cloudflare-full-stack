@@ -1,0 +1,17 @@
+{
+  /*
+   * Worker source living under `test/`, so it needs `@cloudflare/workers-types` — which
+   * `apps/worker/tsconfig.test.json` excludes, because workers-types declares a second global `Response`
+   * and `createTestHarness` needs Node's. Same split as the two fixtures beside it.
+   *
+   * It imports PRODUCTION source (the orchestration itself, which is the point), so that file is in
+   * `include` and `rootDir` is the app rather than `src`.
+   */
+  "extends": "../../../../../tsconfig.base.json",
+  "include": ["**/*.ts", "../../../src/DecideWorkflow.ts", "../../../src/platform/Bindings.ts"],
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../../..",
+    "types": ["@cloudflare/workers-types"]
+  }
+}

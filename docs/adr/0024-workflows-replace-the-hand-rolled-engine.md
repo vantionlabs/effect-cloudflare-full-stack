@@ -69,6 +69,35 @@ Four Rules of Workflows, each with a consequence here:
   paid — cheap, but it argues against splitting the pipeline finer than the activities that already exist.
 - **Portability**, as ADR-0023 records.
 
+## Status note, 2026-09-30: two things in this ADR were wrong, and execution said so
+
+Both were found by building the entrypoint and testing it, which is the method this ADR argues for — so
+they are recorded rather than edited away.
+
+**"The connection opens in `run()`, and steps use it" does not fit an Effect body.** A `step.do` callback is
+an `async` function, so a single Effect scope cannot span the steps without inverting control — awaiting
+each step's promise from inside the scope and providing the captured `SqlClient` to each one. That is
+possible and buys one connection per instance instead of one per step that needs the database, which is two
+of four. It is not worth the inversion: Hyperdrive opens in single-digit milliseconds, the steps are
+sequential so the six-connection cap is never approached, and the Rule's real concern — a non-serializable
+resource crossing a step boundary — holds either way, because no connection is ever returned from a step.
+Each bound work function opens its own, exactly as every HTTP request already does.
+
+**The memo is not what the table above implied, and this one changed the design.** The probe's result was
+read as "`run()` re-executes from the top and completed steps are skipped". It is not: **an error outside a
+`step.do` fails the instance with no retry, and a step retry resumes at the failed step without re-entering
+`run()`.** Measured — the first entrypoint ran the rails and the write outside any step and the instance
+ended `errored` with every counter at 1.
+
+So the rule this ADR should have stated is: **anything that needs a retry goes inside a step, and a step must
+therefore be idempotent.** The rails-and-write half is a step now, and the decision insert became a claim
+(`on conflict … do nothing returning id`) so that a retry after a partial success is safe. The original
+reason for keeping the rails out of a step — that a memoised rail could be replayed past a tightened one —
+survives as a real but smaller concern: a cached step result is replayed only within one instance, which is
+one decision, and the short circuit already returns older decisions without re-railing them.
+
+`docs/references.md` carries both measurements.
+
 ## Revisit when
 
 - **A pipeline needs branching or dynamic routing.** Workflows is step-sequential; that shape is LangGraph's,

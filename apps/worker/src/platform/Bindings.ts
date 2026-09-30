@@ -74,6 +74,24 @@ export interface Env {
    */
   readonly ASSISTANTS: AssistantsBinding
 
+  /**
+   * The decide pipeline as a Cloudflare Workflow (ADR-0024).
+   *
+   * Declared so the class is provisioned and reachable. **Nothing in production calls it yet** — the queue
+   * still runs the pipeline inline through `DispatchEvent` — so this is the one binding here that is
+   * deliberately unused, and `bindings:check` carries the reason rather than leaving it to be wondered
+   * about. Flipping the queue over needs parsing to become the workflow's first step, because Workflow
+   * params are persisted and a large document's text would approach the 1 MiB cap.
+   *
+   * Typed as the slice a caller uses. `create` is how an instance is started; the rest of the namespace's
+   * surface (`get`, `terminate`) is not needed until there is something to administer.
+   */
+  readonly DECIDE: {
+    readonly create: (
+      options: { readonly id?: string | undefined; readonly params: unknown }
+    ) => Promise<{ readonly id: string }>
+  }
+
   /** Source documents. Tenancy is a key prefix, enforced in @ea/modules/intake/domain/Document. */
   readonly DOCUMENTS: R2Bucket
   /** The event queue producer. Stable for an isolate's lifetime, so safe to capture. */

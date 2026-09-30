@@ -214,6 +214,48 @@ Three consequences this repo depends on:
   never has to block a call. It is not what this repo uses, because an auto-created gateway does not carry
   the `cacheTtl: 3600` that `infra/index.ts` declares, and the cache is the reason the gateway is wanted.
 
+### A Cloudflare Workflow retries STEPS, not the instance — verified by execution
+
+Measured 2026-09-30 with `apps/worker/test/DecideWorkflow.test.ts`, because it contradicted what the
+step-memo probe appeared to show and the difference decides where work may be placed.
+
+**An error thrown outside a `step.do` fails the whole instance, with no retry.** The first version of
+`DecideWorkflow` ran the rails and the write outside any step; the instance ended `errored` with every
+counter at 1. Adding nothing but `step.do("Settle", …)` around the same function made it retry.
+
+**A step retry resumes at the failed step. It does not re-enter `run()`.** Same test: the short circuit,
+which sits outside any step, ran **once per instance** while the settle step ran twice. So the earlier
+reading of the probe — "`run()` re-executes from the top and the cached steps are skipped" — was wrong
+about the mechanism while right about the outcome. Step `one` was never re-run because nothing re-ran it,
+not because a memo declined to.
+
+Three consequences this repo depends on:
+
+- **Anything that needs a retry must be inside a step.** For the decide pipeline that is the write, whose
+  retry would otherwise be strictly worse than the Cloudflare Queue it replaces.
+- **A retryable step must be idempotent**, because a retry can re-enter it after a partial success. The
+  decision insert became `on conflict (organization_id, decide_key) do nothing returning id` for exactly
+  this reason — a plain insert would have violated the constraint on every attempt after the first commit.
+- **Code outside a step runs once per instance**, which makes it the right place for a read of current state
+  (the short circuit) and the wrong place for anything that must be re-attempted.
+
+### A `step.do` return must be PROVABLY serializable, and a recursive JSON type breaks the check
+
+Found 2026-09-30 while typing `DecideWorkflow`'s step boundary. `step.do`'s return type is a **mapped type**
+(`Serializable<T>` descends into every property), with two consequences:
+
+- **`unknown` is rejected**, correctly — it admits `undefined`, a `Map`, a class instance with methods. The
+  module's step schema carries `fields: unknown` (a decoded invoice: JSON in fact, opaque in the type
+  system), so the boundary needs its own view.
+- **A recursive `Json` union makes the mapped type diverge**: `TS2589: Type instantiation is excessively deep
+  and possibly infinite`. The platform can only check a boundary it can finish traversing, so the boundary
+  is typed as `object` — non-recursive, and true.
+
+Related: **an exported anonymous class cannot inherit protected members.** `makeDecideWorkflow` returns a
+class expression, and `WorkflowEntrypoint`'s `ctx`/`env` are protected, so declaration emit fails with
+`TS4094`. Annotating the factory's return type with a constructor interface fixes it and keeps the anonymous
+class an implementation detail.
+
 ### Workers AI honours OpenAI-compatible `response_format: json_schema`
 
 **Verified by request 2026-09-29** against
@@ -475,10 +517,11 @@ everything that depends on it.
 
 **The rows most likely to go stale first**, and what changes when they do:
 
-| Row                           | Watch for                         | Then                                                                                                          |
-| ----------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `@effect/platform-cloudflare` | first npm publish                 | re-open ADR-0003; our `WorkflowEnginePg` gains an official alternative                                        |
-| Workers AI free tier          | a paid plan, or a gateway cache   | `bun run evals` can complete a 99-case scored run                                                             |
-| AI Gateway routing            | a gateway existing on the account | the adapters stop being unmetered; `cf-aig-gateway-id` becomes verified by execution rather than by assertion |
-| Effect RC churn in Alchemy    | a clean dependency audit          | ADR-0007's reason for Pulumi expires                                                                          |
-| PlanetScale region            | a region near the user            | ADR-0015's arithmetic changes                                                                                 |
+| Row                           | Watch for                                   | Then                                                                                                          |
+| ----------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `@effect/platform-cloudflare` | first npm publish                           | re-open ADR-0003; our `WorkflowEnginePg` gains an official alternative                                        |
+| Workers AI free tier          | a paid plan, or a gateway cache             | `bun run evals` can complete a 99-case scored run                                                             |
+| Workflow retry semantics      | a Cloudflare change to instance-level retry | the placement rule ("anything needing a retry is inside a step") would relax                                  |
+| AI Gateway routing            | a gateway existing on the account           | the adapters stop being unmetered; `cf-aig-gateway-id` becomes verified by execution rather than by assertion |
+| Effect RC churn in Alchemy    | a clean dependency audit                    | ADR-0007's reason for Pulumi expires                                                                          |
+| PlanetScale region            | a region near the user                      | ADR-0015's arithmetic changes                                                                                 |

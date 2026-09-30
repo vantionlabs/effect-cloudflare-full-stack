@@ -47,15 +47,27 @@ import { HealthHttp } from "@ea/api/v1"
 import { IdentityResolverLive, SessionHttp, SessionRpcLive, SessionStore } from "@ea/better-auth/Session"
 import { Db } from "@ea/database/Database"
 import { withDatabase } from "@ea/database/Database"
+import { CurrentOrg, OrgId } from "@ea/domain/Identity"
+import type { ProposedDecision } from "@ea/modules/decision/domain/Decision"
 import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
 import { DryRunAdapter } from "@ea/modules/decision/server/Execution"
 import { LanguageModelWorkersAiBinding, WORKERS_AI_MODEL } from "@ea/modules/decision/server/Extraction"
 import { TelemetryAnalytics } from "@ea/modules/decision/server/Telemetry"
+import {
+  decideStep,
+  existingDecision,
+  type ExtractOutputValue,
+  extractStep,
+  retrieveStep,
+  settleDecision
+} from "@ea/modules/decision/use-cases/Decision"
 import { DocumentParserText } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
 import { AgentModel } from "@ea/modules/policy/domain/Ask"
 import { AssistantConversationsAgent } from "@ea/modules/policy/server/Assistant"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
+import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
+import type { Retrieval } from "@ea/modules/shared/domain/Retrieval"
 import { CacheKv } from "@ea/modules/shared/server/Cache"
 import { EventQueue, QueueBus } from "@ea/modules/shared/server/Event"
 import { IdsUuid } from "@ea/modules/shared/server/Ids"
@@ -67,6 +79,13 @@ import { LanguageModel } from "effect/ai"
 import { HttpRouter } from "effect/http"
 import { HttpApiBuilder, HttpApiScalar } from "effect/http-api"
 import { RpcSerialization, RpcServer } from "effect/rpc"
+import {
+  type DecideWork,
+  type ExtractedFields,
+  makeDecideWorkflow,
+  type ProposedValue,
+  type RetrievedPolicy
+} from "./DecideWorkflow.ts"
 import { AuthenticatedLive } from "./platform/AuthenticatedLive.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
 import { dispatchEvent } from "./platform/DispatchEvent.ts"
@@ -386,6 +405,64 @@ export { RoomDurableObject } from "./RoomDurableObject.ts"
  * Durable Object — the SDK's class extends it — so it obeys exactly the same rule.
  */
 export { AssistantAgent } from "./AssistantAgent.ts"
+
+/**
+ * The decide pipeline's work, bound to this isolate's runtime and to one tenant.
+ *
+ * This is the join `DecideWorkflow.ts` deliberately does not make: that file names no port and no service,
+ * so the Effect plumbing lives here, in the composition root, where every other adapter binding is.
+ *
+ * `withDatabase` per call rather than one connection for the whole instance — the reasoning is in
+ * `DecideWorkflow.ts`, and it corrects ADR-0024: a `step.do` callback is an async function, so an Effect
+ * scope cannot span the steps without inverting control, and Hyperdrive opens in single-digit milliseconds.
+ *
+ * `CurrentOrg` comes from the params, because a Workflow instance has no session and no event row. That is
+ * the one place the tenancy seam is weaker than elsewhere in this repo: whoever creates the instance is
+ * trusted to have resolved the tenant, exactly as the queue consumer is today.
+ */
+const decideWork = (env: Env, orgId: string): DecideWork => {
+  const runtime = getQueueRuntime(env)
+  const run = <A, R>(effect: Effect.Effect<A, never, R>) =>
+    runtime.runPromise(
+      withDatabase(effect).pipe(
+        Effect.provideService(CurrentOrg, OrgId.make(orgId)),
+        Effect.provide(PolicySearchLive)
+      ) as Effect.Effect<A, never, never>
+    )
+  /*
+   * The casts are all here, and all in one direction: the module's typed values into the platform's
+   * serialised view, and back. `DecideWorkflow.ts` declares that view because `step.do` checks
+   * serializability with a mapped type and cannot see through `unknown` — so this is the one place the two
+   * descriptions of the same bytes are joined, which is what makes it the right place for a cast.
+   */
+  return {
+    existing: (params) => run(existingDecision(params)),
+    extract: (params) => run(extractStep(params)) as Promise<ExtractedFields>,
+    retrieve: (_params, query) => run(retrieveStep(query)) as Promise<RetrievedPolicy>,
+    decide: (_params, fields, policy) =>
+      run(decideStep({ fields, chunks: (policy as unknown as Retrieval).chunks })) as Promise<ProposedValue>,
+    settle: (params, extraction, retrieval, proposal, startedAt) =>
+      run(settleDecision({
+        payload: params,
+        extraction: extraction as unknown as ExtractOutputValue,
+        retrieval: retrieval as unknown as Retrieval,
+        proposal: proposal as unknown as ProposedDecision,
+        startedAt
+      }))
+  }
+}
+
+/**
+ * The Workflow class, created here for the reason `DecideWorkflow.ts` explains: a `WorkflowEntrypoint` is
+ * instantiated by the runtime, so nothing can be handed to it, and importing this file from there would be
+ * a cycle with the export below.
+ *
+ * Exported from the entry like the two Durable Object classes, and declared in `wrangler.jsonc`'s
+ * `workflows` array. NOT yet the path production takes — the queue still runs the pipeline inline. Flipping
+ * it needs parsing to move into a step first, because Workflow params are persisted and a large document's
+ * text would approach the 1 MiB cap.
+ */
+export const DecideWorkflow = makeDecideWorkflow(decideWork)
 
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

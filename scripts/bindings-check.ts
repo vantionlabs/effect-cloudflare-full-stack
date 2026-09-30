@@ -35,7 +35,15 @@ const BINDING_KEYS = [
   "vectorize",
   "services",
   "analytics_engine_datasets",
-  "ai"
+  "ai",
+  /*
+   * Added with `DecideWorkflow`, and it is the SECOND time this list has been the hole it exists to close.
+   * `durable_objects` was missing once too (see the note below on `name` versus `binding`), and the symptom
+   * both times is the same: the check passes, reports a smaller count than the file contains, and allows an
+   * environment with the binding missing. A `workflows` entry does spell it `binding`, so nothing else is
+   * needed here — only the key.
+   */
+  "workflows"
 ] as const
 
 const configPath = new URL("../apps/worker/wrangler.jsonc", import.meta.url).pathname
@@ -274,6 +282,8 @@ const RESOURCE_NEEDS_NO_BINDING: Record<string, string> = {
  */
 const NEEDS_NO_RESOURCE: Record<string, string> = {
   ai: "the binding is the authorisation; Workers AI has no resource to create",
+  workflows:
+    "defined by the Worker's own exported class, like a Durable Object — there is no resource, and \n    Pulumi has no Workflow type. Provisioned by `wrangler deploy` from the `workflows` declaration",
   durable_objects: "defined by the Worker's own exported class plus a migration, not by a resource",
   services: "a reference to another Worker, which is deployed rather than provisioned",
   analytics_engine_datasets: "a dataset is created implicitly on first write",

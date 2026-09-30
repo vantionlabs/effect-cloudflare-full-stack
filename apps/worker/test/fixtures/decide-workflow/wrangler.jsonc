@@ -1,0 +1,15 @@
+{
+  // A harness for the real orchestration, not a deployment. See index.ts for why it is its own Worker.
+  "name": "decide-workflow-probe",
+  "main": "index.ts",
+  "compatibility_date": "2026-09-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workflows": [
+    { "name": "decide-probe", "binding": "DECIDE", "class_name": "DecideWorkflow" },
+    { "name": "short-circuit-probe", "binding": "SHORT", "class_name": "ShortCircuitWorkflow" },
+  ],
+  "kv_namespaces": [
+    // Local-only: the id is never resolved because this Worker is never deployed.
+    { "binding": "COUNTS", "id": "decide_workflow_probe_counts" },
+  ],
+}

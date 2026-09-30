@@ -168,6 +168,22 @@
    * A room never opens it. Deleting a class deletes its storage, which is one more reason to keep rooms
    * stateless: this namespace holds nothing anyone could lose.
    */
+  /*
+   * The decide pipeline as a Cloudflare Workflow (ADR-0024). `class_name` is `DecideWorkflow`,
+   * exported from `Main.ts` — created there by a factory, because a `WorkflowEntrypoint` is
+   * instantiated by the runtime and cannot be handed the composed Effect runtime any other way.
+   *
+   * NOT yet the path production takes: the queue still runs the pipeline inline. The binding is
+   * declared so the class is provisioned and testable; flipping the queue over needs parsing to
+   * become the first step, because Workflow params are persisted and a large document's text
+   * would approach the 1 MiB cap.
+   *
+   * Repeated per environment for the same reason `durable_objects` is: it is NOT inheritable, and
+   * an environment that omitted it would deploy a Worker whose binding is undefined.
+   */
+  "workflows": [
+    { "name": "decide-document", "binding": "DECIDE", "class_name": "DecideWorkflow" },
+  ],
   "durable_objects": {
     "bindings": [
       { "name": "ROOMS", "class_name": "RoomDurableObject" },
@@ -339,6 +355,22 @@
        * making the other wrong; it is not two databases.
        */
       // Non-inheritable: see the top-level comment. Each environment gets its own namespace.
+      /*
+       * The decide pipeline as a Cloudflare Workflow (ADR-0024). `class_name` is `DecideWorkflow`,
+       * exported from `Main.ts` — created there by a factory, because a `WorkflowEntrypoint` is
+       * instantiated by the runtime and cannot be handed the composed Effect runtime any other way.
+       *
+       * NOT yet the path production takes: the queue still runs the pipeline inline. The binding is
+       * declared so the class is provisioned and testable; flipping the queue over needs parsing to
+       * become the first step, because Workflow params are persisted and a large document's text
+       * would approach the 1 MiB cap.
+       *
+       * Repeated per environment for the same reason `durable_objects` is: it is NOT inheritable, and
+       * an environment that omitted it would deploy a Worker whose binding is undefined.
+       */
+      "workflows": [
+        { "name": "decide-document", "binding": "DECIDE", "class_name": "DecideWorkflow" },
+      ],
       "durable_objects": {
         "bindings": [
           { "name": "ROOMS", "class_name": "RoomDurableObject" },
@@ -427,6 +459,22 @@
        * making the other wrong; it is not two databases.
        */
       // Non-inheritable: see the top-level comment. Each environment gets its own namespace.
+      /*
+       * The decide pipeline as a Cloudflare Workflow (ADR-0024). `class_name` is `DecideWorkflow`,
+       * exported from `Main.ts` — created there by a factory, because a `WorkflowEntrypoint` is
+       * instantiated by the runtime and cannot be handed the composed Effect runtime any other way.
+       *
+       * NOT yet the path production takes: the queue still runs the pipeline inline. The binding is
+       * declared so the class is provisioned and testable; flipping the queue over needs parsing to
+       * become the first step, because Workflow params are persisted and a large document's text
+       * would approach the 1 MiB cap.
+       *
+       * Repeated per environment for the same reason `durable_objects` is: it is NOT inheritable, and
+       * an environment that omitted it would deploy a Worker whose binding is undefined.
+       */
+      "workflows": [
+        { "name": "decide-document", "binding": "DECIDE", "class_name": "DecideWorkflow" },
+      ],
       "durable_objects": {
         "bindings": [
           { "name": "ROOMS", "class_name": "RoomDurableObject" },
