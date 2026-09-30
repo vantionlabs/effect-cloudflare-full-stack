@@ -552,21 +552,21 @@ Still missing: resumable streaming and a console surface. `.scratch/ai-stack/iss
 
 ### B2B SaaS basics
 
-| Capability                              | State                                                                                                       |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Auth, organizations, roles, invitations | ✅ better-auth + organization plugin                                                                        |
-| Multi-tenant isolation                  | ✅ `Db.scoped` seam + a static check that every tenant-table statement filters `organization_id` (ADR-0014) |
-| Audit trail                             | ✅ genuinely good — `events`, `decision_citations`, `executions`, `rails_fired` all queryable               |
-| Public versioned API + docs             | ✅                                                                                                          |
-| **API keys**                            | ❌ §5                                                                                                       |
-| **Quota / rate limits**                 | ❌ §5                                                                                                       |
-| **Billing / metering**                  | ❌ nothing. No Stripe, no usage counter                                                                     |
-| **Outbound webhooks**                   | ❌ inbound anticipated only; needs an outbox + HMAC signing + retries                                       |
-| **Admin / back-office**                 | ❌                                                                                                          |
-| **Email**                               | ❌ no transactional email (invitations, verification)                                                       |
-| **Session cache**                       | ⚠️ §3                                                                                                        |
-| **Telemetry**                           | ❌ §6                                                                                                       |
-| **Frontend**                            | ⚠️ built, never run against a live Worker                                                                    |
+| Capability                              | State                                                                                                                                                                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth, organizations, roles, invitations | ✅ better-auth + organization plugin                                                                                                                                                              |
+| Multi-tenant isolation                  | ✅ `Db.scoped` seam + a static check that every tenant-table statement filters `organization_id` (ADR-0014)                                                                                       |
+| Audit trail                             | ✅ genuinely good — `events`, `decision_citations`, `executions`, `rails_fired` all queryable                                                                                                     |
+| Public versioned API + docs             | ✅                                                                                                                                                                                                |
+| **API keys**                            | ✅ better-auth's `api-key` plugin, `X-API-Key` resolving to the SAME `CurrentUser` as the cookie through one declared security scheme (ADR-0022). Row was stale                                   |
+| **Quota / rate limits**                 | ❌ the per-key Durable Object is still unbuilt — the one place the plan says a DO "genuinely earns its keep", since the CF rate-limit binding is per-colo and explicitly not an accounting system |
+| **Billing / metering**                  | ❌ nothing. No Stripe, no usage counter                                                                                                                                                           |
+| **Outbound webhooks**                   | ❌ inbound anticipated only; needs an outbox + HMAC signing + retries                                                                                                                             |
+| **Admin / back-office**                 | ❌                                                                                                                                                                                                |
+| **Email**                               | ❌ no transactional email (invitations, verification)                                                                                                                                             |
+| **Session cache**                       | ⚠️ §3                                                                                                                                                                                              |
+| **Telemetry**                           | ✅ `TelemetryOtlp` (spans) + `TelemetryAnalytics` (the product's own rates), both optional so telemetry is never an availability dependency. Row was stale                                        |
+| **Frontend**                            | ⚠️ built, and now exercised by the Playwright suite in `e2e/` against a real Worker — but never against a DEPLOYED origin, because Deploy is red on a missing `CLOUDFLARE_API_TOKEN`               |
 
 ### The shortest path to the stated demo
 
