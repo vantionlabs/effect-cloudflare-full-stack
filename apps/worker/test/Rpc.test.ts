@@ -93,7 +93,7 @@ describe("Intake.list", () => {
           body: `# ${filename}\n`
         }
       )
-      expect(upload.status).toBe(200)
+      expect(upload.status).toBe(202)
     }
 
     const encoded = await decode(await call("Intake.list", { limit: 10 }, cookie))
@@ -114,7 +114,7 @@ describe("Intake.list", () => {
         body: "# secret\n"
       }
     )
-    expect(upload.status).toBe(200)
+    expect(upload.status).toBe(202)
 
     const second = await harness.signedInWithOrg()
     const message = await decode(await call("Intake.list", { limit: 50 }, second.cookie))

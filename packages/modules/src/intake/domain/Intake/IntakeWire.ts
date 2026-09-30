@@ -9,12 +9,21 @@ import { Collection } from "@ea/modules/shared/domain/Corpus"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
 
+/**
+ * **202 Accepted, not 200.** The name was always right and the status was wrong.
+ *
+ * The upload is stored and an event is enqueued; the decide pipeline runs on a Queue consumer
+ * afterwards, so when this response is written the work has been *accepted* and not *done*. A 200
+ * tells an integrating client the opposite — that the request completed — which is the difference
+ * between polling for the outcome and assuming there isn't one. `document_id` and `intake_id` are
+ * what the caller polls with, so the code and the body have to agree about what happened.
+ */
 export class UploadAcceptedV1 extends Schema.Class<UploadAcceptedV1>("UploadAcceptedV1")({
   document_id: Schema.String,
   intake_id: Schema.String,
   /** Characters of extracted text, so a caller can sanity-check the parse in one round trip. */
   text_length: Schema.Int
-}) {}
+}, { httpApiStatus: 202 }) {}
 
 /**
  * Returned when a document cannot be parsed.

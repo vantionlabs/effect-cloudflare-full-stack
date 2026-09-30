@@ -56,7 +56,9 @@ describe("POST /api/v1/intakes", () => {
       contentType: "text/markdown",
       cookie
     })
-    expect(response.status).toBe(200)
+    // 202, not 200: the document is stored and an event enqueued, and the decide pipeline runs on the
+    // queue after this response is written. See UploadAcceptedV1.
+    expect(response.status).toBe(202)
 
     const accepted = Schema.decodeUnknownSync(UploadAcceptedV1)(await response.json())
     // Both rows are written in one transaction, so both ids exist or neither does.
@@ -79,7 +81,7 @@ describe("POST /api/v1/intakes", () => {
       collection: "policy",
       cookie
     })
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(202)
   })
 
   it("refuses a PDF with 415 and names what is supported", async () => {

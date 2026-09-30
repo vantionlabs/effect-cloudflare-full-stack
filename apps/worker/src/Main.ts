@@ -59,7 +59,7 @@ import { RealtimeUpgrade, RoomsLive } from "@ea/realtime/Server"
 import { Effect, Layer, ManagedRuntime, Redacted } from "effect"
 import { LanguageModel } from "effect/ai"
 import { HttpRouter } from "effect/http"
-import { HttpApiBuilder } from "effect/http-api"
+import { HttpApiBuilder, HttpApiScalar } from "effect/http-api"
 import { RpcSerialization, RpcServer } from "effect/rpc"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
 import { dispatchEvent } from "./platform/DispatchEvent.ts"
@@ -190,6 +190,19 @@ const ServicesLayer = (env: Env) =>
 const AppLayer = (env: Env) =>
   Layer.mergeAll(
     HttpApiBuilder.layer(ApiV1, { openapiPath: "/api/v1/openapi.json" }),
+    /*
+     * The API reference, at `/api/v1/docs`, rendered by Scalar from the same document.
+     *
+     * `layerCdn` and not `layer`: the non-CDN variant INLINES Scalar's whole bundle into this Worker's
+     * script, and the script is what every cold start has to load. A docs page nobody hits on the hot
+     * path is the wrong thing to pay for on every request, so the reference loads from jsDelivr and the
+     * Worker stays small. The spec itself is served by us — Scalar only renders it — so the CDN sees no
+     * request content and going down costs the docs page and nothing else.
+     *
+     * PLAN.md asks for exactly this ("OpenAPI + Scalar docs, derived from the same declaration that types
+     * the handlers, so docs cannot drift"). Until now the document was served and nothing read it.
+     */
+    HttpApiScalar.layerCdn(ApiV1, { path: "/api/v1/docs" }),
     /*
      * The RPC surface, on the SAME router as the HTTP API.
      *
