@@ -255,6 +255,33 @@ be recreated, which is a dividend of the stateless-fan-out decision nobody plann
 `jurisdiction("eu")` is worth defaulting to for EU clients _now_ rather than later, for the same reason: a
 later change would apply only to new objects.
 
+### KV cannot back better-auth's `secondaryStorage`, and `better-auth-cloudflare` needs Drizzle
+
+**Checked 2026-09-30.** Two independent reasons, recorded because the advice circulating for
+"better-auth on Workers" recommends the opposite.
+
+**KV's 60-second minimum TTL is the shallow problem.** A write with a shorter TTL fails silently, and the
+usual workaround is `Math.max(ttl, 60)`. That is not enough here: better-auth's `secondaryStorage` interface
+requires `getAndDelete` and `increment` to be **atomic** — the documentation says the latter is needed "so
+secondary-storage-backed rate limiting can enforce the limit in one distributed-safe operation". KV is
+eventually consistent with no atomic primitives, so two concurrent requests both read N and write N+1, and
+rate limiting breaks **silently**. A six-digit OTP is only as strong as its attempt counter. Clamping the TTL
+fixes the write and leaves that hole open. See the comment at the end of `BetterAuth.ts`; a Durable Object is
+the documented path if session reads ever become a measured bottleneck.
+
+Also worth noting: a 10-second rate-limit window cannot even be _expressed_ with a 60-second floor.
+
+**`better-auth-cloudflare` (zpg6) is `0.3.1` and peers on `@better-auth/drizzle-adapter`.** So adopting it
+means adopting Drizzle, which PLAN.md rejects explicitly ("No Drizzle, no ORM" — row schemas are
+`Model`/`VariantSchema` so they compose with the domain schemas). Its other selling points are a D1 adapter
+(we are on Neon via Hyperdrive) and KV secondary storage (above).
+
+**One piece of its advice we do follow, and one that does not apply.** Instantiating better-auth **per
+request** is already how `acquireAuth` works, and the docstring records that capturing it at layer-build time
+cost two debugging sessions. Passing `ctx.waitUntil` for background tasks is that package's own
+`backgroundTasks.waitUntil` option, not a better-auth core option — `grep waitUntil node_modules/better-auth`
+finds nothing relevant in 1.7.6 — so there is no core hook to pass it to.
+
 ### A `WebSocket` cannot cross a Durable Object stub boundary
 
 **Verified by execution 2026-09-30**, not from documentation — the docs do not say either way, they simply
