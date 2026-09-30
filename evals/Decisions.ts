@@ -48,8 +48,7 @@ import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Ide
 import { Ids } from "@ea/domain/Ids"
 import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
 import { LanguageModelWorkersAiRest, WORKERS_AI_MODEL } from "@ea/modules/decision/server/Extraction"
-import { WorkflowEnginePg } from "@ea/modules/decision/server/Workflow"
-import { DecideDocumentLayer, DecideDocumentWorkflow, decideKey } from "@ea/modules/decision/use-cases/Decision"
+import { DecideDocument, decideKey } from "@ea/modules/decision/use-cases/Decision"
 import { ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
 import { EmbedderWorkersAiRest } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
@@ -157,13 +156,13 @@ const Ports = Layer.mergeAll(
 ).pipe(Layer.provideMerge(Pg))
 
 /*
- * The engine and the policy port are DEPENDENCIES of `DecideDocumentLayer`, so they are provided to it
- * rather than merged beside it. `Layer.mergeAll` builds in parallel, so a layer that another member of the
- * same call needs will not be there in time — the language service flags exactly this.
+ * Simpler than it was, because the pipeline is a plain composition now.
+ *
+ * This used to build `DecideDocumentLayer` over `WorkflowEnginePg` and `PolicySearchLive`, with a comment
+ * about `mergeAll` building in parallel and leaving a needed layer unbuilt. `DecideDocument` requires only
+ * the ports, so there is nothing to wire into anything — the engine and its 298 lines are gone (risk R7).
  */
-const AppLayer = DecideDocumentLayer.pipe(
-  Layer.provideMerge(Layer.mergeAll(WorkflowEnginePg, PolicySearchLive).pipe(Layer.provideMerge(Ports)))
-)
+const AppLayer = PolicySearchLive.pipe(Layer.provideMerge(Ports))
 
 // --- the corpus -----------------------------------------------------------
 
@@ -301,7 +300,7 @@ const main = async () => {
       Effect.gen(function*() {
         const documentId = `eval_inv_${generated.filename}`
         const before = emitted.length
-        const decided = yield* DecideDocumentWorkflow.execute({
+        const decided = yield* DecideDocument({
           documentId,
           documentText: generated.markdown,
           vertical: "invoice"

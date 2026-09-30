@@ -146,3 +146,25 @@ point. The parts of this ADR now dated by external work are the _alternatives_, 
 ADRs 0001–0008 were listed in the plan as step-0 work and were not written; 0009 onward were written as
 the decisions were actually made. This one was written out of order, when the question it answers came
 up. The remaining gaps are tracked in docs/PLAN.md.
+
+## Status note, 2026-09-30: superseded and executed — the engine is deleted
+
+ADR-0024 fired this ADR's revisit trigger; this records that the migration is finished. `WorkflowEnginePg`
+and its 298 lines are gone, and with them **risk R7** — "the custom `WorkflowEngine` is ours to maintain,
+with no exported conformance suite."
+
+What replaced each thing it did:
+
+| The engine did                    | Now                                                                                       |
+| --------------------------------- | ----------------------------------------------------------------------------------------- |
+| memoise completed activities      | the platform, keyed on step name — proven in `workerd`, not assumed                       |
+| `execute`'s run-level idempotency | `existingDecision` reading `decisions` by `decide_key`, which is earlier and prunes never |
+| stub suspend deliberately         | `waitForEvent`, which is the capability the stub was standing in for                      |
+
+**What was genuinely lost**, stated because this ADR's value was always its honesty about trade-offs: in
+Node there is no memo at all, so a run that fails part way through re-extracts on the next attempt. That
+affects the eval harness and the test suite rather than production, and `DecideDocument.ts` says so at the
+point where a reader would otherwise wonder.
+
+The two tables the engine wrote — `workflow_executions` and `workflow_activities` — are left in place.
+Dropping a table is irreversible and they hold the audit trail of every decision made before this change.

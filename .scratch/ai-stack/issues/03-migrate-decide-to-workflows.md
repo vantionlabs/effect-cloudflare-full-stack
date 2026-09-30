@@ -1,6 +1,6 @@
 # Migrate the decide pipeline to Cloudflare Workflows, and delete `WorkflowEnginePg`
 
-Status: ready-for-agent — **first half landed 2026-09-30**
+Status: **done 2026-09-30**
 
 ADR-0024. The trigger on ADR-0003 fired, and the memo property is proven by execution
 (`apps/worker/test/WorkflowStepMemo.test.ts`: step `one` ran once while step `two` ran twice).
@@ -32,7 +32,22 @@ The pipeline is decoupled and the orchestration is proven, but **the queue has n
 retries. An error outside a `step.do` fails the instance with NO retry, and a step retry does not re-enter
 `run()` — measured, and it moved the rails-and-write half inside a step.
 
-## What blocks the flip
+## Done
+
+The queue starts a Workflow instance and acks; the instance owns the `events` row's finish; the engine is
+deleted. `docs/adr/0003` carries the closing note and what was traded.
+
+Three things that were not obvious before building it, all recorded in `docs/references.md`:
+
+- **An error outside `step.do` fails the instance with no retry**, and a step retry does not re-enter
+  `run()`. The first entrypoint put the rails and the write outside a step on the opposite assumption and
+  the instance simply errored.
+- **A step must be idempotent**, because a retry can re-enter it after a partial success. The decision
+  insert became a claim, which also closed a TOCTOU that existed on the old path.
+- **`step.do` needs a provably serializable return**: `unknown` is refused, and a recursive JSON type makes
+  the check diverge.
+
+## What blocked the flip, for the record
 
 `documentText` is in the Workflow params, and params are persisted while a step's non-stream return is
 capped at 1 MiB — a scanned document's text can approach that. **Parsing has to become the first step**, so

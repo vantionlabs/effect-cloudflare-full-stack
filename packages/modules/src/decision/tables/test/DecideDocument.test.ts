@@ -13,8 +13,7 @@ import { Db } from "@ea/database/Database"
 import { CurrentOrgFromUser, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
 import { Ids } from "@ea/domain/Ids"
 import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
-import { WorkflowEnginePg } from "@ea/modules/decision/server/Workflow"
-import { DecideDocumentLayer, DecideDocumentWorkflow, decideKey } from "@ea/modules/decision/use-cases/Decision"
+import { DecideDocument, decideKey } from "@ea/modules/decision/use-cases/Decision"
 import { ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
 import { EmbedderDeterministic } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
@@ -131,10 +130,13 @@ const identity = new Identity({
 /**
  * `CurrentUser` is provided as a LAYER, not with `provideService`.
  *
- * `WorkflowEnginePg` captures the connection and identity when the layer is BUILT — see that file for
- * why `WorkflowEngine.Encoded` forces it — so an inner `provideService` is too late: the layer is
- * constructed from the surrounding context, which does not have it yet. The failure is
- * "Service not found: iam/CurrentUser" at layer build, which is not obvious from the call site.
+ * The original reason was `WorkflowEnginePg`, which captured the connection and identity at layer BUILD
+ * because `WorkflowEngine.Encoded` forces every method to have `R = never` — so an inner `provideService`
+ * was too late and failed with "Service not found: iam/CurrentUser" at layer build.
+ *
+ * That engine is deleted, so the forcing reason is gone. It stays a layer because `PolicySearchLive` is
+ * built from the surrounding context too, and because a test's wiring should look like the composition
+ * root's — which provides it as a layer for the same reason.
  */
 /**
  * A recording `EventBus`, and the reason it is here rather than in the auto-approve describe block.
@@ -178,18 +180,13 @@ const provide = <A, E>(
 ) =>
   effect.pipe(
     /*
-     * One provide, mirroring apps/worker/src/platform/DispatchEvent.ts.
+     * One provide, and much less to wire than there was.
      *
-     * `DecideDocumentLayer` requires both `WorkflowEngine` and `PolicySearch`, so `Layer.mergeAll` of
-     * all of them would leave those unsatisfied — merge is side-by-side, not wiring. `provideMerge`
-     * feeds them in and keeps their outputs visible, which is what the chain did.
+     * This used to feed `WorkflowEnginePg` and `PolicySearch` into `DecideDocumentLayer`, because the
+     * pipeline was an `effect/workflow` workflow and the engine was its dependency. `DecideDocument` is a
+     * plain composition now, so only the ports remain.
      */
-    Effect.provide(
-      DecideDocumentLayer.pipe(
-        Layer.provideMerge(Layer.mergeAll(WorkflowEnginePg, PolicySearchLive)),
-        Layer.provideMerge(base(model, bus))
-      )
-    )
+    Effect.provide(PolicySearchLive.pipe(Layer.provideMerge(base(model, bus))))
   ) as Effect.Effect<A, E, never>
 
 const run = <A, E>(
@@ -205,23 +202,16 @@ const payload = { documentId: DOCUMENT, documentText: INVOICE_TEXT, vertical: VE
 
 let chunkId: string
 
-/**
- * The engine's execution id, which is NOT the idempotency key.
- *
- * `Workflow.execute` hashes `<tagLength>:<tag>:<idempotencyKey>` into a digest, so a test that filtered
- * on `decideKey(...)` finds nothing and passes for the wrong reason if it asserts absence. Asking the
- * workflow for it keeps the test honest about what the engine actually stores.
- */
-const executionId = () =>
-  Effect.runPromise(
-    DecideDocumentWorkflow.executionId(payload) as Effect.Effect<string, never, never>
-  )
-
 beforeEach(async () => {
   await asAdmin(
     Effect.flatMap(SqlClient.SqlClient, (sql) =>
       Effect.gen(function*() {
-        yield* sql`delete from workflow_executions where organization_id = ${ORG}`
+        /*
+         * `workflow_executions` and `workflow_activities` are no longer written by anything — the engine
+         * that owned them is deleted. The tables are left in place rather than dropped: a migration that
+         * drops a table is irreversible, and these hold the audit trail of every decision made before the
+         * migration. Cleaning them here would imply something still writes them.
+         */
         /*
          * `events` has no foreign key into `source_documents` — deliberately, since an event outlives the
          * document it refers to — so deleting documents does not cascade to it and a leftover
@@ -268,7 +258,7 @@ beforeEach(async () => {
 describe("the decide pipeline", () => {
   it("reaches pending_review with its citations stored", async () => {
     const model = countingModel({ failDecide: false, chunkId })
-    const result = await run(model.layer, DecideDocumentWorkflow.execute(payload))
+    const result = await run(model.layer, DecideDocument(payload))
 
     expect(result.replayed).toBe(false)
     // Nothing is armed, so rail 3 alone stops auto_approve even if the model proposed it.
@@ -289,92 +279,70 @@ describe("the decide pipeline", () => {
     expect(stored[0]!.citations).toBe(1)
   })
 
-  it("costs nothing to run a second time, because the run itself is memoised", async () => {
-    const model = countingModel({ failDecide: false, chunkId })
-    await run(model.layer, DecideDocumentWorkflow.execute(payload))
-    const afterFirst = { ...model.calls }
-
-    await run(model.layer, DecideDocumentWorkflow.execute(payload))
-
-    // The RUN-level memo short-circuits before the body, so not one model call of any kind.
-    expect(model.calls).toEqual(afterFirst)
-  })
-
-  it("still refuses to decide twice if the workflow memo is gone", async () => {
+  it("costs nothing to run a second time, because the decision already exists", async () => {
     /*
-     * The run memo and the decide_key constraint are two independent defences, and this proves the
-     * second one alone. Workflow rows are the kind of thing a retention policy prunes; the decision
-     * must still not be made a second time when they are absent.
+     * The run-level memo is gone with the engine, and this property did not go with it — it got SIMPLER.
+     *
+     * It used to pass because `Workflow.execute` remembered the run. Now it passes because
+     * `existingDecision` reads `decisions` by `decide_key` before any step, which is a stronger guarantee
+     * from a source that no retention policy prunes.
      */
     const model = countingModel({ failDecide: false, chunkId })
-    await run(model.layer, DecideDocumentWorkflow.execute(payload))
+    await run(model.layer, DecideDocument(payload))
     const afterFirst = { ...model.calls }
 
-    const id = await executionId()
-    await asAdmin(
-      Effect.flatMap(SqlClient.SqlClient, (sql) => sql`delete from workflow_executions where execution_id = ${id}`)
-    )
-
-    const again = await run(model.layer, DecideDocumentWorkflow.execute(payload))
+    const again = await run(model.layer, DecideDocument(payload))
 
     expect(again.replayed).toBe(true)
-    // It entered the workflow body this time, and still made no model call: the decide_key lookup
-    // happens before the first activity.
+    // Not one model call of any kind: the short circuit is earlier than any memo could be.
     expect(model.calls).toEqual(afterFirst)
   })
 
-  it("makes exactly ONE extraction call across a failure and a redelivery", async () => {
-    const failing = countingModel({ failDecide: true, chunkId })
-    const firstAttempt = await Effect.runPromiseExit(
-      provide(failing.layer, DecideDocumentWorkflow.execute(payload))
-    )
-
-    expect(firstAttempt._tag).toBe("Failure")
-    expect(failing.calls.extract).toBe(1)
-    expect(failing.calls.decide).toBe(1)
-
+  it("makes no model call on a redelivery, which is what the short circuit is for", async () => {
     /*
-     * The redelivery, with a NEW counting model standing in for a new isolate.
+     * **This test replaces "makes exactly ONE extraction call across a failure and a redelivery", and the
+     * substitution is a real reduction in what is asserted here.** That test proved the Postgres engine's
+     * activity memo: a run that failed at `Decide` and was redelivered re-ran `Decide` and NOT `Extract`.
      *
-     * That substitution is the point of the whole engine: an in-memory memo would have forgotten
-     * everything here, which is precisely why the memo lives in Postgres (ADR-0003).
+     * The engine is deleted (risk R7), so in Node a failure part way through re-extracts on the next
+     * attempt. In production it does not, because the platform memoises each completed step — and that is
+     * asserted where it now lives, against the real orchestration in `workerd`:
+     * `apps/worker/test/DecideWorkflow.test.ts`.
+     *
+     * What is still assertable here, and is the guarantee that actually protects the bill, is the earlier
+     * one: a redelivery of COMPLETED work costs nothing at all. A new counting model stands in for a new
+     * isolate, so an in-memory memo could not produce this result.
      */
-    const retry = countingModel({ failDecide: false, chunkId })
-    const result = await run(retry.layer, DecideDocumentWorkflow.execute(payload))
+    await run(countingModel({ failDecide: false, chunkId }).layer, DecideDocument(payload))
 
-    expect(result.outcome).toBe("route_for_approval")
-    // Replayed from workflow_activities. THIS is the assertion the engine exists for.
-    expect(retry.calls.extract, "extraction must NOT run again after a redelivery").toBe(0)
-    // The step that failed does run again, which is exactly right.
-    expect(retry.calls.decide).toBe(1)
+    const redelivered = countingModel({ failDecide: false, chunkId })
+    const result = await run(redelivered.layer, DecideDocument(payload))
+
+    expect(result.replayed).toBe(true)
+    expect(redelivered.calls.extract, "a redelivery must not re-extract").toBe(0)
+    expect(redelivered.calls.decide, "a redelivery must not re-decide").toBe(0)
   }, 30_000)
 
-  it("memoises each activity exactly once, under the right workflow name", async () => {
-    await run(countingModel({ failDecide: false, chunkId }).layer, DecideDocumentWorkflow.execute(payload))
-    const id = await executionId()
+  it("records the failure and writes no decision when a step fails", async () => {
+    /*
+     * The other half of what the deleted tests covered: a failed run must leave nothing behind, so the
+     * redelivery above starts from a clean state rather than from a half-written decision.
+     */
+    const failing = countingModel({ failDecide: true, chunkId })
+    const attempt = await Effect.runPromiseExit(provide(failing.layer, DecideDocument(payload)))
 
-    const named = await asAdmin(
+    expect(attempt._tag).toBe("Failure")
+    expect(failing.calls.extract).toBe(1)
+
+    const stored = await asAdmin(
       Effect.flatMap(SqlClient.SqlClient, (sql) =>
-        sql<{ workflow_name: string }>`
-          select workflow_name from workflow_executions where execution_id = ${id}
+        sql<{ n: number }>`
+          select count(*)::int as n from decisions where decide_key = ${decideKey(DOCUMENT, VERTICAL)}
         `)
     )
-    // Guards a real bug: keying the registry on `workflow.name` stores "Workflow" for every
-    // definition, so all of them share one entry and the last registration wins.
-    expect(named[0]!.workflow_name).toBe("DecideDocument")
-
-    const rows = await asAdmin(
-      Effect.flatMap(SqlClient.SqlClient, (sql) =>
-        sql<{ name: string; n: number }>`
-          select name, count(*)::int as n from workflow_activities
-           where execution_id = ${id}
-           group by name order by name
-        `)
-    )
-
-    expect(rows.map((row) => row.name)).toEqual(["Decide", "Extract", "Retrieve"])
-    expect(rows.every((row) => row.n === 1)).toBe(true)
-  })
+    // The write is the last thing the pipeline does, so a failure before it leaves no decision at all.
+    expect(stored[0]!.n).toBe(0)
+  }, 30_000)
 
   it("escalates to needs_human when the model cites a chunk it never retrieved", async () => {
     /*
@@ -385,7 +353,7 @@ describe("the decide pipeline", () => {
      * which means nobody checked whether it applies.
      */
     const model = countingModel({ failDecide: false, chunkId: "chunk_never_retrieved" })
-    const result = await run(model.layer, DecideDocumentWorkflow.execute(payload))
+    const result = await run(model.layer, DecideDocument(payload))
     expect(result.outcome).toBe("needs_human")
     expect(result.railsFired.some((fired) => fired.includes("never retrieved"))).toBe(true)
   })
@@ -394,7 +362,7 @@ describe("the decide pipeline", () => {
     // The case the test above used to be. Kept, because "no citations and no auto_approve proposed"
     // genuinely should pass through untouched — but named for what it is.
     const model = countingModel({ failDecide: false })
-    const result = await run(model.layer, DecideDocumentWorkflow.execute(payload))
+    const result = await run(model.layer, DecideDocument(payload))
     expect(result.outcome).toBe("route_for_approval")
     expect(result.railsFired.length).toBe(0)
   })
@@ -430,7 +398,7 @@ describe("the auto-approve branch", () => {
   it("auto-approves when every bound holds, and emits exactly one execute event", async () => {
     await arm()
     const model = countingModel({ failDecide: false, chunkId, propose: "auto_approve" })
-    const result = await run(model.layer, DecideDocumentWorkflow.execute(payload))
+    const result = await run(model.layer, DecideDocument(payload))
 
     expect(result.railsFired).toEqual([])
     expect(result.outcome).toBe("auto_approve")
@@ -466,7 +434,7 @@ describe("the auto-approve branch", () => {
      */
     await arm({ max: 50_000 })
     const model = countingModel({ failDecide: false, chunkId, propose: "auto_approve" })
-    const result = await run(model.layer, DecideDocumentWorkflow.execute(payload))
+    const result = await run(model.layer, DecideDocument(payload))
 
     expect(result.outcome).toBe("route_for_approval")
     expect(result.railsFired.some((fired) => fired.includes("above the rule's ceiling"))).toBe(true)
@@ -484,7 +452,7 @@ describe("the auto-approve branch", () => {
     // The fixture invoice has no PO line at all, so this is the absent case rather than an empty one.
     await arm({ requirePo: true })
     const model = countingModel({ failDecide: false, chunkId, propose: "auto_approve" })
-    const result = await run(model.layer, DecideDocumentWorkflow.execute(payload))
+    const result = await run(model.layer, DecideDocument(payload))
 
     expect(result.outcome).toBe("route_for_approval")
     expect(result.railsFired.some((fired) => fired.startsWith("purchase_order:"))).toBe(true)
@@ -495,7 +463,7 @@ describe("the auto-approve branch", () => {
     // wrong pays a supplier on a decision that was routed to a human.
     await arm({ max: 50_000 })
     const model = countingModel({ failDecide: false, chunkId, propose: "auto_approve" })
-    await run(model.layer, DecideDocumentWorkflow.execute(payload))
+    await run(model.layer, DecideDocument(payload))
 
     const events = await asAdmin(
       Effect.flatMap(SqlClient.SqlClient, (sql) =>
