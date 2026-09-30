@@ -12,12 +12,13 @@
  * first asking whether the thread exists.
  */
 import { RoomArchived } from "@ea/modules/realtime/domain/Errors"
-import { Message, type MessageId } from "@ea/modules/realtime/domain/Message"
+import { Message, type MessageId, MessageMention } from "@ea/modules/realtime/domain/Message"
 import type { RoomRef } from "@ea/modules/realtime/domain/Room"
-import { CurrentUser } from "@ea/modules/shared/domain/Identity"
+import { CurrentUser, UserId } from "@ea/modules/shared/domain/Identity"
 import { Ids } from "@ea/modules/shared/domain/Ids"
-import { Db } from "@ea/modules/shared/tables/Database"
+import { Db, textArray } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
+import { ResolveMentions } from "../Mention/ResolveMentions.ts"
 import { ResolveRoomOrFail } from "../Room/ResolveRoom.ts"
 
 export const PostMessage = (input: {
@@ -55,6 +56,22 @@ export const PostMessage = (input: {
       return yield* Effect.die(new Error("insert into messages returned no row"))
     }
 
+    /*
+     * Mentions are resolved and recorded AFTER the message exists, and a failure here does not lose the message —
+     * the insert is already committed. That ordering is deliberate: a message that could not be saved because
+     * somebody's handle was ambiguous would be the wrong trade, and an unrecorded mention costs a notification.
+     */
+    const mentioned = yield* ResolveMentions(input.body)
+    if (mentioned.length > 0) {
+      yield* db.scoped((sql, orgId) =>
+        sql`
+          insert into message_mentions (organization_id, message_id, user_id)
+          select ${orgId}, ${id}, unnest(${textArray(sql, mentioned.map((person) => person.id))})
+          on conflict do nothing
+        `
+      )
+    }
+
     return new Message({
       id: row.id as MessageId,
       roomId: room.id,
@@ -70,6 +87,7 @@ export const PostMessage = (input: {
       // A message is never born edited, deleted or reacted to, so these are known rather than read back.
       editedAt: null,
       deletedAt: null,
-      reactions: []
+      reactions: [],
+      mentions: mentioned.map((person) => new MessageMention({ userId: UserId.make(person.id), email: person.email }))
     })
   })

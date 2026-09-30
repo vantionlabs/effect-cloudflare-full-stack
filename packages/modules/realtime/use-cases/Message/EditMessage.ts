@@ -12,8 +12,9 @@
 import { MessageNotFound, NotMessageAuthor } from "@ea/modules/realtime/domain/Errors"
 import { type MessageId } from "@ea/modules/realtime/domain/Message"
 import { CurrentUser } from "@ea/modules/shared/domain/Identity"
-import { Db } from "@ea/modules/shared/tables/Database"
+import { Db, textArray } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
+import { ResolveMentions } from "../Mention/ResolveMentions.ts"
 
 export const EditMessage = (input: {
   readonly messageId: MessageId
@@ -56,6 +57,24 @@ export const EditMessage = (input: {
         returning edited_at
       `
     )
+
+    /*
+     * Mentions are RE-resolved, not merged: editing "@alice" to "@bob" must stop mentioning Alice. Delete then
+     * insert, which is also how a removed mention disappears — a merge would only ever add.
+     */
+    yield* db.scoped((sql, orgId) =>
+      sql`delete from message_mentions where organization_id = ${orgId} and message_id = ${input.messageId}`
+    )
+    const mentioned = yield* ResolveMentions(input.body)
+    if (mentioned.length > 0) {
+      yield* db.scoped((sql, orgId) =>
+        sql`
+          insert into message_mentions (organization_id, message_id, user_id)
+          select ${orgId}, ${input.messageId}, unnest(${textArray(sql, mentioned.map((person) => person.id))})
+          on conflict do nothing
+        `
+      )
+    }
 
     const row = updated[0]
     return row === undefined

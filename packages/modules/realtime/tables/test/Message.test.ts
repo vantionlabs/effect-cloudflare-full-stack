@@ -66,6 +66,14 @@ const failureOf = <A, E>(identity: Identity, effect: Effect.Effect<A, E, any>) =
 const alice = identityIn(ORG_A, "msg_user_alice", "alice@example.test")
 const bob = identityIn(ORG_A, "msg_user_bob", "bob@example.test")
 const intruder = identityIn(ORG_B, "msg_user_other", "other@example.test")
+/**
+ * Somebody with no row in better-auth's `user` table — what a DELETED account looks like from our side.
+ *
+ * Its own identity rather than reusing Bob, who now needs a real user row so he can be mentioned. Sharing one
+ * fixture for "can be mentioned" and "no longer exists" is what broke when mentions arrived: the author-join test
+ * silently depended on Bob being absent.
+ */
+const ghost = identityIn(ORG_A, "msg_user_ghost", "ghost@example.test")
 
 /** A decision thread, named by the decision so the room is created on first use. */
 const thread = (decisionId: string) => ({ _tag: "RoomForDecision" as const, decisionId })
@@ -86,6 +94,33 @@ beforeEach(async () => {
     yield* sql`
       insert into "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
       values ('msg_user_alice', 'Alice', 'alice@example.test', true, now(), now())
+      on conflict (id) do nothing
+    `
+    /*
+     * Bob exists as a USER and as a MEMBER of org A, because mentions resolve through better-auth's `member`
+     * table.
+     *
+     * And the ORGANIZATION has to exist first, which is a real asymmetry worth knowing: OUR tables carry no
+     * foreign key into better-auth's (TenancyTable.ts explains why), so a fake org id is fine for `messages` and
+     * `rooms` — but better-auth's own tables reference each other, so `member."organizationId"` must name a real
+     * `organization` row. The first version of this fixture skipped it and every test in the file failed with
+     * `member_organizationId_fkey`.
+     */
+    yield* sql`delete from member where "userId" like 'msg_user_%'`
+    yield* sql`
+      insert into organization (id, name, slug, "createdAt")
+      values (${ORG_A}, 'Test Org A', ${`slug-${ORG_A}`}, now())
+      on conflict (id) do nothing
+    `
+    yield* sql`
+      insert into "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
+      values ('msg_user_bob', 'Bob', 'bob@example.test', true, now(), now())
+      on conflict (id) do nothing
+    `
+    yield* sql`
+      insert into member (id, "organizationId", "userId", role, "createdAt")
+      values ('msg_mem_bob', ${ORG_A}, 'msg_user_bob', 'member', now()),
+             ('msg_mem_alice', ${ORG_A}, 'msg_user_alice', 'member', now())
       on conflict (id) do nothing
     `
   }))
@@ -159,13 +194,13 @@ describe("ListMessages", () => {
 
   it("joins the author's email, and tolerates an author who no longer exists", async () => {
     await runAs(alice, PostMessage({ room: thread("dec_1"), body: "from alice" }))
-    // Bob has no row in better-auth's table, which is what a deleted user looks like.
-    await runAs(bob, PostMessage({ room: thread("dec_1"), body: "from bob" }))
+    // The ghost has no row in better-auth's table, which is what a deleted user looks like.
+    await runAs(ghost, PostMessage({ room: thread("dec_1"), body: "from a deleted account" }))
 
     const messages = await runAs(alice, ListMessages({ room: thread("dec_1") }))
     expect(messages.map((message) => message.authorEmail)).toEqual(["alice@example.test", null])
     // The message survives the author: an audit trail that erases what somebody said is not one.
-    expect(messages[1]?.body).toBe("from bob")
+    expect(messages[1]?.body).toBe("from a deleted account")
   })
 
   it("pages by cursor, which is also how a reconnecting client catches up", async () => {
@@ -348,5 +383,67 @@ describe("ToggleReaction", () => {
     const [read] = await runAs(alice, ListMessages({ room: thread("dec_1") }))
     expect(read?.deletedAt).not.toBeNull()
     expect(read?.reactions).toEqual([{ emoji: "👍", count: 1, mine: true }])
+  })
+})
+
+describe("mentions", () => {
+  it("records who a message named, resolved at write time", async () => {
+    const message = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "can you check this @bob?" }))
+
+    expect(message.mentions.map((mention) => mention.userId)).toEqual(["msg_user_bob"])
+
+    /*
+     * And it is STORED, not re-parsed: the read comes back with the same mention without the body being scanned
+     * again. That is what makes a mention a fact about what was written rather than a function of who currently
+     * has which address.
+     */
+    const [read] = await runAs(alice, ListMessages({ room: thread("dec_1") }))
+    expect(read?.mentions).toEqual([{ userId: "msg_user_bob", email: "bob@example.test" }])
+  })
+
+  it("ignores a handle that matches nobody, and an address written out in full", async () => {
+    const typo = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "@nobodyhere are you there" }))
+    // A typo should read as text, not fail a message.
+    expect(typo.mentions).toEqual([])
+
+    /*
+     * The pattern requires a boundary before the `@`, so a full address does not mention the local part — and
+     * does not name a domain either.
+     */
+    const address = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "mail bob@example.test" }))
+    expect(address.mentions).toEqual([])
+  })
+
+  it("does not let somebody mention themselves", async () => {
+    // Never a notification anybody wants, and it would light up the author's own badge for a note to self.
+    const message = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "@alice remember this" }))
+    expect(message.mentions).toEqual([])
+  })
+
+  it("mentions somebody once however many times they are named", async () => {
+    const message = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "@bob and @bob again" }))
+    expect(message.mentions).toHaveLength(1)
+  })
+
+  it("re-resolves on edit, so a removed mention stops mentioning", async () => {
+    const message = await runAs(alice, PostMessage({ room: thread("dec_1"), body: "@bob look" }))
+    expect(message.mentions).toHaveLength(1)
+
+    /*
+     * Delete then insert, not a merge: editing "@bob" out has to stop mentioning him, and a merge would only ever
+     * add. This is the assertion that distinguishes the two implementations.
+     */
+    await runAs(alice, EditMessage({ messageId: message.id, body: "never mind" }))
+    const [read] = await runAs(alice, ListMessages({ room: thread("dec_1") }))
+    expect(read?.mentions).toEqual([])
+  })
+
+  it("does not mention somebody from another organization who happens to share a handle", async () => {
+    /*
+     * Resolution is scoped by membership, so `@bob` in org B names nobody even though org A has a Bob. The
+     * tenancy seam again — this time across better-auth's tables rather than our own.
+     */
+    const message = await runAs(intruder, PostMessage({ room: thread("dec_z"), body: "@bob over here" }))
+    expect(message.mentions).toEqual([])
   })
 })

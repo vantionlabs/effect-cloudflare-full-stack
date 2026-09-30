@@ -122,6 +122,24 @@ export function Thread({
                   ? null
                   : <span style={{ color: "#aaa", fontSize: "0.78rem" }}>{" "}· edited</span>}
 
+                {
+                  /*
+                   * A message that names YOU is marked, using the userId rather than the email — the email is
+                   * display and can change, the id is the identity. This is the whole visible payoff of storing
+                   * mentions: the client does not parse anything, it compares ids.
+                   */
+                }
+                {message.mentions.some((mention) => mention.userId === identity.id)
+                  ? (
+                    <span
+                      title="You were mentioned"
+                      style={{ marginLeft: "0.35rem", fontSize: "0.72rem", color: "#b00", fontWeight: 600 }}
+                    >
+                      @you
+                    </span>
+                  )
+                  : null}
+
                 {message.deletedAt !== null
                   ? <div style={{ color: "#aaa", fontStyle: "italic" }}>message deleted</div>
                   : editing?.id === message.id

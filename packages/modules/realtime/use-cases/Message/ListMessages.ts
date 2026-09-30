@@ -13,7 +13,7 @@
  * by the first message, so "nobody has said anything" and "there is no row" are the same fact to a reader —
  * and `ResolveRoom` is asked not to create one, so reading never writes.
  */
-import { Message, type MessageId, MessageReaction } from "@ea/modules/realtime/domain/Message"
+import { Message, type MessageId, MessageMention, MessageReaction } from "@ea/modules/realtime/domain/Message"
 import type { RoomId, RoomRef } from "@ea/modules/realtime/domain/Room"
 import { CurrentUser, UserId } from "@ea/modules/shared/domain/Identity"
 import { Db } from "@ea/modules/shared/tables/Database"
@@ -84,6 +84,31 @@ export const ListMessages = (input: {
       `
       )
 
+    /*
+     * Mentions in a third query, for the same reason reactions are in a second: a join per extra dimension turns
+     * the thread read into something nobody can verify at a glance, while these are indexed lookups on the same
+     * page of ids. Three round trips for a page of messages is the right trade at this size; if it stops being
+     * one, the fix is a single aggregating query written deliberately, not one that grew.
+     */
+    const mentionRows = ids.length === 0 ?
+      [] :
+      yield* db.scoped((sql, orgId) =>
+        sql<{ message_id: string; user_id: string; email: string | null }>`
+        select mm.message_id, mm.user_id, u.email
+          from message_mentions mm
+          -- LEFT, because a mention must survive the person leaving: "ask @alice" is what was said.
+          left join "user" u on u.id = mm.user_id
+         where mm.organization_id = ${orgId} and ${sql.in("mm.message_id", ids)}
+      `
+      )
+
+    const mentionsByMessage = new Map<string, Array<MessageMention>>()
+    for (const row of mentionRows) {
+      const existing = mentionsByMessage.get(row.message_id) ?? []
+      existing.push(new MessageMention({ userId: UserId.make(row.user_id), email: row.email }))
+      mentionsByMessage.set(row.message_id, existing)
+    }
+
     const reactionsByMessage = new Map<string, Array<MessageReaction>>()
     for (const row of reactionRows) {
       const existing = reactionsByMessage.get(row.message_id) ?? []
@@ -101,7 +126,8 @@ export const ListMessages = (input: {
         createdAt: row.created_at.toISOString(),
         editedAt: row.edited_at === null ? null : row.edited_at.toISOString(),
         deletedAt: row.deleted_at === null ? null : row.deleted_at.toISOString(),
-        reactions: reactionsByMessage.get(row.id) ?? []
+        reactions: reactionsByMessage.get(row.id) ?? [],
+        mentions: mentionsByMessage.get(row.id) ?? []
       })
     )
   })

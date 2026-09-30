@@ -17,6 +17,17 @@ export type MessageId = typeof MessageId.Type
 export const MAX_BODY_LENGTH = 4000
 export const MAX_EMOJI_LENGTH = 32
 
+/**
+ * Somebody a message named.
+ *
+ * The email is joined at read time, like the author's, so a changed address shows correctly. The `userId` is what
+ * a client compares against the reader to decide whether to highlight — never the email, which is display.
+ */
+export class MessageMention extends Schema.Class<MessageMention>("MessageMention")({
+  userId: UserId,
+  email: Schema.NullOr(Schema.String)
+}) {}
+
 /** One emoji on one message: how many people used it, and whether you are one of them. */
 export class MessageReaction extends Schema.Class<MessageReaction>("MessageReaction")({
   emoji: Schema.String,
@@ -56,5 +67,12 @@ export class Message extends Schema.Class<Message>("Message")({
    * would make a busy message's row grow with its popularity, for information nobody shows until they hover.
    * Who reacted is a query that can be added when something needs it.
    */
-  reactions: Schema.Array(MessageReaction)
+  reactions: Schema.Array(MessageReaction),
+  /**
+   * Who this message named, resolved when it was written.
+   *
+   * Stored rather than re-parsed on read, so a mention is a fact about what was said: if somebody's address
+   * changes, a message that named them still names them. See `MentionTable.ts`.
+   */
+  mentions: Schema.Array(MessageMention)
 }) {}
