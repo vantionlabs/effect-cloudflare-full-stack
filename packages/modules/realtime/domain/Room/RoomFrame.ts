@@ -110,7 +110,16 @@ export class MessagePosted extends Schema.TaggedClass<MessagePosted>("MessagePos
   message: Message
 }) {}
 
-export const ServerFrame = Schema.Union([Welcome, Presence, QueueChanged, MessagePosted])
+/**
+ * The channel list changed — created, renamed, archived or restored.
+ *
+ * A nudge with no payload, unlike `MessagePosted`, and the asymmetry is the rule rather than an inconsistency: a
+ * room's fields change over its life, so a carried room could be stale, while a posted message never changes. A
+ * short list re-read on demand cannot disagree with itself.
+ */
+export class RoomsChanged extends Schema.TaggedClass<RoomsChanged>("RoomsChanged")("RoomsChanged", {}) {}
+
+export const ServerFrame = Schema.Union([Welcome, Presence, QueueChanged, MessagePosted, RoomsChanged])
 export type ServerFrame = typeof ServerFrame.Type
 
 /** Encoding is JSON both ways: the payloads are tiny and a frame a human can read in devtools is worth more

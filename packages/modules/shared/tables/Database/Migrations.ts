@@ -25,7 +25,8 @@ import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
-import { MessageTable } from "@ea/modules/realtime/tables/Message"
+import { MessageRooms, MessageTable } from "@ea/modules/realtime/tables/Message"
+import { RoomTable } from "@ea/modules/realtime/tables/Room"
 import { Migrator } from "effect/sql"
 import { EventTable } from "../Event/EventTable.ts"
 import { TenancyTable } from "../Tenancy/TenancyTable.ts"
@@ -67,7 +68,17 @@ export const migrations = {
    */
   "0015_rule_conditions": RuleTable,
   // Chat: `messages`, the record a room deliberately is not (ADR-0018).
-  "0016_messages": MessageTable
+  "0016_messages": MessageTable,
+  // Named channels, which is the trigger `Message.ts` said would justify a rooms table.
+  "0017_rooms": RoomTable,
+  /*
+   * Moves `messages` from (subject_kind, subject_id) onto `room_id`.
+   *
+   * A TRANSITION rather than a re-application: it backfills from columns it then drops, so unlike
+   * `0015_rule_conditions` it cannot be expressed by re-running the table's own definition. It must also run
+   * after `rooms` exists, which is the other reason it is its own key.
+   */
+  "0018_messages_rooms": MessageRooms
 }
 
 export const loader = Migrator.fromRecord(migrations)

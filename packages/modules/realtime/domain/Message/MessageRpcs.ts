@@ -6,10 +6,12 @@
  * error channel and a response the caller can act on — all of which the RPC path has and a fire-and-forget
  * frame does not. The socket only carries the notification afterwards.
  */
+import { RoomArchived, RoomNotFound } from "@ea/modules/realtime/domain/Errors"
 import { AuthenticatedRpc } from "@ea/modules/shared/domain/Identity"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
-import { MAX_BODY_LENGTH, Message, MessageId, SubjectKind } from "./Message.ts"
+import { RoomRef } from "../Room/Room.ts"
+import { MAX_BODY_LENGTH, Message, MessageId } from "./Message.ts"
 
 /**
  * A body that is actually a message.
@@ -23,8 +25,11 @@ const MessageBody = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLengt
 export const MessageRpcs = RpcGroup.make(
   Rpc.make("Message.list", {
     payload: {
-      subjectKind: SubjectKind,
-      subjectId: Schema.String,
+      /**
+       * A room REFERENCE, not an id, so a caller can name a decision's thread without knowing whether it
+       * exists — it is created by the first message. See `RoomRef`.
+       */
+      room: RoomRef,
       /**
        * Keyset pagination, and it is the same query a reconnecting client uses to catch up.
        *
@@ -35,12 +40,20 @@ export const MessageRpcs = RpcGroup.make(
       after: Schema.optional(MessageId),
       limit: Schema.optional(Schema.Int)
     },
-    success: Schema.Array(Message)
+    success: Schema.Array(Message),
+    /*
+     * Reading can fail, once a room can be addressed by id: an id that names no room in this organization is a
+     * refusal rather than an empty list, because an id is something the caller got from us and a typo should
+     * not read as "that channel is quiet".
+     *
+     * A room referenced by DECISION cannot fail this way — a thread that does not exist yet reads as empty,
+     * since it is created by the first message.
+     */
+    error: RoomNotFound
   }),
   Rpc.make("Message.post", {
     payload: {
-      subjectKind: SubjectKind,
-      subjectId: Schema.String,
+      room: RoomRef,
       body: MessageBody
     },
     /**
@@ -50,6 +63,12 @@ export const MessageRpcs = RpcGroup.make(
      * copy is the same row everybody else will receive over the socket rather than a local reconstruction
      * that might differ.
      */
-    success: Message
+    success: Message,
+    /*
+     * Two refusals, and a caller acts on them differently: `RoomNotFound` means the room is gone or was never
+     * theirs, `RoomArchived` means it exists and is closed — un-archive it, or post elsewhere. Collapsing them
+     * would make the console guess which advice to give.
+     */
+    error: Schema.Union([RoomNotFound, RoomArchived])
   })
 ).middleware(AuthenticatedRpc)

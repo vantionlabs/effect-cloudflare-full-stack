@@ -16,7 +16,7 @@ import { useHydrated } from "@/hooks/use-hydrated"
 import { useIdentity, useOrganizationId } from "@/hooks/use-session"
 import { RealtimeBridge } from "@/realtime/realtime-bridge"
 import { WebSocketProvider } from "@/realtime/socket-provider"
-import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router"
+import { createFileRoute, Link, Outlet, redirect, useNavigate } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: ({ context, location }) => {
@@ -65,7 +65,12 @@ function AuthenticatedLayout() {
       {organizationId === null ? null : <RealtimeBridge />}
       <div className="flex min-h-full flex-col">
         <header className="flex items-center justify-between border-b px-4 py-3">
-          <span className="text-sm font-medium">effect-ai</span>
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium">effect-ai</span>
+            {/* Plain links rather than a nav component: two destinations do not need an abstraction. */}
+            <Link to="/" className="text-muted-foreground text-sm hover:underline">Queue</Link>
+            <Link to="/chat" className="text-muted-foreground text-sm hover:underline">Chat</Link>
+          </div>
           <div className="flex items-center gap-3">
             <span className="text-muted-foreground text-sm">{identity.email}</span>
             <Button

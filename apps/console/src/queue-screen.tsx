@@ -341,7 +341,7 @@ function Inspector({ decisionId }: { readonly decisionId: string }) {
       ))}
 
       {/* The humans' reasoning, next to the machine's. See thread.tsx. */}
-      <Thread decisionId={decisionId} />
+      <Thread kind="decision" id={decisionId} title="NOTES" />
 
       <footer style={{ marginTop: "2rem", color: "#666", fontSize: "0.85rem" }}>
         <kbd>j</kbd>/<kbd>k</kbd> move · <kbd>a</kbd> approve · <kbd>r</kbd> reject

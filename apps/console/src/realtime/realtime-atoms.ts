@@ -10,7 +10,7 @@ import { Effect } from "effect"
 import { Atom, Reactivity } from "effect/reactivity"
 import { DECISIONS_KEY } from "../queue-atoms.ts"
 import { Api } from "../rpc.ts"
-import { threadKey } from "../thread-atoms.ts"
+import { decisionThreadKey, ROOMS_KEY, roomThreadKey } from "../thread-atoms.ts"
 
 /**
  * Everyone connected to this organization's room, including you.
@@ -29,8 +29,13 @@ export const viewersAtom = Atom.make<ReadonlyArray<Viewer>>([])
  * it is actually showing.
  */
 export const invalidateThreadAtom = Api.runtime.fn(
-  Effect.fnUntraced(function*(decisionId: string) {
-    yield* Reactivity.invalidate([threadKey(decisionId)])
+  Effect.fnUntraced(function*(roomId: string) {
+    /*
+     * Both spellings of the key, because a frame carries a room id and a thread may be registered under either:
+     * a channel by room id, a decision's thread by decision id (which has no room until somebody posts).
+     * Invalidating an unregistered key is a no-op, so this is cheaper than tracking the mapping.
+     */
+    yield* Reactivity.invalidate([roomThreadKey(roomId), decisionThreadKey(roomId), ROOMS_KEY])
   })
 )
 

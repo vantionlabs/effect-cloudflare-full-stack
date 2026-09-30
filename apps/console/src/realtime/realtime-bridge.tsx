@@ -46,9 +46,13 @@ export const RealtimeBridge = (): null => {
      *
      * Own echo included on purpose, unlike the queue: posting does not invalidate locally, so this is how the
      * poster's own thread updates. One refetch either way.
+     *
+     * BOTH keys are invalidated, because the frame carries a room id and a thread may be keyed either way: a
+     * channel is keyed by room, while a decision's thread is keyed by the decision (it has no room id until
+     * somebody posts). Invalidating a key nothing is registered under is a no-op, so the alternative — teaching
+     * the bridge which decision a room belongs to — would be state to keep in step for no gain.
      */
-    if (frame.message.subject.kind !== "decision") return
-    invalidateThread(frame.message.subject.id)
+    invalidateThread(frame.message.roomId)
   })
 
   return null

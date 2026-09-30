@@ -14,8 +14,11 @@ import { IdentityRpcs } from "@ea/modules/iam/domain/Identity"
 import { IntakeRpcs } from "@ea/modules/intake/domain/Intake"
 import { AskRpcs } from "@ea/modules/policy/domain/Ask"
 import { MessageRpcs } from "@ea/modules/realtime/domain/Message"
+import { RoomRpcs } from "@ea/modules/realtime/domain/Room"
 
-export const RpcV1 = IdentityRpcs.merge(IntakeRpcs).merge(DecisionRpcs).merge(AskRpcs).merge(MessageRpcs)
+export const RpcV1 = IdentityRpcs.merge(IntakeRpcs).merge(DecisionRpcs).merge(AskRpcs).merge(MessageRpcs).merge(
+  RoomRpcs
+)
 
 /** Where the RPC endpoint is mounted. Exported so the client and the server cannot disagree. */
 export const RPC_V1_PATH = "/api/rpc/v1"

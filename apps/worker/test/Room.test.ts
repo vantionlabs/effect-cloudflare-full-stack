@@ -197,10 +197,17 @@ describe("a message reaches a connected socket", () => {
 
     const response = await call(
       "Message.post",
-      { subjectKind: "decision", subjectId: "dec_broadcast", body: "checked the PO" },
+      { room: { _tag: "RoomForDecision", decisionId: "dec_broadcast" }, body: "checked the PO" },
       cookie
     )
-    expect(response.status).toBe(200)
+    /*
+     * The BODY is asserted, not only the status. An RPC failure is a 200 carrying a `Defect` or `Failure`
+     * envelope, so `expect(status).toBe(200)` passes for a handler that died — which is exactly how a wrong
+     * payload shape hid here until the frame never arrived five seconds later.
+     */
+    const body = await response.text()
+    expect(body, "the RPC should have succeeded").not.toContain("Defect")
+    expect(body).not.toContain("\"_tag\":\"Failure\"")
 
     /*
      * The frame is the integration this whole feature rests on: the use case wrote a row, the transport edge
@@ -208,9 +215,10 @@ describe("a message reaches a connected socket", () => {
      * elsewhere; only here do they meet.
      */
     const posted = await waitForFrame(frames, "MessagePosted")
-    const message = posted["message"] as { readonly body: string; readonly subject: { readonly id: string } }
+    const message = posted["message"] as { readonly body: string; readonly roomId: string }
     expect(message.body).toBe("checked the PO")
-    expect(message.subject.id).toBe("dec_broadcast")
+    // The room was created by this very post — a decision's thread does not exist until somebody writes in it.
+    expect(message.roomId).toBeTruthy()
 
     socket.close()
   })
@@ -221,7 +229,12 @@ describe("a message reaches a connected socket", () => {
     const listener = await connect(theirs.cookie)
     await waitForFrame(listener.frames, "Welcome")
 
-    await call("Message.post", { subjectKind: "decision", subjectId: "dec_private", body: "ours" }, mine.cookie)
+    const posted = await call(
+      "Message.post",
+      { room: { _tag: "RoomForDecision", decisionId: "dec_private" }, body: "ours" },
+      mine.cookie
+    )
+    expect(await posted.text()).not.toContain("Defect")
 
     /*
      * Asserted by waiting and then finding nothing, which is the only way to test an absence: the room name is

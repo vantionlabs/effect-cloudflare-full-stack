@@ -163,6 +163,25 @@ your disk because you ran `vite` at some point, which is exactly why local green
 `bun run --filter @ea/console build` first; CI does, before `check`, for this reason. Found when the first
 push to the remote failed CI on a tree whose `preflight` had just passed.
 
+**`bun run db:migrate` and `bun run test` target DIFFERENT databases by default.** `migrate` prefers
+`DATABASE_URL`, which `apps/worker/.env` sets to the **dev Neon** project; the test suites read the `PG*`
+variables and hit the **compose container**. So "I applied the migration" and "the tests see the new column"
+are two different claims, and a suite that fails with `column … does not exist` right after a successful
+migration is this, not a broken migration.
+
+The script prints the host it is about to migrate as its first line, which is the mitigation — and piping it
+through `tail` defeats that, which is how this was found. To migrate the container:
+
+```sh
+# The URL is spelled out in apps/worker/.env.example — user effect_ai, password local_dev_only,
+# localhost:55433, database effect_ai. Written as parts here because secretlint's connection-string rule
+# cannot tell a throwaway local credential from a real one, and the rule is worth keeping armed repo-wide.
+DATABASE_URL="$LOCAL_PG_URL" bun run db:migrate
+```
+
+Telling them apart afterwards is easy and worth knowing: `db:verify` reports **pgvector 0.8.5** for the
+container (ADR-0015 pins it) and **0.8.6** for Neon.
+
 **Anything a browser can do before hydration, it will — and the console's forms did all three.** The
 server sends real, typeable, submittable HTML; for the window before the bundle runs, React is not
 involved. Three distinct failures came out of that one window, and each looked like something else:

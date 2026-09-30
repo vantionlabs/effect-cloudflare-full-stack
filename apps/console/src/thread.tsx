@@ -1,30 +1,50 @@
 /**
- * The conversation on one decision.
+ * A room's messages, and a box to add one.
  *
- * The product's claim is that an automatic decision can be audited a year later. The citations make the
- * machine's reasoning legible; this makes the humans' — why a reviewer approved something despite a rail, or
- * what they checked before rejecting it, next to the decision rather than in a chat app nobody can query.
+ * Used for both kinds of room, which is why it takes a `kind` and an `id` rather than a `RoomRef` object: the
+ * ids are primitives, so the atom family memoises on them, whereas a fresh `{ _tag, decisionId }` literal each
+ * render would key a new atom every time — the same class of bug as building a query atom inside a component.
  *
  * Live updates arrive by invalidation, not by appending: `realtime-bridge.tsx` invalidates this thread's key
- * when a `MessagePosted` frame names it, and the query re-reads. So the socket makes it timely and the
- * database remains the only source of what it contains.
+ * when a `MessagePosted` frame names it, and the query re-reads. So the socket makes it timely and the database
+ * remains the only source of what it contains.
  */
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import { useCallback, useState } from "react"
-import { postMessageAtom, threadAtom } from "./thread-atoms.ts"
+import { useCallback, useMemo, useState } from "react"
+import { decisionThreadAtom, postMessageAtom, roomThreadAtom } from "./thread-atoms.ts"
 
-export function Thread({ decisionId }: { readonly decisionId: string }) {
-  const thread = useAtomValue(threadAtom(decisionId))
+export function Thread({
+  id,
+  kind,
+  title
+}: {
+  readonly kind: "decision" | "room"
+  readonly id: string
+  /** What to call the panel. The queue calls it NOTES; a channel uses its own name. */
+  readonly title: string
+}) {
+  const thread = useAtomValue(kind === "decision" ? decisionThreadAtom(id) : roomThreadAtom(id))
   const post = useAtomSet(postMessageAtom, { mode: "promise" })
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
+  const [rejected, setRejected] = useState<string | undefined>(undefined)
 
   const messages = thread._tag === "Success" ? thread.value : []
+
+  /** Memoised on the primitives, so the payload is stable and `send` is not rebuilt each render. */
+  const room = useMemo(
+    () =>
+      kind === "decision"
+        ? ({ _tag: "RoomForDecision", decisionId: id } as const)
+        : ({ _tag: "RoomById", roomId: id } as never),
+    [kind, id]
+  )
 
   const send = useCallback(async () => {
     const body = draft.trim()
     if (body === "" || sending) return
     setSending(true)
+    setRejected(undefined)
     /*
      * The draft is cleared BEFORE the await, so the next message can be typed immediately — and restored if the
      * post fails. Clearing after would swallow whatever was typed during the round trip, which on a slow
@@ -32,23 +52,27 @@ export function Thread({ decisionId }: { readonly decisionId: string }) {
      */
     setDraft("")
     try {
-      await post({ payload: { subjectKind: "decision", subjectId: decisionId, body } })
+      await post({ payload: { room, body } })
     } catch (error) {
       setDraft(body)
-      throw error
+      /*
+       * The server's refusal, shown rather than thrown. `RoomArchived` is the one a user can act on — the
+       * channel is closed, un-archive it or post elsewhere — and it is the reason that error is typed at all.
+       */
+      setRejected(String((error as { readonly _tag?: string })._tag ?? "Message not sent"))
     } finally {
       setSending(false)
     }
-  }, [decisionId, draft, post, sending])
+  }, [draft, post, room, sending])
 
   return (
     <section style={{ borderTop: "1px solid #ddd", marginTop: "1.5rem", paddingTop: "1rem" }}>
       <h3 style={{ font: "600 0.8rem ui-sans-serif", color: "#666", margin: "0 0 0.75rem" }}>
-        NOTES · {messages.length}
+        {title} · {messages.length}
       </h3>
 
       {messages.length === 0
-        ? <p style={{ color: "#888", fontSize: "0.85rem" }}>No notes yet. Say what you checked.</p>
+        ? <p style={{ color: "#888", fontSize: "0.85rem" }}>Nothing here yet.</p>
         : (
           <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.6rem" }}>
             {messages.map((message) => (
@@ -66,10 +90,14 @@ export function Thread({ decisionId }: { readonly decisionId: string }) {
           </ol>
         )}
 
+      {rejected === undefined ?
+        null :
+        <p role="alert" style={{ color: "#b00", fontSize: "0.8rem", marginTop: "0.5rem" }}>{rejected}</p>}
+
       <form
         /*
-         * `method="post"` and a disabled control while sending, for the reasons in `login.tsx`: before
-         * hydration the browser owns this form, and a GET submission would put the note in the URL.
+         * `method="post"` and a disabled control while sending, for the reasons in `login.tsx`: before hydration
+         * the browser owns this form, and a GET submission would put the message in the URL.
          */
         method="post"
         onSubmit={(event) => {
@@ -81,12 +109,11 @@ export function Thread({ decisionId }: { readonly decisionId: string }) {
         <input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Add a note"
-          aria-label="Add a note"
+          placeholder="Write a message"
+          aria-label="Write a message"
           /*
-           * `j`/`k`/`a`/`r` are document-level shortcuts; the handler already ignores events from inputs, so
-           * typing "a" here does not approve the decision. That check is in queue-screen.tsx and this input is
-           * the reason it exists.
+           * `j`/`k`/`a`/`r` are document-level shortcuts; the handler ignores events from inputs, so typing "a"
+           * here does not approve a decision. That check lives in queue-screen.tsx and this input is why.
            */
           style={{ flex: 1, padding: "0.4rem 0.5rem", font: "inherit" }}
         />

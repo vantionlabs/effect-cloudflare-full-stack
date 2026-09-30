@@ -1,25 +1,30 @@
 /**
- * A thread, oldest first, optionally after a cursor.
+ * A room's messages, oldest first, optionally after a cursor.
  *
  * **One query shape serves three jobs**: the first page, the next page, and a reconnecting client's catch-up.
- * That is the point of keyset pagination here rather than an offset — an offset shifts under inserts, and a
- * live thread inserts constantly, so paging with one would skip or repeat messages exactly when the feature is
+ * That is the point of keyset pagination rather than an offset — an offset shifts under inserts, and a live
+ * thread inserts constantly, so paging with one would skip or repeat messages exactly when the feature is
  * working. `after` is a message id, and ids are time-ordered (UUIDv7), so `id >` is chronological.
  *
- * Oldest-first, unlike most feeds: a conversation reads in the order it happened, and a client that appends
- * live messages to the end needs the stored ones in the same direction.
+ * Oldest-first, unlike most feeds: a conversation reads in the order it happened, and a client appending live
+ * messages to the end needs the stored ones in the same direction.
+ *
+ * A room that does not exist yet reads as an EMPTY thread rather than an error. A decision's thread is created
+ * by the first message, so "nobody has said anything" and "there is no row" are the same fact to a reader —
+ * and `ResolveRoom` is asked not to create one, so reading never writes.
  */
-import { Message, type MessageId, MessageSubject, type SubjectKind } from "@ea/modules/realtime/domain/Message"
+import { Message, type MessageId } from "@ea/modules/realtime/domain/Message"
+import type { RoomId, RoomRef } from "@ea/modules/realtime/domain/Room"
 import { UserId } from "@ea/modules/shared/domain/Identity"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
+import { ResolveRoom } from "../Room/ResolveRoom.ts"
 
 const MAX_LIMIT = 200
 const DEFAULT_LIMIT = 50
 
 export const ListMessages = (input: {
-  readonly subjectKind: SubjectKind
-  readonly subjectId: string
+  readonly room: RoomRef
   readonly after?: MessageId | undefined
   readonly limit?: number | undefined
 }) =>
@@ -27,6 +32,9 @@ export const ListMessages = (input: {
     const db = yield* Db
     const limit = Math.min(Math.max(input.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT)
     const after = input.after
+
+    const room = yield* ResolveRoom(input.room, { create: false })
+    if (room === null) return []
 
     const rows = yield* db.scoped((sql, orgId) =>
       sql<{
@@ -38,18 +46,12 @@ export const ListMessages = (input: {
       }>`
         select m.id, m.author_user_id, u.email as author_email, m.body, m.created_at
           from messages m
-          /*
-           * A LEFT join into better-auth's own table, read-only.
-           *
-           * Left, because a deleted user must leave their messages behind — an audit trail that erases who
-           * said something is not one. Our tables carry no foreign key into better-auth's (TenancyTable.ts),
-           * so this is the one place the two schemas meet, and it meets them in a direction that cannot
-           * constrain what better-auth does to its own rows.
-           */
+          -- A LEFT join into better-auth's own table, read-only. Left, because a deleted user must leave their
+          -- messages behind: an audit trail that erases who said something is not one. Our tables carry no
+          -- foreign key into better-auth's (TenancyTable.ts), so this is the one place the schemas meet.
           left join "user" u on u.id = m.author_user_id
          where m.organization_id = ${orgId}
-           and m.subject_kind = ${input.subjectKind}
-           and m.subject_id = ${input.subjectId}
+           and m.room_id = ${room.id}
            ${after === undefined ? sql`` : sql`and m.id > ${after}`}
          order by m.id asc
          limit ${limit}
@@ -59,7 +61,7 @@ export const ListMessages = (input: {
     return rows.map((row) =>
       new Message({
         id: row.id as MessageId,
-        subject: new MessageSubject({ kind: input.subjectKind, id: input.subjectId }),
+        roomId: room.id as RoomId,
         authorUserId: UserId.make(row.author_user_id),
         authorEmail: row.author_email,
         body: row.body,
