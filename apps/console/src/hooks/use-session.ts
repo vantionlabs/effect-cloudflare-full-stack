@@ -17,14 +17,44 @@
  * invites rendering something for a case that cannot happen.
  */
 import type { CurrentSession } from "@/auth/current-session"
+import { sessionAtom } from "@/auth/session-atoms"
+import { useAtomInitialValues, useAtomSet, useAtomValue } from "@effect/atom-react"
 import { useRouteContext } from "@tanstack/react-router"
+import { useEffect } from "react"
+
+/**
+ * Seeds `sessionAtom` from router context. Called once, from the root route's component.
+ *
+ * `useAtomInitialValues` writes into the current registry and does so **at most once per atom per registry**,
+ * which is exactly the hydration semantics wanted: the server's answer is there before the first child
+ * renders, and a later render cannot clobber a value the app has since changed. One registry per router means
+ * one per request on the server, so nothing leaks between two visitors.
+ *
+ * The effect afterwards is not redundant. Seeding happens once, but router context can be resolved again —
+ * `router.invalidate()` re-runs `beforeLoad` — and without this the atom would then disagree with the context
+ * the guards use. Sign-in and sign-out do not rely on it, because both reload the document and therefore
+ * build a new registry.
+ *
+ * It must render ABOVE anything calling `useSession`, which is why it lives in the root component rather than
+ * being a hook each screen remembers to call. A consumer above it reads the Guest default and fails closed.
+ */
+export const useHydrateSession = (): void => {
+  const session = useRouteContext({ from: "__root__", select: (context) => context.session })
+  useAtomInitialValues([[sessionAtom, session]])
+  const setSession = useAtomSet(sessionAtom)
+  useEffect(() => setSession(session), [session, setSession])
+}
 
 /*
+ * Reads the ATOM, not router context, and the two are kept in step by `useHydrateSession` above. Components
+ * could read either; going through the atom means there is one answer in the app rather than one for
+ * components and another for atoms, and it is the atom that other atoms can depend on.
+ *
  * Not exported yet: `useIdentity` is its only caller, and knip flags an export with no importer. Export it
  * the moment something renders differently for a guest — a marketing header, or a nav with either a name or
- * a sign-in link. The two-hook split is still the right shape; only its visibility is provisional.
+ * a sign-in link.
  */
-const useSession = (): CurrentSession => useRouteContext({ from: "__root__", select: (context) => context.session })
+const useSession = (): CurrentSession => useAtomValue(sessionAtom)
 
 export const useIdentity = () => {
   const session = useSession()

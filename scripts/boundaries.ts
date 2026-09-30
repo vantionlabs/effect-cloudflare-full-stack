@@ -27,7 +27,20 @@ interface Rule {
 
 const COMPOSITION_ROOT = new Set([
   "apps/worker/src/Main.ts",
-  "apps/worker/src/platform/DispatchEvent.ts"
+  "apps/worker/src/platform/DispatchEvent.ts",
+  /*
+   * The WebSocket upgrade, which composes the session seam with the rooms binding.
+   *
+   * It belongs here for the same reason `DispatchEvent.ts` does: it is wiring, not a use case. It has to name
+   * `resolveIdentity` because a socket has to be authenticated before a room accepts it, and the room cannot
+   * do it — a room holds no database by design (ADR-0019). It also returns a `Response` carrying a
+   * `webSocket`, which no schema describes and only workerd understands, so it could not live in
+   * `packages/api` either.
+   *
+   * Added deliberately rather than by loosening the rule to a prefix: the point of an explicit set is that a
+   * fourth entry is a decision somebody makes in a diff.
+   */
+  "apps/worker/src/platform/RealtimeHttp.ts"
 ])
 
 const MODULES = "packages/modules/"
@@ -118,6 +131,30 @@ const rules: ReadonlyArray<Rule> = [
           "slice that imports one has bound itself to a platform, and the fakes-only test tier " +
           "stops being possible. `evals/` is deliberately outside this rule: it is a composition " +
           "root of its own, and naming the deterministic embedder is the whole point of it"
+      }
+    ]
+  },
+  /**
+   * A room may not reach a database, and this is a COST boundary rather than a layering one.
+   *
+   * An outbound `connect()` keeps a Durable Object resident and billable for up to 15 minutes, and our
+   * Postgres client dials through `cloudflare:sockets` (ADR-0009). So a room that wrote to the database would
+   * stay billable for a quarter of an hour after every message — Cloudflare's own examples put that at $412 a
+   * month against $20 for the same traffic.
+   *
+   * A check rather than a comment because the failure is invisible: nothing errors, nothing logs, the code
+   * reads fine, and the bill arrives a month later. See ADR-0019.
+   */
+  {
+    label: "a Durable Object may not reach a database",
+    appliesTo: (p) => p.startsWith("apps/worker/src/Room"),
+    forbidden: [
+      {
+        pattern: /^@effect\/sql|^pg$|^@ea\/modules\/[a-z-]+\/tables(\/|$)/,
+        because: "a room must never hold a database connection: an outbound connect() keeps the object " +
+          "resident and billable for up to 15 minutes, which defeats hibernation and multiplies the cost " +
+          "of every room by about twenty. Writes belong in the Worker, which owns connection lifetime per " +
+          "request; the room is told what to broadcast afterwards (ADR-0019)"
       }
     ]
   },

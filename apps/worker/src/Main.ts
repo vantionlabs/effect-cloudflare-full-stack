@@ -60,6 +60,8 @@ import { ConnectHyperdrive, ReactivityLive } from "./platform/HyperdriveConnect.
 import { IdsUuid } from "./platform/Ids.ts"
 import { EventQueue, QueueBus } from "./platform/QueueBus.ts"
 import { consumeBatch, type QueueBatchLike } from "./platform/QueueHandler.ts"
+import { RealtimeHttp } from "./platform/RealtimeHttp.ts"
+import { RoomsLive } from "./platform/RoomsLive.ts"
 import { TelemetryAnalytics } from "./platform/TelemetryAnalytics.ts"
 import { TelemetryOtlp } from "./platform/TelemetryOtlp.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
@@ -209,6 +211,12 @@ const AppLayer = (env: Env) =>
        */
       protocol: "http"
     }),
+    /*
+     * The realtime upgrade. On this router, so it shares the origin — and therefore the cookie — with
+     * everything else; a socket that had to authenticate differently from a request would be a second
+     * authorization seam (see RealtimeHttp.ts).
+     */
+    RealtimeHttp,
     // better-auth's own routes, on the same router as the API — they must share an origin with each other
     // whatever the console does, because the session cookie is set by one and read by the other.
     SessionHttp
@@ -245,6 +253,7 @@ const AppLayer = (env: Env) =>
     // JSON rather than msgpack: the console is a browser, the payloads are small, and a wire format a
     // human can read in devtools is worth more here than a few bytes.
     Layer.provide(RpcSerialization.layerJson),
+    Layer.provide(RoomsLive),
     Layer.provide(SessionLive),
     Layer.provide(SessionRpcLive),
     Layer.provideMerge(ServicesLayer(env)),
@@ -283,6 +292,16 @@ let queueRuntime: ReturnType<typeof makeQueueRuntime> | undefined
  */
 const makeQueueRuntime = (env: Env) => ManagedRuntime.make(ServicesLayer(env), { memoMap })
 const getQueueRuntime = (env: Env) => (queueRuntime ??= makeQueueRuntime(env))
+
+/**
+ * The room class, re-exported from the entry because that is how the runtime finds it.
+ *
+ * A Durable Object class must be an export of the Worker's main module; `exports` in wrangler.jsonc only
+ * declares what to provision for it. A class that exists but is not exported here is not an error at deploy
+ * — Cloudflare ignores a class it was not told about — so the failure would be a namespace that never
+ * appears and an `env.ROOMS` that is undefined at the first upgrade.
+ */
+export { RoomDurableObject } from "./RoomDurableObject.ts"
 
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

@@ -143,6 +143,21 @@ const bindingNames = (scope: Record<string, unknown>): Set<string> => {
       const binding = entry["binding"]
       if (typeof binding === "string") {
         names.add(`${key}:${binding}`)
+      } else if (key === "durable_objects" && typeof entry["name"] === "string") {
+        /*
+         * A Durable Object binding spells it `name`, not `binding`.
+         *
+         * Nothing else in the configuration reference does, which is why it fell straight through to the
+         * fallback and was silently dropped — `durable_objects` was in `BINDING_KEYS` and contributed
+         * nothing, so this script reported "7 bindings" and cheerfully allowed an environment with no
+         * `ROOMS`. That is precisely the hole it exists to close, one level up: the check that guards
+         * against a missing binding was itself missing a binding kind.
+         *
+         * `class_name` is deliberately not compared. It is the class the runtime instantiates, and it is
+         * legitimately identical across environments — it is the BINDING name the Worker's code refers to
+         * (`env.ROOMS`) that must match everywhere.
+         */
+        names.add(`${key}:${entry["name"]}`)
       } else if (key === "queues" && typeof entry["queue"] === "string") {
         names.add("queues:<consumer>")
       } else {

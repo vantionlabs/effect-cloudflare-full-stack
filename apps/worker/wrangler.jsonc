@@ -147,6 +147,34 @@
    * Both point at the same Neon project. Splitting the CONNECTION is what lets one be cached without
    * making the other wrong; it is not two databases.
    */
+  /*
+   * Realtime rooms: one Durable Object per organization, for fan-out only (ADR-0018).
+   *
+   * **Two keys, and they live at different levels on purpose**, which is a wrangler subtlety worth stating
+   * rather than rediscovering:
+   *
+   * - `durable_objects.bindings` is NON-inheritable, so it is repeated in every `env` below. An environment
+   *   that omitted it would deploy a Worker whose `env.ROOMS` is undefined, and the first upgrade would
+   *   fail at runtime rather than at deploy. `bun run bindings:check` fails on that asymmetry.
+   * - `exports` IS inherited by named environments, and each environment still gets its own provisioned
+   *   namespace — so staging's rooms are not production's rooms even though this is declared once.
+   *
+   * `exports` rather than the legacy `migrations` array: it is what Cloudflare recommends for new classes,
+   * and the two are mutually exclusive. It is declarative — Cloudflare compares the classes the code
+   * exports, this declaration, and what is already provisioned — so renaming a class is an edit here rather
+   * than an append-only list of tags kept forever.
+   *
+   * `storage: "sqlite"` is the only backend a new namespace may declare, and the only one on the free plan.
+   * A room never opens it. Deleting a class deletes its storage, which is one more reason to keep rooms
+   * stateless: this namespace holds nothing anyone could lose.
+   */
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "RoomDurableObject" }],
+  },
+  "exports": {
+    "RoomDurableObject": { "type": "durable-object", "storage": "sqlite" },
+  },
+
   "hyperdrive": [
     { "binding": "HYPERDRIVE", "id": "8ef40398cba4415b96f52e61221b370f" },
     { "binding": "HYPERDRIVE_CACHED", "id": "588d06bec00e403694acd2bbc6d688e3" },
@@ -295,6 +323,10 @@
        * Both point at the same Neon project. Splitting the CONNECTION is what lets one be cached without
        * making the other wrong; it is not two databases.
        */
+      // Non-inheritable: see the top-level comment. Each environment gets its own namespace.
+      "durable_objects": {
+        "bindings": [{ "name": "ROOMS", "class_name": "RoomDurableObject" }],
+      },
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "6cf07f8655824f63a5c306f164feb196" },
         { "binding": "HYPERDRIVE_CACHED", "id": "9f66a0db9afe43069ed83a7a772fba57" },
@@ -374,6 +406,10 @@
        * Both point at the same Neon project. Splitting the CONNECTION is what lets one be cached without
        * making the other wrong; it is not two databases.
        */
+      // Non-inheritable: see the top-level comment. Each environment gets its own namespace.
+      "durable_objects": {
+        "bindings": [{ "name": "ROOMS", "class_name": "RoomDurableObject" }],
+      },
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "514e8b327dd048f3ac40de09165ef43b" },
         { "binding": "HYPERDRIVE_CACHED", "id": "33746fc280a543ecae33b34cd30ee46d" },

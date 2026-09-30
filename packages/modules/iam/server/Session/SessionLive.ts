@@ -40,11 +40,17 @@ import { acquireAuth, authSettings } from "./SessionStore.ts"
  *
  * Takes headers rather than reaching for `HttpServerRequest`, which is what makes it genuinely
  * transport-agnostic: the RPC middleware is handed `options.headers` and never sees an HTTP request.
- * Extracted so the two middlewares below are provably **one** authorization seam rather than two
+ * Extracted so the middlewares below are provably **one** authorization seam rather than several
  * implementations that happen to agree today — every decision about who the caller is lives here, and
  * each layer contributes only its transport's way of refusing.
+ *
+ * **Exported for a third transport:** the WebSocket upgrade in `apps/worker/src/platform/RealtimeHttp.ts`,
+ * which authenticates a socket before handing it to a room. That one is worth naming here because the room
+ * cannot re-check a session afterwards — it has no database by design — so this call is the *only* moment
+ * anybody verifies who is on that connection. Refusing correctly here is the whole of realtime's
+ * authorization.
  */
-const resolveIdentity = (config: AuthConfig, headers: Headers) =>
+export const resolveIdentity = (config: AuthConfig, headers: Headers) =>
   Effect.gen(function*() {
     // The POOL is acquired inside the per-request effect and released with the request scope.
     // Capturing it at layer-build time is the bug this shape prevents — it cost two debugging

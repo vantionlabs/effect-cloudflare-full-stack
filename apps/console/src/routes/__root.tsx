@@ -9,6 +9,7 @@
  * goes. Omitting either produces a page that renders on the server and never hydrates, which looks like
  * "React is broken" rather than "a tag is missing".
  */
+import { useHydrateSession } from "@/hooks/use-session"
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 import { getCurrentSession } from "../auth/current-session.ts"
@@ -32,8 +33,19 @@ export const Route = createRootRoute({
     links: [{ rel: "stylesheet", href: appCss }]
   }),
   shellComponent: RootDocument,
-  component: () => <Outlet />
+  component: RootRoute
 })
+
+/**
+ * The root component exists to hydrate the session atom before anything reads it.
+ *
+ * `beforeLoad` has already resolved the session and put it in router context; this copies it into an atom so
+ * that other ATOMS can depend on the session too, not only components. See `auth/session-atoms.ts`.
+ */
+function RootRoute() {
+  useHydrateSession()
+  return <Outlet />
+}
 
 function RootDocument({ children }: { readonly children: ReactNode }) {
   return (

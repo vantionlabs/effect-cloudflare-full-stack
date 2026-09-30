@@ -8,48 +8,118 @@
  * `j`/`k` move, `a` approves, `r` rejects. Bound once on the document rather than per row, so a shortcut never
  * depends on which element has focus — a reviewer who clicked a citation should still be able to press `a`.
  */
-import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react"
-import { useCallback, useEffect, useState } from "react"
+import type { Viewer } from "@ea/modules/shared/domain/Room"
+import { useAtomSet, useAtomValue } from "@effect/atom-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Highlight } from "./highlight.tsx"
-import { Api } from "./rpc.ts"
-
-const queueAtom = Api.query("Decision.queue", { limit: 50 })
+import { useIdentity } from "./hooks/use-session.ts"
+import { approveAtom, decisionAtom, queueAtom, rejectAtom, REVIEW_KEYS, reviewingAtom } from "./queue-atoms.ts"
+import { usePresence } from "./realtime/use-presence.ts"
 
 export function QueueScreen() {
   const queue = useAtomValue(queueAtom)
-  // A query atom is read-only; refreshing re-runs it. `useAtomSet` would be for a writable atom.
-  const refreshQueue = useAtomRefresh(queueAtom)
   const [selected, setSelected] = useState(0)
+  const identity = useIdentity()
+  const presence = usePresence()
 
-  const items = queue._tag === "Success" ? queue.value : []
+  /*
+   * The mutation atoms come from module scope, and that matters more than it looks.
+   *
+   * They used to be created inside this component — `useAtomSet(Api.mutation("Decision.approve"))` — which
+   * builds a NEW atom on every render, so the mutation's own state was thrown away and rebuilt each time and
+   * every `useCallback` depending on it was invalidated. It worked because the result was awaited directly;
+   * it would have broken the moment anything read the mutation atom's pending or error state.
+   */
+  const approve = useAtomSet(approveAtom, { mode: "promise" })
+  const reject = useAtomSet(rejectAtom, { mode: "promise" })
+  const reviewing = useAtomValue(reviewingAtom)
+  const setReviewing = useAtomSet(reviewingAtom)
+
+  /*
+   * The optimistic subtraction. The server's answer is the only queue data; this only ever HIDES rows.
+   *
+   * Memoised on the two inputs so that a re-render caused by anything else — presence arriving, the cursor
+   * moving — does not rebuild the array and, through it, every row.
+   */
+  const items = useMemo(() => {
+    const rows = queue._tag === "Success" ? queue.value : []
+    return reviewing.size === 0 ? rows : rows.filter((row) => !reviewing.has(row.decisionId))
+  }, [queue, reviewing])
+
   const current = items[selected]
 
-  const approve = useAtomSet(Api.mutation("Decision.approve"), {
-    mode: "promise"
-  })
-  const reject = useAtomSet(Api.mutation("Decision.reject"), {
-    mode: "promise"
-  })
+  /*
+   * Presence follows the cursor, so colleagues see which invoice you are on rather than only that you are
+   * here. Sent on change rather than on a timer: the room keeps it in the socket's attachment, so it costs
+   * one frame per navigation and nothing while you read.
+   *
+   * `setViewing` is stable (a `useCallback` over a stable `send`), so this effect runs when the selection
+   * changes and at no other time. Depending on a whole `presence` object here is what made an earlier version
+   * fire on every frame that arrived.
+   */
+  const { connected, setViewing } = presence
+  useEffect(() => {
+    setViewing(current?.decisionId ?? null)
+    /*
+     * `connected` is a dependency, not noise. A send before the socket is open is DROPPED rather than queued
+     * (see socket-provider.tsx), and this effect first runs on mount — before the upgrade completes. Without
+     * re-running on connect, a reviewer who opened a decision immediately would appear to colleagues as
+     * looking at nothing, and would stay that way until they moved. Re-sending on every reconnect is also
+     * what restores presence after a deploy.
+     */
+  }, [current?.decisionId, setViewing, connected])
+
+  /** Everybody except you — the list includes your own connection, which is not news to you. */
+  const others = useMemo(
+    () => presence.viewers.filter((viewer) => viewer.userId !== identity.id),
+    [presence.viewers, identity.id]
+  )
 
   const review = useCallback(
     async (action: "approve" | "reject") => {
       if (current === undefined) return
+      const { decisionId } = current
       const send = action === "approve" ? approve : reject
-      const result = await send({
-        payload: { decisionId: current.decisionId }
-      })
+
       /*
-       * `not_pending` means somebody else got there first — the CAS on the server rejected this review.
-       * Refreshing rather than showing an error is the right response: the queue has moved on, and the
-       * reviewer's next action should be against what is true now.
+       * Hidden before the round trip, restored only if it fails.
+       *
+       * The queue is keyboard-driven: `a a a` is three keystrokes faster than three round trips, and without
+       * this the cursor lands on a row the server is about to remove, so the second keystroke reviews the
+       * wrong decision.
+       *
+       * Note what is NOT done here: nothing invents a row or edits one. The hidden set is subtracted from
+       * whatever the server last said, so the worst outcome of a bug in this is a row that reappears.
        */
-      refreshQueue()
-      // Keep the cursor in range as the list shrinks, so `a a a` works without the selection running off
-      // the end — which is the whole point of a keyboard-first queue.
+      setReviewing((hidden) => new Set(hidden).add(decisionId))
+      // The cursor stays in range as the list shrinks, which is the whole point of a keyboard-first queue.
       setSelected((index) => Math.min(index, Math.max(items.length - 2, 0)))
-      return result
+
+      try {
+        /*
+         * `reactivityKeys` per call — a mutation takes them here rather than at definition — so a successful
+         * review re-runs the queue query on its own. There is no manual refresh anywhere in this file now.
+         *
+         * `not_pending` counts as success: somebody else got there first, the row is no longer pending, and
+         * it should stay hidden. The reviewer's next action should be against what is true now, which is what
+         * the invalidated query fetches.
+         */
+        return await send({ payload: { decisionId }, reactivityKeys: REVIEW_KEYS })
+      } catch (error) {
+        /*
+         * The row comes back. A review that failed — network, or a 500 — has NOT happened, and leaving it
+         * hidden would tell the reviewer it was handled. This is the rollback the optimistic hide is only
+         * safe because of.
+         */
+        setReviewing((hidden) => {
+          const next = new Set(hidden)
+          next.delete(decisionId)
+          return next
+        })
+        throw error
+      }
     },
-    [approve, current, items.length, refreshQueue, reject]
+    [approve, current, items.length, reject, setReviewing]
   )
 
   useEffect(() => {
@@ -93,7 +163,7 @@ export function QueueScreen() {
         height: "100vh"
       }}
     >
-      <QueueGrid items={items} selected={selected} onSelect={setSelected} />
+      <QueueGrid items={items} selected={selected} onSelect={setSelected} others={others} />
       {current === undefined ?
         (
           <section style={{ padding: "2rem", color: "#666" }}>
@@ -106,6 +176,8 @@ export function QueueScreen() {
 }
 
 interface QueueGridProps {
+  /** Other people connected to this organization's room, and what they have open. */
+  readonly others: ReadonlyArray<Viewer>
   readonly items: ReadonlyArray<{
     readonly decisionId: string
     readonly filename: string
@@ -118,7 +190,7 @@ interface QueueGridProps {
   readonly onSelect: (index: number) => void
 }
 
-function QueueGrid({ items, onSelect, selected }: QueueGridProps) {
+function QueueGrid({ items, onSelect, others, selected }: QueueGridProps) {
   return (
     <nav style={{ borderRight: "1px solid #ddd", overflowY: "auto" }}>
       <h1
@@ -130,6 +202,28 @@ function QueueGrid({ items, onSelect, selected }: QueueGridProps) {
         }}
       >
         REVIEW QUEUE · {items.length} · oldest first
+        {
+          /*
+           * Who else is here, and on what.
+           *
+           * The point is the one failure this does not otherwise prevent: two reviewers opening the same
+           * invoice, one approving it, and the other discovering that from a lost CAS race. Seeing a
+           * colleague on a row is the cheap half of that — the CAS is still what makes it safe.
+           *
+           * Absent entirely when nobody else is connected, rather than rendering "0 others": an empty
+           * indicator is noise on the screen of the person working alone, which is most of the time.
+           */
+        }
+        {others.length === 0 ?
+          null :
+          (
+            <span
+              style={{ marginLeft: "0.75rem", color: "#888", fontWeight: 400 }}
+              title={others.map((viewer) => viewer.email).join(", ")}
+            >
+              · {others.length} other{others.length === 1 ? "" : "s"} here
+            </span>
+          )}
       </h1>
       <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {items.map((item, index) => (
@@ -168,7 +262,8 @@ function QueueGrid({ items, onSelect, selected }: QueueGridProps) {
 }
 
 function Inspector({ decisionId }: { readonly decisionId: string }) {
-  const detail = useAtomValue(Api.query("Decision.get", { decisionId }))
+  // One atom per id, from module scope — see `decisionAtom` for why this must not be built during render.
+  const detail = useAtomValue(decisionAtom(decisionId))
 
   if (detail._tag !== "Success" || detail.value === null) {
     return <section style={{ padding: "2rem", color: "#666" }}>loading…</section>

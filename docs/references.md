@@ -201,6 +201,101 @@ entirely — the one property that makes a room affordable. So a room must never
 not a style preference; it is the difference between $20 and $400 a month in Cloudflare's own worked
 examples (their Example 3 versus Example 4).
 
+### WebSocket keepalive: the runtime answers protocol pings; the browser cannot send them
+
+**Checked 2026-09-30.** Three facts that together decide the design, from
+<https://developers.cloudflare.com/durable-objects/best-practices/websockets/>,
+<https://developers.cloudflare.com/network/websockets/> and
+<https://developers.cloudflare.com/durable-objects/api/state/>.
+
+1. **Cloudflare closes a WebSocket when no data flows in either direction** for a period. The timeout is
+   not published and is configurable only for Enterprise. The documented remedy is "implement a client-side
+   heartbeat (ping/pong)". Cloudflare also restarts servers when it deploys, which terminates connections —
+   so **reconnect logic is mandatory**, not defensive.
+2. **The runtime already answers WebSocket _protocol_ ping frames** (RFC 6455 §5.5.2) with pongs, without
+   waking a hibernating object, and `webSocketMessage` is not called for control frames.
+3. **But a browser cannot send a protocol ping.** The `WebSocket` API exposes no `ping()`; control frames
+   are not reachable from JavaScript. So fact 2 does not help a browser client, which is exactly why fact 4
+   exists.
+
+4. **`setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"))`** answers an
+   application-level text `ping` **without waking** the object. Both strings are capped at 2,048
+   characters. `getWebSocketAutoResponseTimestamp(ws)` gives the last time a socket auto-responded — which
+   is a liveness signal readable without having woken for it.
+
+So: the client sends a text `ping` on a timer, the room answers from the runtime, and the room stays
+hibernated. Cloudflare's own best-practices page sets this in the constructor, which is also the only place
+it can go for an object that may be reconstructed on any wake.
+
+**Also:** `web_socket_auto_reply_to_close` is default-on for compatibility dates from **2026-04-07**. Ours
+is `2026-09-26`, so the runtime completes the close handshake and calling `ws.close()` inside
+`webSocketClose` is unnecessary. On an older date, omitting it causes `1006` abnormal closures.
+
+### Durable Objects do not have peers — one name is one instance, and it never moves
+
+**Checked 2026-09-30**, <https://developers.cloudflare.com/durable-objects/best-practices/rules-of-durable-objects/>
+and <https://developers.cloudflare.com/durable-objects/reference/data-location/>.
+
+**There is no cross-node message-passing problem to solve.** A name resolves to exactly one instance
+globally, and every client of that room is routed to it from wherever they are. That is the property being
+bought. What is paid for it:
+
+| Fact                                                                                                                      | Consequence                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **~500–1,000 req/s** per object for simple pass-through; **~500–750** with JSON parsing; **~200–500** with storage writes | a per-room ceiling. `Required DOs = total req/s ÷ per-DO capacity`                    |
+| "**thousands of clients per instance**" over WebSockets                                                                   | a room's connection count is not the binding limit; its message rate is               |
+| A single object as a global singleton is a **documented anti-pattern**                                                    | shard on a natural boundary — per room, per org, per document — never one coordinator |
+| Created near the **first `get()`**, and **does not relocate** ("dynamic relocation is planned")                           | the first connection decides where a room lives for its whole life                    |
+| `locationHint` is honoured **only on the first `get()`**, and is best-effort                                              | it cannot fix a badly-placed existing object                                          |
+| `jurisdiction("eu")` constrains where an object **runs and stores**, and is not a hint                                    | the GDPR lever, and it pairs with the `mistral-eu` provider profile                   |
+
+**Two consequences specific to this repo.** Because an object never moves, placement is decided once and
+permanently — except that **our rooms store nothing**, so a badly-placed room is fixed by letting it die and
+be recreated, which is a dividend of the stateless-fan-out decision nobody planned for. And
+`jurisdiction("eu")` is worth defaulting to for EU clients _now_ rather than later, for the same reason: a
+later change would apply only to new objects.
+
+### A `WebSocket` cannot cross a Durable Object stub boundary
+
+**Verified by execution 2026-09-30**, not from documentation — the docs do not say either way, they simply
+always show `stub.fetch(request)`.
+
+Attempting the nicer shape — create the `WebSocketPair` in the Worker and hand the server half to a typed RPC
+method, `stub.accept(server, identity)` — fails at runtime:
+
+```
+DataCloneError: Could not serialize object of type "WebSocket". This type does not support serialization.
+```
+
+**So the pair must be created inside the Durable Object**, which means the room is entered through `fetch`,
+which means anything the room needs to know has to ride the request. Cloudflare's own examples put the user
+id in the **URL** (`?userId=…&username=…`); we use one header carrying a Schema-encoded value instead, so a
+malformed identity is a decode failure at a named line rather than two silent `null`s, and it never appears in
+a log. The route rebuilds the header set from the resolved session, so a client cannot supply its own.
+
+Also confirmed while testing: `acceptWebSocket` permits **32,768 connections per object** (CPU and memory may
+bind first), and takes up to **10 tags** of 256 characters for filtering `getWebSockets(tag)`.
+
+### `serializeAttachment` is the per-connection store, and it replaces a presence cache
+
+**Checked 2026-09-30**, <https://developers.cloudflare.com/durable-objects/best-practices/websockets/>.
+
+- A value attached with `serializeAttachment` **survives hibernation** for as long as the socket is healthy,
+  and is **lost when either side closes**. Max serialised size **16,384 bytes**; structured-clone types.
+- `deserializeAttachment()` returns the most recent value, or `null`.
+- Larger or longer-lived state is meant to go in the Storage API with its key held as the attachment — which
+  we do not need, because a room stores nothing (ADR-0018).
+
+**This is what replaces Redis for presence, and it is better rather than merely simpler.** A presence set in
+Redis needs TTL heartbeats because a crashed node cannot delete its own entries, so the list shows ghosts
+until a timeout expires and the UI is wrong for that window. Here the viewer list is _derived_ on every read
+from `getWebSockets()` plus attachments, so a disconnected viewer is not representable. Note the
+corollary: **presence is deliberately not durable**. It is meaningful only while sockets exist, so
+persisting it would reintroduce exactly the stale-entry problem.
+
+Cloudflare's own `workers-chat-demo` keeps its sessions in an instance array, which is the pattern to avoid
+under hibernation: the array is empty on the next wake.
+
 ### Effect v4 has WebSocket RPC, and the upgrade path is `HttpServerRequest.upgrade`
 
 **Checked 2026-09-29** by reading the vendored source at `repos/effect/packages/effect/src/rpc/RpcServer.ts`

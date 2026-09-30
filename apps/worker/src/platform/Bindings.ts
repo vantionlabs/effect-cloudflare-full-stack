@@ -46,6 +46,28 @@ export interface Env {
     readonly database: string
     readonly connectionString: string
   }
+  /**
+   * Realtime rooms: one Durable Object per organization, for fan-out only.
+   *
+   * Typed structurally, like the queue producer below, so this file states exactly what the code uses and
+   * a test double is an object literal rather than a mock of the platform's class. `getByName` is the
+   * modern form of `idFromName` + `get`, and it is what makes the name the whole addressing story — see
+   * `@ea/modules/shared/domain/Room/RoomName` for why that name is derived from the session and never
+   * received from a client.
+   *
+   * Notably absent: anything about storage. A room stores nothing (ADR-0018), so the binding's surface is
+   * an upgrade and a broadcast.
+   */
+  readonly ROOMS: {
+    readonly getByName: (name: string) => {
+      /**
+       * The upgrade. A `WebSocket` cannot cross a stub boundary (`DataCloneError`), so the room creates the
+       * pair itself and is entered with a request carrying a Schema-encoded identity header.
+       */
+      readonly fetch: (request: Request) => Promise<Response>
+      readonly broadcast: (encoded: string) => Promise<void>
+    }
+  }
   /** Source documents. Tenancy is a key prefix, enforced in @ea/modules/intake/domain/Document. */
   readonly DOCUMENTS: R2Bucket
   /** The event queue producer. Stable for an isolate's lifetime, so safe to capture. */
