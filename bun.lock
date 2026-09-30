@@ -66,6 +66,7 @@
         "@ea/api": "workspace:*",
         "@ea/better-auth": "workspace:*",
         "@ea/database": "workspace:*",
+        "@ea/domain": "workspace:*",
         "@ea/modules": "workspace:*",
         "@ea/realtime": "workspace:*",
         "@effect/sql-pg": "catalog:",

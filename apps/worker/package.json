@@ -10,14 +10,15 @@
     "types": "wrangler types"
   },
   "dependencies": {
+    "@ea/ai-openai": "workspace:*",
     "@ea/api": "workspace:*",
-    "@ea/modules": "workspace:*",
-    "@effect/sql-pg": "catalog:",
-    "effect": "catalog:",
-    "@ea/database": "workspace:*",
-    "@ea/realtime": "workspace:*",
     "@ea/better-auth": "workspace:*",
-    "@ea/ai-openai": "workspace:*"
+    "@ea/database": "workspace:*",
+    "@ea/domain": "workspace:*",
+    "@ea/modules": "workspace:*",
+    "@ea/realtime": "workspace:*",
+    "@effect/sql-pg": "catalog:",
+    "effect": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260926.1",

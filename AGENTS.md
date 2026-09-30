@@ -190,10 +190,18 @@ container and a Cloudflare token — `preflight` should stay runnable on a lapto
 when you touch the console's auth, routing or forms, which is precisely where it has already earned its
 keep.
 
-**Three things made the gates pass locally and fail on a clean machine, and all three had the same
+**An undeclared workspace dependency resolves on your machine and fails in a fresh install.** Bun hoists
+workspace packages to the root `node_modules`, so any package can import any other whatever its manifest says
+— and nothing in `preflight` noticed: `tsc` follows the same hoisted paths, `knip` reports the opposite
+direction (declared and unused), and `syncpack` checks versions rather than presence. It surfaced as a
+**rolldown resolution error during the console build in CI**, where `apps/worker` imported `@ea/domain`
+without declaring it. `bun run deps:workspace` is the check, and it is in `hygiene`.
+
+**Four things made the gates pass locally and fail on a clean machine, and all four had the same
 shape: a developer machine holds state a fresh one does not.** A green `bun run preflight` is therefore
-evidence about this machine, not about the code. The three were a generated file that was already on disk,
-a `node_modules` link left by an earlier install, and cached `wrangler login` credentials. When a gate
+evidence about this machine, not about the code. They were a generated file that was already on disk,
+a `node_modules` link left by an earlier install, cached `wrangler login` credentials, and a workspace
+dependency that only the hoisted layout satisfied. When a gate
 disagrees with CI, suspect local state before suspecting CI.
 
 **The `worker` vitest project cannot run without `CLOUDFLARE_API_TOKEN`.**
