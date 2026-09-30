@@ -33,7 +33,7 @@ Status column, and the distinction matters more than it looks:
 | **Workers KV**            | better-auth session cache                                    | Cloudflare             | ✅      | **planned** — was declared-unwired, now removed (§3) |
 | **Durable Objects**       | exact per-API-key quota                                      | Cloudflare             | ✅      | planned                                              |
 | **Rate Limiting binding** | coarse flood protection                                      | Cloudflare             | ✅      | planned                                              |
-| **AI Gateway**            | caching, retries, cost/limit control in front of the model   | Cloudflare             | ✅      | planned (§5)                                         |
+| **AI Gateway**            | caching, retries, cost/limit control in front of the model   | Cloudflare             | ✅      | adapters route; **gateway not created** (§7)         |
 | **Analytics Engine**      | custom metrics at SQL                                        | Cloudflare             | ✅      | planned (§6)                                         |
 | **PlanetScale Postgres**  | relational + pgvector + Dutch FTS                            | **external**           | ❌      | in use (§4.1)                                        |
 | **Postgres in Docker**    | the test database                                            | **local only**         | ❌      | in use (§4.2, ADR-0015)                              |
@@ -178,9 +178,12 @@ asserts the new semantics explicitly. Both were negative-tested.
 
 **Still not wired**, and neither is a one-liner:
 
-- **The cron.** No `scheduled` export, because `ReconcileStuckExecutions` and the enqueue-gap sweeper do not
-  exist. They are the recovery record for the two failure modes that have no transaction, so they are real
-  work rather than config.
+- ~~**The cron.** No `scheduled` export…~~ **Half of this was done and the row went stale — corrected
+  2026-09-30.** `Main.ts` has a `scheduled` export, `wrangler.jsonc` has `"crons": ["*/5 * * * *"]` at both
+  levels, and the sweeper runs: `SweepEnqueueGap`, the enqueue-gap recovery record. What is **still**
+  missing is the other half — the **stuck-claim report** that `ExecutionTable.ts` promises and ADR-0013
+  requires, which must report an ambiguous `pending` to an operator and must never resolve it. So the cron
+  exists and has one job of the two.
 - **A second vertical.** `IngestUpload` hardcodes `invoice`, named as `INVOICE_VERTICAL` so the question
   "where is the vertical chosen?" has one answer when a second arrives.
 
@@ -389,12 +392,38 @@ signal — a decision with nothing to point at cannot be audited whatever its ou
   failure modes that have no transaction, and they need the cron that does not exist yet.
 - **Web Analytics / RUM** for the console.
 
-## 7. AI Gateway — planned, and it would have paid for itself already
+## 7. AI Gateway — the code routes through it; the gateway does not exist
 
-Not used. It sits in front of any model provider, Workers AI included (`env.AI.run(model, input, {
-gateway: { id } })`, or a gateway URL for an external provider), and gives: **caching** of identical
-requests, **rate limiting**, **retries and fallback** to another provider, **per-request logging with
-tokens and cost**, and **spend limits**.
+**Corrected 2026-09-30, twice, and the second correction matters more than the first.** "Not used" was
+stale: every model adapter now routes through a gateway, and as of today so does the embedder, which was
+the last one going direct. But the opposite overstatement is just as wrong, and I made it before checking —
+**AI Gateway is not adopted either.** The honest state is a third thing:
+
+| Layer              | State                                                                                                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| The adapters       | ✅ all four paths route — chat by gateway hostname, embeddings by `cf-aig-gateway-id` header, both bindings by `{ gateway: { id } }` run option |
+| The configuration  | ✅ `CLOUDFLARE_AI_GATEWAY` and `AI_GATEWAY` are set to `effect-ai-ai-dev` at every level of `wrangler.jsonc`                                    |
+| The gateway itself | ❌ **declared in `infra/index.ts`, never applied.** Pulumi has not run, so no gateway by that name exists on the account                        |
+
+**So the configuration names a resource nobody created** — which is, verbatim, the blind spot ADR-0007's
+own "Revisit when" lists for `bindings-check`: _"a binding that exists in `wrangler.jsonc` and points at a
+resource nobody created still passes, and the symptom is a runtime failure on the first request that
+touches it."_ It was written as a hypothetical and it is the actual state. That is the whole reason this
+row is worth three lines instead of a tick: a check comparing declarations against declarations agreed with
+itself, and the thing neither declaration touches is whether the gateway is there.
+
+Creating it is now an MCP or `wrangler` action rather than a Pulumi one (ADR-0007's status note), and
+`wrangler` has no `ai-gateway` command, so it is the `cf-ai-gateway` MCP server — which needs the user to
+authorise it once. Tracked as `.scratch/ai-stack/issues/01`.
+
+One option worth knowing before creating anything by hand: Cloudflare accepts the literal gateway id
+`default`, which **creates a gateway on the first authenticated request**. That makes "no gateway exists" a
+non-blocker, but it is not a substitute here — an auto-created gateway does not carry the settings
+`infra/index.ts` declares, and `cacheTtl: 3600` is the entire point for the eval harness.
+
+It sits in front of any model provider, Workers AI included, and gives: **caching** of identical requests,
+**rate limiting**, **retries and fallback** to another provider, **per-request logging with tokens and
+cost**, and **spend limits**.
 
 Four reasons it belongs here specifically:
 
@@ -465,25 +494,31 @@ full stack, with B2B SaaS basics._ Honest scoring.
 
 ### AI engineering
 
-| Capability                     | State                                                                                                                                                                               |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Embeddings**                 | ✅ Workers AI `bge-m3`, 1024d matching the column; swappable port; dimension mismatch refused before storage                                                                        |
-| **RAG**                        | ✅ and unusually strong — heading-aware chunking, contextual prefixes, pgvector HNSW + Dutch FTS, **RRF fused in one SQL function**, corpus separation enforced inside the function |
-| **Retrieval evals**            | ✅ `evals:retrieval` — multi-strategy sweep vs LangChain, gated at lexical ≥ 75% / hybrid ≥ 90%                                                                                     |
-| **Rails / guardrails**         | ✅ four rails behind an unconstructible brand — a decision _cannot compile_ without passing them                                                                                    |
-| **Model-free gate**            | ✅ `evals:rule` — assumes the model is maximally wrong; found 190/300 released, now 1/300 (ADR-0016)                                                                                |
-| **End-to-end evals**           | ⚠️ built, blocked on model quota. Real corpus with distractors, scored against docket's 33/99                                                                                        |
-| **Durable execution**          | ✅ `effect/workflow` on a ~200-line Postgres engine; memoised activities, proven by a "exactly one extraction call" test                                                            |
-| **Structured output**          | ✅ native JSON mode with a provider-side JSON schema, measured field ordering                                                                                                       |
-| **AI Gateway**                 | ❌ §7                                                                                                                                                                               |
-| **Agents (tool-calling loop)** | ❌ **the clearest gap.** `toolChoice` is always `"none"`; the adapter _fails_ on tool messages by design. This is a pipeline, not an agent                                          |
-| **Reranking**                  | ❌ RRF only; no cross-encoder                                                                                                                                                       |
-| **Judge / LLM-as-critic**      | ⚠️ `Judge` is named in the plan's activity list; the rails do the work today                                                                                                         |
+| Capability                     | State                                                                                                                                                                                                                                                                                                      |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Embeddings**                 | ✅ Workers AI `bge-m3`, 1024d matching the column; swappable port; dimension mismatch refused before storage                                                                                                                                                                                               |
+| **RAG**                        | ✅ and unusually strong — heading-aware chunking, contextual prefixes, pgvector HNSW + Dutch FTS, **RRF fused in one SQL function**, corpus separation enforced inside the function                                                                                                                        |
+| **Retrieval evals**            | ✅ `evals:retrieval` — multi-strategy sweep vs LangChain, gated at lexical ≥ 75% / hybrid ≥ 90%                                                                                                                                                                                                            |
+| **Rails / guardrails**         | ✅ four rails behind an unconstructible brand — a decision _cannot compile_ without passing them                                                                                                                                                                                                           |
+| **Model-free gate**            | ✅ `evals:rule` — assumes the model is maximally wrong; found 190/300 released, now 1/300 (ADR-0016)                                                                                                                                                                                                       |
+| **End-to-end evals**           | ⚠️ built, blocked on model quota. Real corpus with distractors, scored against docket's 33/99                                                                                                                                                                                                               |
+| **Durable execution**          | ✅ `effect/workflow` on a ~200-line Postgres engine; memoised activities, proven by a "exactly one extraction call" test                                                                                                                                                                                   |
+| **Structured output**          | ✅ native JSON mode with a provider-side JSON schema, measured field ordering                                                                                                                                                                                                                              |
+| **AI Gateway**                 | ⚠️ every adapter routes through it (embeddings included, 2026-09-30) — but **no gateway exists on the account**, so the calls are unmetered. §7                                                                                                                                                             |
+| **Agents (tool-calling loop)** | ✅ **built 2026-09-29, this row was stale.** `AskCorpus` runs a real `Tool.make("search_policy")` loop under `AgentModel`, streams progress, and **refuses an answer whose citation it cannot verify**. The claim below about `toolChoice: "none"` is true only of the DECIDE adapter, which is deliberate |
+| **Reranking**                  | ❌ RRF only; no cross-encoder                                                                                                                                                                                                                                                                              |
+| **Judge / LLM-as-critic**      | ⚠️ `Judge` is named in the plan's activity list; the rails do the work today                                                                                                                                                                                                                                |
 
-**On agents, plainly:** a tool-calling loop would be the honest addition, and there is a natural one — the
-reviewer asking questions of the corpus ("which clause covers a supplier not on the list?") with retrieval
-as a tool. It should be additive and must not touch the decide path: the whole argument for the decide
-pipeline is that it is _not_ a loop with unbounded authority.
+**On agents, plainly** — written as a proposal, and it is now what exists, so it is kept as the statement of
+why the shape is what it is: a tool-calling loop is the honest addition, and the natural one is the reviewer
+asking questions of the corpus ("which clause covers a supplier not on the list?") with retrieval as a tool.
+It is additive and does not touch the decide path: the whole argument for the decide pipeline is that it is
+_not_ a loop with unbounded authority. Both halves held. `AskCorpus` is RPC-only rather than part of the
+frozen v1 HTTP contract, and the rails apply to it too — an ungrounded answer is refused rather than
+returned with a caveat, which is the same refusal the pipeline makes, reached by a different route.
+
+What is still missing is the stateful half: a conversation that survives a request, schedules its own
+follow-up work, or waits for a human. That is the Agents SDK, tracked as `.scratch/ai-stack/issues/04`.
 
 ### B2B SaaS basics
 
@@ -511,8 +546,9 @@ Ordered by what unblocks the most, not by size:
    discovered it. Everything below is an improvement to a path production cannot run; this is the one that
    makes the product exist. Mostly composition, not new logic.
 1. **AI Gateway** — unblocks the eval run via caching, gives cost/token observability, and brings external
-   providers under Cloudflare. Smallest change with the widest effect. _Declared in Pulumi and supported by
-   the adapter as of 2026-09-29; no gateway created yet._
+   providers under Cloudflare. Smallest change with the widest effect. _All four adapter paths route as of
+   2026-09-30 (the embedder was last, and is the most-repeated call). What remains is **creating the
+   gateway**, which no amount of code can do: `effect-ai-ai-dev` is named everywhere and exists nowhere._
 2. **Telemetry** — `effect/observability` + Analytics Engine, product metrics before platform ones. An AI
    engineering demo with no observability is not one.
 3. **API keys → quota (DO) → caching**, in that order. Each needs the previous: a quota is per key, and a

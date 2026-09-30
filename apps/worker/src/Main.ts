@@ -155,7 +155,14 @@ const ServicesLayer = (env: Env) =>
      * why it logs once at startup rather than silently discarding.
      */
     env.METRICS === undefined ? TelemetryNoop : TelemetryAnalytics(env.METRICS),
-    EmbedderWorkersAiBinding(env.AI),
+    /*
+     * Both take the gateway, and for a while only one did. The embedder went direct while the chat adapter
+     * on the next line was routed — two individually valid calls, so nothing failed and no check could
+     * notice. It matters most here: the eval harness embeds the whole corpus plus 99 questions per run, so
+     * the embedder is the most repeated call in the system and the one whose cache hits are worth the most
+     * against a neuron allocation.
+     */
+    EmbedderWorkersAiBinding(env.AI, env.AI_GATEWAY),
     LanguageModelWorkersAiBinding(env.AI, WORKERS_AI_MODEL, env.AI_GATEWAY),
     /*
      * The agent's model, under its OWN tag — see `policy/domain/Ask/AgentModel.ts`.

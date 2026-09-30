@@ -18,6 +18,22 @@
  *
  * Same model and therefore the same vectors either way, which is what makes a number measured in the
  * harness meaningful for production.
+ *
+ * **Both transports route through AI Gateway, by two different mechanisms** — and this adapter bypassed it
+ * on both for longer than the language model did, which is the expensive half of the mistake: the eval
+ * harness embeds 99 questions plus the corpus on every run, so the embedder is the call made most often and
+ * the one whose cache is worth the most.
+ *
+ *   binding: a `{ gateway: { id } }` RUN OPTION.  A binding cannot be pointed at a hostname.
+ *   REST:    a `cf-aig-gateway-id` HEADER on the same `/ai/run/@cf/{model}` URL.
+ *
+ * The REST form is deliberately NOT the gateway hostname that `chatCompletionsUrl` builds for the chat
+ * endpoint. Cloudflare's own words: *"If you are already calling Workers AI models through the existing
+ * REST API, that path (`/ai/run/@cf/{model}`) continues to work. To call Workers AI models through AI
+ * Gateway, use the `@cf/` model prefix and include the `cf-aig-gateway-id` header."* So the URL is
+ * unchanged and only a header is added — a smaller change than the chat path needed, and one that cannot
+ * break the direct call by construction, because omitting the gateway omits a header rather than
+ * rewriting a hostname.
  */
 import { EMBEDDING_DIMENSIONS } from "@ea/modules/policy/domain/Chunk"
 import { EmbeddingProfile } from "@ea/modules/policy/domain/Embedding"
@@ -71,6 +87,8 @@ const profile = Layer.succeed(EmbeddingProfile)({
 export interface WorkersAiRestConfig {
   readonly accountId: string
   readonly token: Redacted.Redacted<string>
+  /** An AI Gateway id, or undefined to call the account endpoint directly — unmetered and uncached. */
+  readonly gateway: string | undefined
 }
 
 /**
@@ -82,8 +100,48 @@ export interface WorkersAiRestConfig {
 export const workersAiRestConfig: Effect.Effect<WorkersAiRestConfig> = Effect.gen(function*() {
   const accountId = yield* Effect.orDie(Config.String("CLOUDFLARE_ACCOUNT_ID"))
   const token = yield* Effect.orDie(Config.Redacted("CLOUDFLARE_AI_TOKEN"))
-  return { accountId, token }
+  /*
+   * OPTIONAL, read from the same variable as the chat adapter so one setting moves both.
+   *
+   * Optional for the reason `workersAiChatConfig` gives: a gateway is an account-level resource somebody
+   * has to create, and a harness that refused to run until infrastructure existed would be worse than one
+   * that runs unmetered. Cloudflare also accepts the literal id `default`, which creates a gateway on the
+   * first authenticated request — so "no gateway exists yet" is not a reason to leave this unset.
+   */
+  const gateway = yield* Effect.orDie(
+    Config.String("CLOUDFLARE_AI_GATEWAY").pipe(Config.withDefault(""))
+  )
+  return { accountId, token, gateway: gateway === "" ? undefined : gateway }
 })
+
+/**
+ * The REST headers, with the gateway when one is configured.
+ *
+ * Exported for tests for the same reason `chatCompletionsUrl` is: this header IS the integration, there is
+ * no gateway on the account to verify it against yet, and its failure mode is silent — the call succeeds,
+ * unmetered and uncached, and nothing anywhere says so. An assertion is the only thing standing between
+ * "routed through the gateway" and "we believe it is".
+ *
+ * `Redacted.value` is called here rather than in the caller so the token cannot be logged by a debug print
+ * of a header object built somewhere else.
+ */
+export const embedRequestHeaders = (config: {
+  readonly token: Redacted.Redacted<string>
+  readonly gateway: string | undefined
+}): Record<string, string> => ({
+  authorization: `Bearer ${Redacted.value(config.token)}`,
+  "content-type": "application/json",
+  ...(config.gateway === undefined ? {} : { "cf-aig-gateway-id": config.gateway })
+})
+
+/**
+ * Where the embedding endpoint lives — the SAME url with or without a gateway.
+ *
+ * Exported alongside the headers so a reader comparing this adapter with the chat one can see that the
+ * asymmetry is intended: there, the gateway changes the host; here it does not.
+ */
+export const embedRunUrl = (config: { readonly accountId: string }): string =>
+  `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/ai/run/${WORKERS_AI_EMBEDDING_MODEL}`
 
 export const EmbedderWorkersAiRest: Layer.Layer<
   EmbeddingModel.EmbeddingModel | EmbeddingProfile
@@ -95,17 +153,11 @@ export const EmbedderWorkersAiRest: Layer.Layer<
           Effect.gen(function*() {
             const response = yield* Effect.tryPromise({
               try: () =>
-                fetch(
-                  `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/ai/run/${WORKERS_AI_EMBEDDING_MODEL}`,
-                  {
-                    method: "POST",
-                    headers: {
-                      authorization: `Bearer ${Redacted.value(config.token)}`,
-                      "content-type": "application/json"
-                    },
-                    body: JSON.stringify({ text: options.inputs })
-                  }
-                ),
+                fetch(embedRunUrl(config), {
+                  method: "POST",
+                  headers: embedRequestHeaders(config),
+                  body: JSON.stringify({ text: options.inputs })
+                }),
               catch: (cause) => fail(`Workers AI request failed: ${String(cause)}`)
             })
 
@@ -152,20 +204,31 @@ export const EmbedderWorkersAiRest: Layer.Layer<
 export interface WorkersAiBinding {
   readonly run: (
     model: string,
-    input: { readonly text: ReadonlyArray<string> }
+    input: { readonly text: ReadonlyArray<string> },
+    options?: { readonly gateway?: { readonly id: string } } | undefined
   ) => Promise<unknown>
 }
 
 export const EmbedderWorkersAiBinding = (
-  binding: WorkersAiBinding
+  binding: WorkersAiBinding,
+  /**
+   * An AI Gateway id. A RUN OPTION rather than a URL, because a binding cannot be pointed at a gateway
+   * hostname — see the header docstring for the REST half, which reaches the same gateway by header.
+   *
+   * Optional, and absent means direct: unmetered, unlogged and uncached. `Main.ts` passes `env.AI_GATEWAY`,
+   * which was already being passed to the chat adapter on the very next line while this one went without —
+   * a one-line gap that no check could see, because both calls were individually valid.
+   */
+  gateway?: string
 ): Layer.Layer<EmbeddingModel.EmbeddingModel | EmbeddingProfile> =>
   Layer.merge(
     Layer.effect(EmbeddingModel.EmbeddingModel)(
       EmbeddingModel.make({
         embedMany: (options: { readonly inputs: ReadonlyArray<string> }) =>
           Effect.gen(function*() {
+            const runOptions = gateway === undefined ? undefined : { gateway: { id: gateway } }
             const raw = yield* Effect.tryPromise({
-              try: () => binding.run(WORKERS_AI_EMBEDDING_MODEL, { text: options.inputs }),
+              try: () => binding.run(WORKERS_AI_EMBEDDING_MODEL, { text: options.inputs }, runOptions),
               catch: (cause) => fail(`env.AI.run failed: ${String(cause)}`)
             })
             // The binding returns the payload unwrapped, without the REST envelope.

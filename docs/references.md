@@ -188,6 +188,32 @@ Four rules constrain the migration, all from
 **Default retry behaviour is not documented**, so the probe sets retries explicitly. A test that depended on an
 undocumented default would be measuring the wrong thing.
 
+### Workers AI through AI Gateway: a header on REST, a run option on the binding
+
+Checked 2026-09-30 against `/ai-gateway/usage/providers/workersai/`, `/ai-gateway/usage/rest-api/` and the
+changelogs of 2026-05-21 and 2026-08-07. Recorded because the two transports differ and the difference is
+invisible when you get it wrong — the call succeeds either way, unmetered and uncached.
+
+| Transport                   | How the gateway is named                                                | Source                                                                                                                                                                                                                    |
+| --------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| REST, `/ai/run/@cf/{model}` | the **`cf-aig-gateway-id` header**. The URL does not change             | _"that path (`/ai/run/@cf/{model}`) continues to work. To call Workers AI models through AI Gateway, use the `@cf/` model prefix … and include the `cf-aig-gateway-id` header to specify which gateway to route through"_ |
+| REST, provider-specific     | `https://gateway.ai.cloudflare.com/v1/{account}/{gateway}/workers-ai/…` | the provider endpoint list                                                                                                                                                                                                |
+| Binding, `env.AI.run`       | a third argument, `{ gateway: { id, skipCache, cacheTtl } }`            | the 2026-08-07 changelog and `/agents/runtime/operations/using-ai-models/`                                                                                                                                                |
+
+Three consequences this repo depends on:
+
+- **The embedder needed only a header**, not a URL rewrite — which is why `EmbedderWorkersAi` keeps
+  `api.cloudflare.com` while `LanguageModelWorkersAi` switches host. That asymmetry looks like an
+  inconsistency and is not; both files say so, and a test asserts each.
+- **Authorisation is the Workers AI permission, not the AI Gateway one.** _"All `/accounts/{account_id}/ai/*`
+  endpoints require the Workers AI permission… A token that holds only an `AI Gateway` permission returns
+  `401` with error code `10000`."_ The `AI Gateway` permissions govern `/ai-gateway/*`, which is gateway
+  configuration and logs. So a token minted for "the gateway" cannot call a model through it — worth knowing
+  before debugging a 401 as a routing problem.
+- **The gateway id `default` creates a gateway on the first authenticated request.** So a missing gateway
+  never has to block a call. It is not what this repo uses, because an auto-created gateway does not carry
+  the `cacheTtl: 3600` that `infra/index.ts` declares, and the cache is the reason the gateway is wanted.
+
 ### Workers AI honours OpenAI-compatible `response_format: json_schema`
 
 **Verified by request 2026-09-29** against
@@ -449,9 +475,10 @@ everything that depends on it.
 
 **The rows most likely to go stale first**, and what changes when they do:
 
-| Row                           | Watch for                       | Then                                                                   |
-| ----------------------------- | ------------------------------- | ---------------------------------------------------------------------- |
-| `@effect/platform-cloudflare` | first npm publish               | re-open ADR-0003; our `WorkflowEnginePg` gains an official alternative |
-| Workers AI free tier          | a paid plan, or a gateway cache | `bun run evals` can complete a 99-case scored run                      |
-| Effect RC churn in Alchemy    | a clean dependency audit        | ADR-0007's reason for Pulumi expires                                   |
-| PlanetScale region            | a region near the user          | ADR-0015's arithmetic changes                                          |
+| Row                           | Watch for                         | Then                                                                                                          |
+| ----------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `@effect/platform-cloudflare` | first npm publish                 | re-open ADR-0003; our `WorkflowEnginePg` gains an official alternative                                        |
+| Workers AI free tier          | a paid plan, or a gateway cache   | `bun run evals` can complete a 99-case scored run                                                             |
+| AI Gateway routing            | a gateway existing on the account | the adapters stop being unmetered; `cf-aig-gateway-id` becomes verified by execution rather than by assertion |
+| Effect RC churn in Alchemy    | a clean dependency audit          | ADR-0007's reason for Pulumi expires                                                                          |
+| PlanetScale region            | a region near the user            | ADR-0015's arithmetic changes                                                                                 |
