@@ -86,6 +86,28 @@ export function ChatScreen({
                 }}
               >
                 # {room.slug}
+                {
+                  /*
+                   * The badge counts what SOMEBODY ELSE said and you have not read — never your own messages, or
+                   * posting would feel like falling behind. Absent at zero rather than showing "0", which is
+                   * noise on every row of a quiet list.
+                   */
+                }
+                {room.unreadCount === 0 ? null : (
+                  <span
+                    aria-label={`${room.unreadCount} unread`}
+                    style={{
+                      marginLeft: "0.4rem",
+                      fontSize: "0.72rem",
+                      background: "#b00",
+                      color: "#fff",
+                      borderRadius: "999px",
+                      padding: "0.05rem 0.35rem"
+                    }}
+                  >
+                    {room.unreadCount}
+                  </span>
+                )}
               </button>
               <button
                 type="button"

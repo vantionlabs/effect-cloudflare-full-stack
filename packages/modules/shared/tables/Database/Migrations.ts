@@ -27,6 +27,7 @@ import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
 import { MessageLifecycle, MessageRooms, MessageTable } from "@ea/modules/realtime/tables/Message"
 import { ReactionTable } from "@ea/modules/realtime/tables/Reaction"
+import { RoomReadTable } from "@ea/modules/realtime/tables/Read"
 import { RoomTable } from "@ea/modules/realtime/tables/Room"
 import { Migrator } from "effect/sql"
 import { EventTable } from "../Event/EventTable.ts"
@@ -89,7 +90,9 @@ export const migrations = {
    */
   "0019_message_lifecycle": MessageLifecycle,
   // Reactions. Keyed by (message, user, emoji), so reacting twice is a conflict rather than a duplicate.
-  "0020_reactions": ReactionTable
+  "0020_reactions": ReactionTable,
+  // Read positions, from which unread counts are COUNTED rather than stored.
+  "0021_room_reads": RoomReadTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

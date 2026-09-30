@@ -5,6 +5,8 @@
  * people opening the same decision at the same moment both find no thread and both insert; without the index one
  * of them wins and the other's messages land in a second room holding half the conversation.
  */
+import { PostMessage } from "@ea/modules/realtime/use-cases/Message"
+import { MarkRead } from "@ea/modules/realtime/use-cases/Read"
 import { ArchiveRoom, CreateRoom, ListRooms, ResolveRoom } from "@ea/modules/realtime/use-cases/Room"
 import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/modules/shared/domain/Identity"
 import { Ids } from "@ea/modules/shared/domain/Ids"
@@ -26,9 +28,20 @@ const Admin = PgClient.layer({
   ssl: false
 })
 
-/** Unique per call, since two rooms must never collide on their primary key while racing. */
+/**
+ * Monotonic prefix, random suffix — the shape of a real UUIDv7, and both halves are load-bearing here.
+ *
+ * The suffix keeps two rooms from colliding on their primary key while racing, which is what the concurrency test
+ * needs. The PREFIX is what makes ids sort in creation order, which is what unread counts and the keyset cursor
+ * both rely on: `m.id > last_read` is only "later than" if ids are time-ordered.
+ *
+ * A purely random generator passed every other test in this file and made the unread test fail by one — the
+ * third message sorted before the second. Worth the comment, because a fake that is unique but unordered looks
+ * perfectly reasonable.
+ */
+let counter = 0
 const IdsLive = Layer.succeed(Ids)({
-  next: Effect.sync(() => `room_${crypto.randomUUID()}`)
+  next: Effect.sync(() => `room_${String(counter++).padStart(6, "0")}_${crypto.randomUUID().slice(0, 8)}`)
 })
 
 const identityIn = (orgId: OrgId, userId: string) =>
@@ -59,9 +72,13 @@ const asAdmin = <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) =>
  */
 const failureOf = <A, E>(identity: Identity, effect: Effect.Effect<A, E, any>) => runAs(identity, Effect.flip(effect))
 
+const bob = identityIn(ORG_A, "room_user_bob")
+
 beforeEach(async () => {
+  counter = 0
   await asAdmin(Effect.gen(function*() {
     const sql = yield* SqlClient.SqlClient
+    // Messages, reads and reactions all cascade from rooms; deleting rooms is enough and says so.
     yield* sql`delete from rooms where organization_id in (${ORG_A}, ${ORG_B})`
   }))
 })
@@ -180,5 +197,70 @@ describe("ResolveRoom", () => {
       `
     }))
     expect(rows[0]?.count).toBe("1")
+  })
+})
+
+describe("unread counts", () => {
+  it("counts what somebody else said and you have not read", async () => {
+    const room = await runAs(alice, CreateRoom({ name: "Billing" }))
+    const ref = { _tag: "RoomById" as const, roomId: room.id }
+
+    await runAs(bob, PostMessage({ room: ref, body: "one" }))
+    await runAs(bob, PostMessage({ room: ref, body: "two" }))
+
+    expect((await runAs(alice, ListRooms()))[0]?.unreadCount).toBe(2)
+    /*
+     * Never your own. You have read what you wrote, and a badge that counted your own messages would make
+     * posting feel like falling behind.
+     */
+    expect((await runAs(bob, ListRooms()))[0]?.unreadCount).toBe(0)
+  })
+
+  it("clears as far as the marker, and no further", async () => {
+    const room = await runAs(alice, CreateRoom({ name: "Billing" }))
+    const ref = { _tag: "RoomById" as const, roomId: room.id }
+
+    await runAs(bob, PostMessage({ room: ref, body: "one" }))
+    const second = await runAs(bob, PostMessage({ room: ref, body: "two" }))
+    await runAs(bob, PostMessage({ room: ref, body: "three" }))
+
+    await runAs(alice, MarkRead({ roomId: room.id, messageId: second.id }))
+    // Inclusive of the marker, exclusive of everything after: `id >` is the same predicate the cursor uses.
+    expect((await runAs(alice, ListRooms()))[0]?.unreadCount).toBe(1)
+  })
+
+  it("never moves the marker backwards", async () => {
+    const room = await runAs(alice, CreateRoom({ name: "Billing" }))
+    const ref = { _tag: "RoomById" as const, roomId: room.id }
+
+    const first = await runAs(bob, PostMessage({ room: ref, body: "one" }))
+    const third = await runAs(bob, PostMessage({ room: ref, body: "two" }))
+
+    await runAs(alice, MarkRead({ roomId: room.id, messageId: third.id }))
+    /*
+     * A client that scrolled up, or a late response arriving after a newer one, must not re-unread what was
+     * already seen. `greatest` over TEXT does that because UUIDv7 in hex sorts in time order — the same property
+     * the keyset cursor relies on, which is why both break together if ids ever stop being time-ordered.
+     */
+    const result = await runAs(alice, MarkRead({ roomId: room.id, messageId: first.id }))
+    expect(result.lastReadMessageId).toBe(third.id)
+    expect((await runAs(alice, ListRooms()))[0]?.unreadCount).toBe(0)
+  })
+
+  it("treats a channel nobody has opened as entirely unread", async () => {
+    const room = await runAs(alice, CreateRoom({ name: "Billing" }))
+    await runAs(bob, PostMessage({ room: { _tag: "RoomById", roomId: room.id }, body: "hello" }))
+
+    // A LEFT join, so no marker means "read none of it" rather than "read all of it".
+    expect((await runAs(alice, ListRooms()))[0]?.unreadCount).toBe(1)
+  })
+
+  it("refuses to mark a room from another organization", async () => {
+    const room = await runAs(alice, CreateRoom({ name: "Ours" }))
+    const message = await runAs(alice, PostMessage({ room: { _tag: "RoomById", roomId: room.id }, body: "ours" }))
+    /*
+     * Checked before the insert, so this is a refusal rather than a foreign-key violation surfacing as a 500.
+     */
+    expect((await failureOf(other, MarkRead({ roomId: room.id, messageId: message.id })))._tag).toBe("RoomNotFound")
   })
 })

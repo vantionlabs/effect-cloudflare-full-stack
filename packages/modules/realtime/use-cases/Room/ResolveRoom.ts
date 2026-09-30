@@ -28,7 +28,14 @@ interface RoomRow {
   readonly archived_at: Date | null
 }
 
-export const toRoom = (row: RoomRow): Room =>
+/**
+ * `unreadCount` defaults to zero here, because most callers are not answering that question.
+ *
+ * `ResolveRoom`, `CreateRoom` and `ArchiveRoom` all return the room they just touched, where a count would be an
+ * extra query for a number nobody is about to render. `ListRooms` computes it, and that is the one place the room
+ * list is shown. A per-reader field on a shared entity is always going to be like this — see `mine` on a reaction.
+ */
+export const toRoom = (row: RoomRow, unreadCount = 0): Room =>
   new Room({
     id: row.id as RoomId,
     kind: row.kind as Room["kind"],
@@ -38,7 +45,8 @@ export const toRoom = (row: RoomRow): Room =>
     subjectId: row.subject_id,
     createdBy: row.created_by as Room["createdBy"],
     createdAt: row.created_at.toISOString(),
-    archivedAt: row.archived_at === null ? null : row.archived_at.toISOString()
+    archivedAt: row.archived_at === null ? null : row.archived_at.toISOString(),
+    unreadCount
   })
 
 /** The columns every read of this table needs, in one place so the row type and the query cannot drift. */

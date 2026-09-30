@@ -75,7 +75,18 @@ export class Room extends Schema.Class<Room>("Room")({
    * can be audited a year later is the wrong default. An archived room is hidden from the list and refuses new
    * messages; everything said in it remains readable.
    */
-  archivedAt: Schema.NullOr(Schema.String)
+  archivedAt: Schema.NullOr(Schema.String),
+  /**
+   * How many messages this reader has not seen, counted per request.
+   *
+   * A per-READER field on a shared entity, like `mine` on a reaction — which is why it is counted rather than
+   * stored: a stored counter would need incrementing for every member on every post, and would drift the first
+   * time one of those writes was lost. Own messages are excluded: you have read what you wrote.
+   *
+   * Zero for a room nobody has posted in, and zero from `Room.create` and `Room.archive`, which return the room
+   * they just changed rather than running the count.
+   */
+  unreadCount: Schema.Int
 }) {}
 
 /**

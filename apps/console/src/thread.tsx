@@ -10,12 +10,13 @@
  * remains the only source of what it contains.
  */
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useIdentity } from "./hooks/use-session.ts"
 import {
   decisionThreadAtom,
   deleteMessageAtom,
   editMessageAtom,
+  markReadAtom,
   postMessageAtom,
   QUICK_REACTIONS,
   reactAtom,
@@ -41,6 +42,7 @@ export function Thread({
   const edit = useAtomSet(editMessageAtom, { mode: "promise" })
   const remove = useAtomSet(deleteMessageAtom, { mode: "promise" })
   const react = useAtomSet(reactAtom, { mode: "promise" })
+  const markRead = useAtomSet(markReadAtom, { mode: "promise" })
   /** Which message is being edited, and the draft for it. One at a time, which is all anybody does. */
   const [editing, setEditing] = useState<{ readonly id: string; readonly body: string } | undefined>(undefined)
 
@@ -54,6 +56,22 @@ export function Thread({
         : ({ _tag: "RoomById", roomId: id } as never),
     [kind, id]
   )
+
+  /*
+   * Mark read up to the newest message on show.
+   *
+   * Effect rather than a scroll listener: "the thread is open and these messages are rendered" is the honest
+   * condition, and a scroll position is a proxy for it that gets complicated fast. `MarkRead` is idempotent and
+   * monotonic, so calling it on every render of a new last message is cheap and cannot move the marker backwards.
+   *
+   * Only for a channel. A decision's thread has no unread badge to clear — it is reached through the queue, not
+   * through a list — so marking it would write a row nothing reads.
+   */
+  const newest = messages.at(-1)?.id
+  useEffect(() => {
+    if (kind !== "room" || newest === undefined) return
+    void markRead({ payload: { roomId: id as never, messageId: newest } })
+  }, [id, kind, markRead, newest])
 
   const send = useCallback(async () => {
     const body = draft.trim()

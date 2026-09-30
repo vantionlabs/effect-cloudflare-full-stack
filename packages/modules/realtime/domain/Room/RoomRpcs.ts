@@ -11,6 +11,7 @@ import { RoomArchived, RoomNameInvalid, RoomNotFound, RoomSlugTaken } from "@ea/
 import { AuthenticatedRpc } from "@ea/modules/shared/domain/Identity"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
+import { MessageId } from "../Message/Message.ts"
 import { MAX_ROOM_NAME_LENGTH, MAX_ROOM_TOPIC_LENGTH, Room, RoomId } from "./Room.ts"
 
 export const RoomRpcs = RpcGroup.make(
@@ -34,6 +35,16 @@ export const RoomRpcs = RpcGroup.make(
   Rpc.make("Room.archive", {
     payload: { roomId: RoomId, archived: Schema.Boolean },
     success: Room,
+    error: RoomNotFound
+  }),
+  /*
+   * On `Room` rather than on `Message`, because it is a fact about a reader and a ROOM — "I am up to here" — and
+   * the unread count it feeds is a room's field. A client calls it as it renders a thread, which is why the use
+   * case is idempotent and monotonic rather than trusting the caller to only ever move forward.
+   */
+  Rpc.make("Room.markRead", {
+    payload: { roomId: RoomId, messageId: MessageId },
+    success: Schema.Struct({ roomId: RoomId, lastReadMessageId: MessageId }),
     error: RoomNotFound
   })
 ).middleware(AuthenticatedRpc)

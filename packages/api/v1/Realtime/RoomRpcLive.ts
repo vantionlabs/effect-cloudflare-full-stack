@@ -11,6 +11,7 @@
  */
 import { RoomsChanged } from "@ea/modules/realtime/domain/Room"
 import { orgRoom, RoomRpcs, Rooms } from "@ea/modules/realtime/domain/Room"
+import { MarkRead } from "@ea/modules/realtime/use-cases/Read"
 import { ArchiveRoom, CreateRoom, ListRooms } from "@ea/modules/realtime/use-cases/Room"
 import { CurrentUser } from "@ea/modules/shared/domain/Identity"
 import { Effect } from "effect"
@@ -31,6 +32,13 @@ export const RoomRpcLive = RoomRpcs.toLayer(
       Effect.tap(serve(CreateRoom(payload)), () => announce),
 
     "Room.archive": (payload: { readonly roomId: string; readonly archived: boolean }) =>
-      Effect.tap(serve(ArchiveRoom(payload as never)), () => announce)
+      Effect.tap(serve(ArchiveRoom(payload as never)), () => announce),
+
+    /*
+     * No broadcast. A read position is one person's fact, and telling the room would wake every other client to
+     * re-read a list that has not changed for them — the opposite of what the socket is for.
+     */
+    "Room.markRead": (payload: { readonly roomId: string; readonly messageId: string }) =>
+      serve(MarkRead(payload as never))
   })
 )

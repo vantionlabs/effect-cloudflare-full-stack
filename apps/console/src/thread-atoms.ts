@@ -56,3 +56,4 @@ export const ROOMS_KEY = "rooms"
 export const roomsAtom = Api.query("Room.list", {}, { reactivityKeys: [ROOMS_KEY] })
 export const createRoomAtom = Api.mutation("Room.create")
 export const archiveRoomAtom = Api.mutation("Room.archive")
+export const markReadAtom = Api.mutation("Room.markRead")
