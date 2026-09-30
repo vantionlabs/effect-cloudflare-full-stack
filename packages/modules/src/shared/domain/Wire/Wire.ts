@@ -16,10 +16,15 @@
  *    mapping function in between, because encoding *is* the mapping.
  *
  * **What this gives up, and what pays for it.** Hand-writing made a domain rename impossible to propagate;
- * deriving makes it possible. The compensating control is `test/OpenApiSnapshot.test.ts`, which holds the
- * generated document as a committed fixture — so a domain rename now fails a test that names the field and
- * prints the diff, instead of silently shipping. That is a different guarantee, and on balance a stronger one:
- * the hand-written version could also be wrong, and nothing compared it to anything.
+ * deriving makes it possible. The compensating control is `packages/api/test/OpenApiSnapshot.test.ts`, which
+ * holds the generated document as a committed fixture — so a domain rename now fails a test that names the
+ * field and prints the diff, instead of silently shipping. That is a different guarantee, and on balance a
+ * stronger one: the hand-written version could also be wrong, and nothing compared it to anything.
+ *
+ * **Why this is in `shared/domain` and not in `@ea/api`.** The groups that use it live with their slices, and a
+ * module may not import the api package (`dep:check` forbids it, because the dependency runs api -> modules and
+ * a cycle there fails as `ApiV1` arriving undefined). It is a Schema utility, so the direction is the only thing
+ * that decides where it goes.
  */
 import { Schema } from "effect"
 
@@ -42,27 +47,46 @@ type SnakeCase<S extends string> = S extends `${infer Head}${infer Tail}`
 const toSnakeCase = (key: string): string => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 
 /**
- * A wire schema: the named fields of `source`, with snake_case on the outside.
+ * A wire schema from an explicit field map: snake_case outside, the given schemas inside.
  *
- * `source` is anything carrying `fields` — a `Schema.Class` or a `Schema.Struct` — so a domain class can be
- * projected without being re-declared, and the field types come from one place.
+ * The primitive the others are built on, and the one to reach for when a field needs OVERRIDING rather than
+ * copying — a nested domain type has camelCase keys of its own, so its wire version has to be substituted in:
+ *
+ * ```ts
+ * const DetailV1 = wire({ ...pickFields(Detail.fields, ["decisionId"]), citations: Schema.Array(CitedV1) })
+ * ```
  */
-export const wireFrom = <
-  F extends Schema.Struct.Fields,
-  const K extends ReadonlyArray<keyof F & string>
->(
-  source: { readonly fields: F },
-  keys: K
-) => {
-  const fields = {} as { [P in K[number]]: F[P] }
-  const mapping = {} as { [P in K[number]]: SnakeCase<P> }
-  for (const key of keys) {
-    // eslint-disable-next-line
-    ;(fields as Record<string, unknown>)[key] = source.fields[key]
+export const wire = <F extends Schema.Struct.Fields>(fields: F) => {
+  // Keyed over `keyof F` rather than `keyof F & string`, because `Struct.Fields` is indexed by
+  // `PropertyKey` — a mapping narrowed to string keys is not assignable to what `encodeKeys` wants.
+  const mapping = {} as { readonly [P in keyof F]: P extends string ? SnakeCase<P> : P }
+  for (const key of Object.keys(fields)) {
     ;(mapping as Record<string, unknown>)[key] = toSnakeCase(key)
   }
   return Schema.Struct(fields).pipe(Schema.encodeKeys(mapping))
 }
+
+/** The named fields of a field map, so a projection can be spread and extended. */
+export const pickFields = <F extends Schema.Struct.Fields, const K extends ReadonlyArray<keyof F & string>>(
+  fields: F,
+  keys: K
+): Pick<F, K[number]> => {
+  const picked = {} as Pick<F, K[number]>
+  for (const key of keys) (picked as Record<string, unknown>)[key] = fields[key]
+  return picked
+}
+
+/**
+ * A wire schema: the named fields of `source`, with snake_case on the outside.
+ *
+ * `source` is anything carrying `fields` — a `Schema.Class` or a `Schema.Struct` — so a domain class can be
+ * projected without being re-declared, and the field types come from one place. This is the common case; use
+ * `wire` with a spread when a nested field needs its own wire version.
+ */
+export const wireFrom = <F extends Schema.Struct.Fields, const K extends ReadonlyArray<keyof F & string>>(
+  source: { readonly fields: F },
+  keys: K
+) => wire(pickFields(source.fields, keys))
 
 /**
  * A page of a collection: the items, and the cursor for the next page or `null`.

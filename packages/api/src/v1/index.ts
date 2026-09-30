@@ -10,6 +10,9 @@
 // needs only the group — so the asymmetry belongs to the HTTP builder, not to this layout.
 export * from "./ApiV1.ts"
 export * from "./Ask/AskRpcLive.ts"
+export * from "./Chat/MessageHttp.ts"
+export * from "./Chat/RoomHttp.ts"
+export * from "./Decision/DecisionHttp.ts"
 export * from "./Decision/DecisionRpcLive.ts"
 export * from "./Frames.ts"
 export * from "./Health/HealthHttp.ts"

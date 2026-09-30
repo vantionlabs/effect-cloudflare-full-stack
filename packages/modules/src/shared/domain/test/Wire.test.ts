@@ -5,9 +5,9 @@
  * happens on the outside only, and that the known limitation of the rename is a known limitation rather than a
  * surprise.
  */
+import { pageOf, wireFrom } from "@ea/modules/shared/domain/Wire"
 import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
-import { pageOf, wireFrom } from "../src/v1/Wire.ts"
 
 class Source extends Schema.Class<Source>("Source")({
   decisionId: Schema.String,
@@ -62,6 +62,24 @@ describe("wireFrom", () => {
     expect(Object.keys(encoded).sort()).toEqual(["decision_id", "document_id", "grounded", "rails_fired"])
     expect(Object.keys(encoded)).not.toContain("internal_note")
     expect(Object.keys(encoded)).not.toContain("internalNote")
+  })
+
+  /*
+   * The property that lets a handler return a DOMAIN value and get a projected response: an unpublished field
+   * on the value is dropped at encode time rather than rejected. So the projection is enforced by the schema on
+   * the way out, not by every handler remembering to pick — which is the difference between a rule and a habit.
+   */
+  it("DROPS an unpublished field rather than rejecting or leaking it", () => {
+    const encoded = Schema.encodeUnknownSync(Wire)({
+      decisionId: "d1",
+      documentId: "doc1",
+      railsFired: [],
+      grounded: true,
+      internalNote: "must not appear"
+    }) as Record<string, unknown>
+
+    expect(Object.keys(encoded).sort()).toEqual(["decision_id", "document_id", "grounded", "rails_fired"])
+    expect(JSON.stringify(encoded)).not.toContain("must not appear")
   })
 
   it("refuses a payload missing a published field, rather than encoding undefined", () => {

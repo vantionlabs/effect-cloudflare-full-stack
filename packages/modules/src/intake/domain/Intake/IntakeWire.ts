@@ -6,8 +6,10 @@
  */
 import { Authenticated } from "@ea/domain/Identity"
 import { Collection } from "@ea/modules/shared/domain/Corpus"
+import { pageOf, wireFrom } from "@ea/modules/shared/domain/Wire"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
+import { HttpApiEndpoint, HttpApiError, HttpApiGroup, HttpApiSchema } from "effect/http-api"
+import { IntakeListItem } from "./IntakeRpcs.ts"
 
 /**
  * **202 Accepted, not 200.** The name was always right and the status was wrong.
@@ -49,7 +51,30 @@ export class UnsupportedDocumentV1 extends Schema.Error<UnsupportedDocumentV1>(
  * Also behind `Authenticated`: an upload must be attributed to an organization, and there is no
  * such thing as an anonymous document here — the tenant is what every later query filters on.
  */
+/** An arrival, as a client reads it back. Derived from the domain row; see `shared/domain/Wire`. */
+export const IntakeSummaryV1 = wireFrom(IntakeListItem, [
+  "intakeId",
+  "documentId",
+  "filename",
+  "collection",
+  "source",
+  "status",
+  "sizeBytes",
+  "receivedAt"
+])
+
 export const IntakeGroup = HttpApiGroup.make("intake")
+  .add(
+    HttpApiEndpoint.get("list", "/intakes", {
+      query: {
+        collection: Schema.optional(Collection),
+        cursor: Schema.optional(Schema.String),
+        limit: Schema.optional(Schema.FiniteFromString)
+      },
+      success: pageOf(IntakeSummaryV1),
+      error: HttpApiError.BadRequest
+    })
+  )
   .add(
     HttpApiEndpoint.post("upload", "/intakes", {
       /**

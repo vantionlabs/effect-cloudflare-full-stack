@@ -3,4 +3,5 @@
 export * from "./Decision.ts"
 export * from "./DecisionFrame.ts"
 export * from "./DecisionRpcs.ts"
+export * from "./DecisionWire.ts"
 export * from "./Rails.ts"

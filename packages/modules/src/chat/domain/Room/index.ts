@@ -3,3 +3,4 @@
 export * from "./ChatFrame.ts"
 export * from "./Room.ts"
 export * from "./RoomRpcs.ts"
+export * from "./RoomWire.ts"

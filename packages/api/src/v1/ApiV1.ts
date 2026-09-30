@@ -9,6 +9,9 @@
  * only the composition is here. That keeps a slice whole (its contract, model and errors in one
  * place) while still giving the browser client and the OpenAPI document a single import.
  */
+import { MessageGroup } from "@ea/modules/chat/domain/Message"
+import { RoomGroup } from "@ea/modules/chat/domain/Room"
+import { DecisionGroup } from "@ea/modules/decision/domain/Decision"
 import { MeGroup } from "@ea/modules/iam/domain/Identity"
 import { IntakeGroup } from "@ea/modules/intake/domain/Intake"
 import { HttpApi, OpenApi } from "effect/http-api"
@@ -27,6 +30,9 @@ export const ApiV1 = HttpApi.make("effect-ai-v1")
   .add(HealthGroup)
   .add(MeGroup)
   .add(IntakeGroup)
+  .add(DecisionGroup)
+  .add(RoomGroup)
+  .add(MessageGroup)
   .prefix("/api/v1")
   .annotate(OpenApi.Title, "effect-ai")
   .annotate(OpenApi.Version, "1.0.0")

@@ -17,11 +17,9 @@ import { Db } from "@ea/database/Database"
 import { CurrentUser, UserId } from "@ea/domain/Identity"
 import { Message, type MessageId, MessageMention, MessageReaction } from "@ea/modules/chat/domain/Message"
 import type { RoomId, RoomRef } from "@ea/modules/chat/domain/Room"
+import { clampPageSize } from "@ea/modules/shared/domain/Page"
 import { Effect } from "effect"
 import { ResolveRoom } from "../Room/ResolveRoom.ts"
-
-const MAX_LIMIT = 200
-const DEFAULT_LIMIT = 50
 
 export const ListMessages = (input: {
   readonly room: RoomRef
@@ -31,7 +29,7 @@ export const ListMessages = (input: {
   Effect.gen(function*() {
     const db = yield* Db
     const identity = yield* CurrentUser
-    const limit = Math.min(Math.max(input.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT)
+    const limit = clampPageSize(input.limit)
     const after = input.after
 
     const room = yield* ResolveRoom(input.room, { create: false })

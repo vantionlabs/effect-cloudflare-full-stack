@@ -2,3 +2,4 @@
 // this the only way in, and `"./internal/*": null` makes anything else unresolvable.
 export * from "./Message.ts"
 export * from "./MessageRpcs.ts"
+export * from "./MessageWire.ts"
