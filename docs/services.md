@@ -506,6 +506,7 @@ full stack, with B2B SaaS basics._ Honest scoring.
 | **Structured output**          | ✅ native JSON mode with a provider-side JSON schema, measured field ordering                                                                                                                                                                                                                              |
 | **AI Gateway**                 | ⚠️ every adapter routes through it (embeddings included, 2026-09-30) — but **no gateway exists on the account**, so the calls are unmetered. §7                                                                                                                                                             |
 | **Agents (tool-calling loop)** | ✅ **built 2026-09-29, this row was stale.** `AskCorpus` runs a real `Tool.make("search_policy")` loop under `AgentModel`, streams progress, and **refuses an answer whose citation it cannot verify**. The claim below about `toolChoice: "none"` is true only of the DECIDE adapter, which is deliberate |
+| **Stateful agents**            | ⚠️ `AssistantAgent` on the Agents SDK (2026-09-30): durable per-conversation state, an org-scoped Durable Object name enforced by the port's `CurrentOrg` requirement, reachable over RPC. No resumable streaming and no console surface yet                                                                |
 | **Reranking**                  | ❌ RRF only; no cross-encoder                                                                                                                                                                                                                                                                              |
 | **Judge / LLM-as-critic**      | ⚠️ `Judge` is named in the plan's activity list; the rails do the work today                                                                                                                                                                                                                                |
 
@@ -517,8 +518,22 @@ _not_ a loop with unbounded authority. Both halves held. `AskCorpus` is RPC-only
 frozen v1 HTTP contract, and the rails apply to it too — an ungrounded answer is refused rather than
 returned with a caveat, which is the same refusal the pipeline makes, reached by a different route.
 
-What is still missing is the stateful half: a conversation that survives a request, schedules its own
-follow-up work, or waits for a human. That is the Agents SDK, tracked as `.scratch/ai-stack/issues/04`.
+The stateful half landed on 2026-09-30, on the Agents SDK: `AssistantAgent` keeps a reviewer's conversation
+in its own Durable Object, and `Assistant.ask` answers through the same `AskCorpus` loop and records the
+turn — including refusals, which are recorded and then re-raised so a refusal cannot become an
+answer-shaped thing with no answer in it.
+
+Three rules bound it, and ADR-0025 carries the reasoning:
+
+- **`Agent`, never `AIChatAgent`** — the latter requires the Vercel AI SDK, which would put a second model
+  abstraction beside `effect/ai` (ADR-0023).
+- **The agent never touches the database.** For a room that rule was cost; for an agent the stronger reason
+  is tenancy, since a Durable Object cannot validate the identity it is handed and the corpus is
+  tenant-scoped. `dep:check` covers both.
+- **Waiting is not the agent's job.** ADR-0024 assigns waiting on a human to Workflows' `waitForEvent`, so
+  there is no `schedule()` call here — the tracker issue claimed it as the headline win and was corrected.
+
+Still missing: resumable streaming and a console surface. `.scratch/ai-stack/issues/04` tracks both.
 
 ### B2B SaaS basics
 
