@@ -108,6 +108,34 @@ not `QueueGrid.tsx` — because that is what every contributor coming from the R
 console is where such a contributor is most likely to start. The two conventions meet at a package
 boundary, which is the only place a convention change is cheap to notice.
 
+## What stays in `apps/worker`
+
+The app is an entrypoint. Eight files, and each one is there for a reason that survives the question "could this
+be a module?":
+
+| File                            | Why it cannot move                                                                                          |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `Main.ts`                       | the composition root. The only file that reads `env.*`                                                      |
+| `platform/Bindings.ts`          | the `Env` declaration. Names adapters' binding TYPES, which is the inversion that lets them live in modules |
+| `platform/CloudflareSocket.ts`  | imports `cloudflare:sockets`                                                                                |
+| `platform/HyperdriveConnect.ts` | builds the driver over that socket and the Hyperdrive binding                                               |
+| `platform/QueueHandler.ts`      | queue batch semantics — ack/retry per message, which is a platform contract                                 |
+| `platform/DispatchEvent.ts`     | wiring: names every slice's handler                                                                         |
+| `platform/WorkerPlatform.ts`    | the layer bundle                                                                                            |
+| `RoomDurableObject.ts`          | a `DurableObject` subclass must be exported from the entry and declared in `exports`                        |
+
+**The rule: platform glue stays, everything else moves.** Glue is code that needs a runtime global (`WebSocketPair`,
+`DurableObjectState`) or a platform module (`cloudflare:sockets`), or that composes. An adapter that takes its
+binding as a parameter is not glue — it is a `server`-ring implementation of a port, and it belongs in the slice
+that owns the port. `packages/modules` compiles with `types: []` precisely so that platform globals cannot be
+ambient there, which is what makes this line enforceable rather than a matter of taste.
+
+Five adapters and a whole slice moved out under this rule: `CacheKv`, `IdsUuid`, `QueueBus` and `TelemetryOtlp` to
+`shared/server`, `TelemetryAnalytics` to `decision/server` (it names that slice's port), and `GetHealth` to
+`shared/use-cases` with its transport edge in `packages/api`. The last one needed a design fix first: the use case
+returned `HealthV1`, a WIRE type, so it could only live in the app — `dep:check` forbids modules from importing
+`@ea/api`. It returns a domain `HealthReport` now and the edge maps it, which is what every other slice does.
+
 ## Traps in this codebase
 
 Recorded because each has cost real debugging time more than once.

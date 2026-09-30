@@ -65,7 +65,6 @@
         "@ea/modules": "workspace:*",
         "@effect/sql-pg": "catalog:",
         "effect": "catalog:",
-        "uuid": "^14.0.2",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "^5.20260926.1",
@@ -124,6 +123,7 @@
         "better-auth": "1.7.6",
         "effect": "catalog:",
         "pg": "^8.23.0",
+        "uuid": "^14.0.2",
       },
       "devDependencies": {
         "@effect/sql-pg": "catalog:",

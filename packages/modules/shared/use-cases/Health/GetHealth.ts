@@ -12,7 +12,7 @@
  * Stemming is proven by asking Postgres whether the two forms stem alike, not by reading
  * `pg_ts_config` — a config row says the dictionary is installed, not that it works.
  */
-import { DatabaseHealthV1, HealthV1 } from "@ea/api/v1"
+import { DatabaseHealth, HealthReport } from "@ea/modules/shared/domain/Health"
 import { Effect } from "effect"
 import { SqlClient } from "effect/sql"
 
@@ -35,27 +35,27 @@ export const GetHealth = (version: string) =>
 
     const row = rows[0]
     if (row === undefined) {
-      return new HealthV1({ status: "degraded", version, database: null })
+      return new HealthReport({ status: "degraded", version, database: null })
     }
 
-    const database = new DatabaseHealthV1({
-      postgres_version: row.pg,
-      pgvector_version: row.vector,
-      dutch_stemming: row.stem_a === row.stem_b
+    const database = new DatabaseHealth({
+      postgresVersion: row.pg,
+      pgvectorVersion: row.vector,
+      dutchStemming: row.stem_a === row.stem_b
     })
 
     // Reachable but missing a retrieval capability is degraded, not ok: the pipeline would
     // run and quietly escalate everything.
-    const healthy = database.pgvector_version !== null && database.dutch_stemming
+    const healthy = database.pgvectorVersion !== null && database.dutchStemming
 
-    return new HealthV1({ status: healthy ? "ok" : "degraded", version, database })
+    return new HealthReport({ status: healthy ? "ok" : "degraded", version, database })
   }).pipe(
     // A database that cannot be reached is a degraded service, not a 500: the endpoint's
     // job is to report, and a monitor needs the body rather than a stack trace.
     Effect.catchCause((cause) =>
       Effect.as(
         Effect.logError("Health check could not reach the database", cause),
-        new HealthV1({ status: "degraded", version, database: null })
+        new HealthReport({ status: "degraded", version, database: null })
       )
     )
   )

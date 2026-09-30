@@ -37,9 +37,11 @@ import {
   RPC_V1_PATH,
   RpcV1
 } from "@ea/api/v1"
+import { HealthHttp } from "@ea/api/v1"
 import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
 import { DryRunAdapter } from "@ea/modules/decision/server/Execution"
 import { LanguageModelWorkersAiBinding, WORKERS_AI_MODEL } from "@ea/modules/decision/server/Extraction"
+import { TelemetryAnalytics } from "@ea/modules/decision/server/Telemetry"
 import {
   IdentityResolverLive,
   SessionHttp,
@@ -52,7 +54,11 @@ import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
 import { AgentModel } from "@ea/modules/policy/domain/Ask"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
 import { RealtimeUpgrade, RoomsLive } from "@ea/modules/realtime/server/Room"
+import { CacheKv } from "@ea/modules/shared/server/Cache"
+import { EventQueue, QueueBus } from "@ea/modules/shared/server/Event"
+import { IdsUuid } from "@ea/modules/shared/server/Ids"
 import { LanguageModelWorkersAiOpenAi } from "@ea/modules/shared/server/Model"
+import { TelemetryOtlp } from "@ea/modules/shared/server/Telemetry"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { withDatabase } from "@ea/modules/shared/tables/Database"
 import { SweepEnqueueGap } from "@ea/modules/shared/use-cases/Event"
@@ -61,16 +67,10 @@ import { LanguageModel } from "effect/ai"
 import { HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { RpcSerialization, RpcServer } from "effect/rpc"
-import { HealthHttp } from "./Health/HealthHttp.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
-import { CacheKv } from "./platform/CacheKv.ts"
 import { dispatchEvent } from "./platform/DispatchEvent.ts"
 import { ConnectHyperdrive, ReactivityLive } from "./platform/HyperdriveConnect.ts"
-import { IdsUuid } from "./platform/Ids.ts"
-import { EventQueue, QueueBus } from "./platform/QueueBus.ts"
 import { consumeBatch, type QueueBatchLike } from "./platform/QueueHandler.ts"
-import { TelemetryAnalytics } from "./platform/TelemetryAnalytics.ts"
-import { TelemetryOtlp } from "./platform/TelemetryOtlp.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
 
 /**
