@@ -74,18 +74,57 @@ browser ──WS──> console Worker ──service binding──> API Worker �
 - **Keepalive uses `setWebSocketAutoResponse`**, so a ping does not wake a hibernating room. No
   `setInterval` anywhere in a room: a timer prevents hibernation, which is the whole point of the design.
 
-## Transport: Effect RPC over the socket, if `request.upgrade` holds
+## Transport: a push-only socket, and why it cannot carry Effect RPC
 
-`RpcServer.layerProtocolWebsocket({ path })` exists in rc.118 and registers a GET route that upgrades and
-attaches the socket to the RPC protocol (`docs/references.md`). If it works under `workerd`, chat joins the
-existing `RpcGroup`, the client is typed from the same contract as everything else, and there is no second
-wire format to keep in step — the argument ADR-0012 already makes for RPC.
+**The socket is one-way, server to client.** Client actions — post a message, mark a thread read — go over
+the existing HTTP RPC path, which is already typed from the same contract, already authenticated by the
+session cookie, and already works. Only pushes need the socket.
 
-**It is unverified by execution**, because `workerd` upgrades by returning a 101 response carrying a
-`webSocket`, not by upgrading a request in place. That is a step-0 question of exactly the same shape as
-ADR-0009's, and it gets the same treatment: prove it in a real Worker before building on it. The fallback if
-it does not hold is a hand-rolled `WebSocketPair` with `Schema`-encoded frames — more code, same types, no
-RPC ergonomics.
+That asymmetry is not a simplification, it is forced, and working it out corrected an earlier version of
+this spec which said chat would "join the existing `RpcGroup` over a WebSocket":
+
+**Hibernation and Effect's WebSocket RPC are mutually exclusive.** Hibernation is _defined_ by the room
+leaving memory while its sockets stay connected: delivery becomes callback-based and stateless per message
+(`webSocketMessage(ws, msg)`), and the socket set is recovered from `ctx.getWebSockets()`. But
+`RpcServer.layerProtocolWebsocket` keeps a **protocol session in memory for each connection** — that is what
+`makeSocketProtocol` is — and a streaming rpc additionally keeps a **server fiber alive** for as long as the
+subscription lasts. Anything held in memory per connection means the room can never leave memory, which
+means `accept()` rather than `ctx.acceptWebSocket()`, which bills wall-clock for the entire time every
+client is connected. In Cloudflare's own worked examples that is **$412/month against $20/month** for
+identical traffic.
+
+It cannot be patched by restoring protocol state on wake. `serializeAttachment` holds a small value per
+socket, not an RPC session, so the room would be rebuilding a protocol handshake on every message.
+
+**So room frames are self-contained**: a `Schema`-encoded tagged union, encoded once per broadcast and sent
+with `ws.send`. Schema still gives one definition shared by both ends — the property that made RPC
+attractive — without a session to keep alive.
+
+**This demotes the `request.upgrade` question** (issue 01) from blocking to informational. The room must
+upgrade with `ctx.acceptWebSocket()`, a Durable Object API, so Effect's socket protocol is the wrong tool
+here whether or not `request.upgrade` resolves under `workerd`. It stays worth knowing for a future
+non-hibernating use — an RPC stream terminating in the Worker rather than in a room — which is why the issue
+is kept rather than deleted.
+
+## Which Effect primitives, and where
+
+The question "PubSub, cluster, Stream, Sink?" has a different answer per feature, and the wrong answer is
+expensive rather than merely inelegant.
+
+| Primitive             | Used here?                        | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`PubSub`**          | **No**                            | It is in-memory and **per isolate**. Two browsers are usually served by two isolates, so a publish reaches a subset of subscribers and reports success — silent partial fan-out, the worst failure shape. It also needs a resident subscriber fiber per socket, which is the hibernation problem again. The Durable Object _is_ the coordination point `PubSub` would be imitating, so it adds nothing and costs the thing that makes rooms affordable.                                                        |
+| **`Queue`**           | **No**, in a room                 | Same reason: a queue with no consumer fiber is a leak, and a consumer fiber is residency.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **`Stream` / `Sink`** | **Yes — on feature A**            | Feature A is a streaming rpc (`stream: true`) over the **HTTP** protocol, which `makeProtocolHttp` supports directly: no hand-rolled SSE. Token generation is a `Stream`; persisting the transcript while it streams is a `Sink` on a forked branch, so the record is written from the same bytes the client saw rather than from a second call. This is where these primitives belong — one request's lifetime, inside the Worker, where a fiber is alive anyway and Workers bill CPU rather than wall-clock. |
+| **`effect/cluster`**  | **No** (ADR-0003)                 | Designed for N long-lived processes over a shared transactional database; `SqlMessageStorage` calls `withTransaction` in nine places and sharding runs background loops on 3/10/35/60-second timers. Every one of those is residency inside a room, and the transactions imply a `PgClient`, which is the 15-minute rule.                                                                                                                                                                                      |
+| **Room fan-out**      | `ctx.getWebSockets()` + `ws.send` | A synchronous loop inside a handler. No fibers, no subscriptions, nothing to restore on wake. This is the whole room.                                                                                                                                                                                                                                                                                                                                                                                          |
+
+**`effect/cluster` is also the revisit trigger, with a caveat.** `@effect/platform-cloudflare` (PR #7322,
+unpublished — `docs/references.md`) ships `ClusterEntity` and `ClusterWorkflow` as SQLite-backed Durable
+Object classes, and an entity per room is the shape this design is hand-rolling. When it releases, reassess
+— but reassess the **billing** too rather than assuming it is solved: an entity that reaches Postgres from
+inside a DO hits the same outbound-connection rule, and the PR explicitly ships "no HttpServer/Crypto/FS
+parity", so the pieces that are ours stay ours.
 
 ## Running Effect inside a Durable Object
 
