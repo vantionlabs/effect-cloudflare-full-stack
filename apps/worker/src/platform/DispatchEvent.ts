@@ -33,7 +33,12 @@ import { WorkflowEnginePg } from "@ea/modules/decision/server/Workflow"
 import { DecideDocumentLayer, DecideDocumentWorkflow } from "@ea/modules/decision/use-cases/Decision"
 import { ExecuteDecision } from "@ea/modules/decision/use-cases/Execution"
 import { Blobs, DocumentParser } from "@ea/modules/intake/domain/Document"
-import { ANYDOC_PARSER_VERSION } from "@ea/modules/intake/server/Document"
+import {
+  ANYDOC_PARSER_VERSION,
+  type MistralOcrConfig,
+  mistralOcrConfig,
+  ocrParserVersion
+} from "@ea/modules/intake/server/Document"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
 import { readThrough } from "@ea/modules/shared/domain/Cache"
 import type { QueueMessage } from "@ea/modules/shared/domain/Event"
@@ -122,19 +127,30 @@ const documentTextFor = (documentId: string) =>
  * identical work.
  */
 /*
- * Imported rather than restated. The version describes the PARSER, so it belongs with the parser — this
- * constant read "text-1" while the parser was being replaced by tier 2, and nothing in the build would have
- * noticed the key describing a parser that no longer ran.
+ * Imported rather than restated, and assembled from EVERY tier that could have produced the text.
+ *
+ * The version describes the PARSER, so it belongs with the parser — this constant read "text-1" while the
+ * parser was being replaced by tier 2, and nothing in the build would have noticed the key describing a
+ * parser that no longer ran.
+ *
+ * Tier 3 made it a function rather than a constant. Which parser produced a document's text depends on the
+ * document AND on whether OCR is configured for this deployment, so a key naming only tier 2 would let a
+ * deployment with OCR read an entry written by one without it — text from a different parser, against which
+ * the same spans verify differently. Enabling or disabling OCR is now a key change, which is the same
+ * property a version bump has.
  */
-const PARSER_VERSION = ANYDOC_PARSER_VERSION
-const documentTextKey = (documentId: string) => `doc:${PARSER_VERSION}:${documentId}`
+const parserVersion = (ocr: MistralOcrConfig | undefined) =>
+  ocr === undefined ? ANYDOC_PARSER_VERSION : `${ANYDOC_PARSER_VERSION}+${ocrParserVersion(ocr)}`
+
+const documentTextKey = (documentId: string, ocr: MistralOcrConfig | undefined) =>
+  `doc:${parserVersion(ocr)}:${documentId}`
 
 /** One hour. Long enough to cover a redelivery storm, short enough that a stale entry costs nothing. */
 const DOCUMENT_TEXT_TTL_SECONDS = 3600
 
-const cachedDocumentTextFor = (documentId: string) =>
+const cachedDocumentTextFor = (documentId: string, ocr: MistralOcrConfig | undefined) =>
   readThrough({
-    key: documentTextKey(documentId),
+    key: documentTextKey(documentId, ocr),
     ttlSeconds: DOCUMENT_TEXT_TTL_SECONDS,
     compute: documentTextFor(documentId)
   })
@@ -145,7 +161,12 @@ const workFor = (row: EventRow) =>
     switch (row.type) {
       case "document.decide": {
         const payload = yield* Schema.decodeUnknownEffect(DecidePayload)(row.payload)
-        const documentText = yield* cachedDocumentTextFor(payload.documentId)
+        /*
+         * Read per message rather than captured once, because it decides the CACHE KEY.
+         * `Config` is memoised by the provider, so this is a lookup and not an environment read.
+         */
+        const ocr = yield* mistralOcrConfig
+        const documentText = yield* cachedDocumentTextFor(payload.documentId, ocr)
         yield* DecideDocumentWorkflow.execute({
           documentId: payload.documentId,
           documentText,

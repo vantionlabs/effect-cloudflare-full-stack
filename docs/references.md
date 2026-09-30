@@ -225,6 +225,38 @@ _repeat_ of an identical run free, but not the first one.
 A caveat on these figures: only calls that go **through the gateway** are logged, so anything that bypassed
 it before 2026-09-30 is not counted. The per-call rates are what to reuse, not the totals.
 
+### Mistral OCR: the stateless endpoint, and a data URI or a 422
+
+Checked 2026-09-30 against `docs.mistral.ai` (capabilities/OCR and the `/v1/ocr` endpoint reference).
+**Not verified by execution** — there is no Mistral key on this account — so this row is the contract the
+adapter was written against, and the date is what makes a later disagreement legible.
+
+| Fact           | Value                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Endpoint       | `POST https://api.mistral.ai/v1/ocr`, `Authorization: Bearer <key>`                                                 |
+| Document       | `document: { type: "document_url", document_url }` for PDF/Office, `{ type: "image_url", image_url }` for images    |
+| **Base64**     | must be a **data URI** — `data:application/pdf;base64,<b64>`. **Raw base64 returns 422**                            |
+| Response       | `{ pages: [{ index, markdown, images, tables, dimensions, confidence_scores, blocks }], model, usage_info }`        |
+| Bounding boxes | `include_blocks: true` (the default) returns paragraph-level boxes; images carry `top_left_x/y`, `bottom_right_x/y` |
+| Confidence     | `confidence_scores_granularity: "page"                                                                              |
+| Statefulness   | the endpoint is stateless: the document is supplied in the request                                                  |
+
+Three consequences this repo depends on:
+
+- **Stateless is a legal property here, not only an architectural one.** Mistral's Zero Data Retention is
+  available on the Scale plan **for stateless calls only** and not for stateful products (files, batch,
+  conversations, libraries) — plan risk R8. The file-upload form of this same API therefore may not be used,
+  and the adapter sends a data URI instead. Our documents are private in R2, so a public URL is not an
+  option either; the data URI is the only form that is both stateless and doesn't publish the document.
+- **`mistral-ocr-latest` must never be configured.** A parser version defines the verbatim contract, so a
+  floating tag would let a provider-side upgrade change what `containsVerbatim` accepts, silently, in the
+  direction of a decision that used to be grounded no longer being so. `MISTRAL_OCR_MODEL` is required with
+  no default when a key is present, and the model string is part of the parsed-text cache key.
+- **`blocks` and `confidence_scores` are available and unused so far.** Block confidence is a natural rail-2
+  input — a low-confidence block is a reason to force review — and bounding boxes would let the reviewer UI
+  show _where on the page_ a `source_span` came from, which no text parser can offer. `ParsedDocument` has
+  nowhere to put either yet, so both are left on the table deliberately rather than by oversight.
+
 ### `anydoc` runs in `workerd` — verified by execution, plus a package-name trap
 
 Checked 2026-09-30 by building `apps/worker/test/fixtures/anydoc/` and running it under `createTestHarness`.

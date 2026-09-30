@@ -87,9 +87,15 @@ export const DocumentParserAnydoc = (
    * opaque type costs nothing and keeps the boundary honest.
    */
   wasmModule: unknown
-): Layer.Layer<DocumentParser> => Layer.succeed(DocumentParser)({ parse: makeParse(wasmModule) })
+): Layer.Layer<DocumentParser> => Layer.succeed(DocumentParser)({ parse: anydocParse(wasmModule) })
 
-const makeParse = (wasmModule: unknown): DocumentParserService["parse"] => {
+/**
+ * Tiers 1 and 2 as a plain function, so a further tier can chain onto it.
+ *
+ * Exported because tier 3 (OCR) must run only AFTER this one has produced nothing, and the composition root
+ * is where the order of tiers should be readable. A layer cannot be chained; a function can.
+ */
+export const anydocParse = (wasmModule: unknown): DocumentParserService["parse"] => {
   let ready = false
   /*
    * Initialised LAZILY, once per isolate.

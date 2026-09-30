@@ -69,8 +69,9 @@ import {
   retrieveStep,
   settleDecision
 } from "@ea/modules/decision/use-cases/Decision"
+import { DocumentParser } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
-import { DocumentParserAnydoc } from "@ea/modules/intake/server/Document"
+import { anydocParse, mistralOcrConfig, mistralOcrParse } from "@ea/modules/intake/server/Document"
 import { AgentModel } from "@ea/modules/policy/domain/Ask"
 import { AssistantConversationsAgent } from "@ea/modules/policy/server/Assistant"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
@@ -146,7 +147,7 @@ const ServicesLayer = (env: Env) =>
      * is that a `.docx` no longer returns `UnsupportedDocument`, which was the gap that made the pipeline
      * undemonstrable on a real client's documents.
      */
-    DocumentParserAnydoc(anydocWasm),
+    DocumentParserTiers(anydocWasm),
     IdsUuid,
     BlobsR2,
     QueueBus,
@@ -422,6 +423,29 @@ export { RoomDurableObject } from "./RoomDurableObject.ts"
  * Durable Object — the SDK's class extends it — so it obeys exactly the same rule.
  */
 export { AssistantAgent } from "./AssistantAgent.ts"
+
+/**
+ * The parser, as the ordered tiers this deployment has.
+ *
+ * Composed HERE rather than inside an adapter, because the order of tiers is a deployment decision and the
+ * composition root is where a reader should be able to see it:
+ *
+ *   text → anydoc (wasm, in-Worker) → OCR (Mistral, paid, EU), when a key is configured
+ *
+ * Each tier runs only if the one before it refused, so a markdown document never touches the wasm and a
+ * `.docx` never becomes a paid API call. **OCR is absent unless configured**, which is the right default
+ * for a tier that bills per page and whose use is a per-client residency decision (ADR-0006).
+ *
+ * `Layer.effect` rather than `Layer.succeed` because whether tier 3 exists is read from config, and the
+ * parsed-text cache key depends on the answer — see `DispatchEvent`, where enabling OCR is a key change.
+ */
+const DocumentParserTiers = (wasmModule: unknown) =>
+  Layer.effect(DocumentParser)(
+    Effect.map(mistralOcrConfig, (ocr) => {
+      const inWorker = anydocParse(wasmModule)
+      return { parse: ocr === undefined ? inWorker : mistralOcrParse(ocr, inWorker) }
+    })
+  )
 
 /**
  * The decide pipeline's work, bound to this isolate's runtime and to one tenant.

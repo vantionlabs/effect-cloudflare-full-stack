@@ -164,6 +164,21 @@ export interface Env {
   readonly OTLP_HEADERS?: string | undefined
   /** The AI Gateway id, when one is configured. Absent means direct, unmetered, uncached model calls. */
   readonly AI_GATEWAY?: string | undefined
+
+  /**
+   * Tier 3 parsing: Mistral OCR, for scanned documents.
+   *
+   * **Both or neither.** A key with no pinned model is a misconfiguration that fails loudly at layer build,
+   * because a parser version defines the verbatim contract and `mistral-ocr-latest` would let a
+   * provider-side upgrade change what verifies (plan risk R6). Absent means OCR is simply not a tier this
+   * deployment has, which is the right default for something billed per page.
+   *
+   * A SECRET, not a var: `wrangler secret put MISTRAL_API_KEY`. It is absent from `wrangler.jsonc`
+   * deliberately — an EU processor's key in a committed file is the kind of thing ADR-0006 exists to avoid.
+   */
+  readonly MISTRAL_API_KEY?: string | undefined
+  /** The pinned OCR model, e.g. a dated `mistral-ocr-<yymm>`. Never `mistral-ocr-latest`. */
+  readonly MISTRAL_OCR_MODEL?: string | undefined
   readonly VERSION?: string | undefined
 }
 
