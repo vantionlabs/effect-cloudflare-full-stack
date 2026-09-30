@@ -25,3 +25,20 @@ model call is an outbound connection. Build it as a stream from the Worker.
 - A streamed answer with citations that resolve to real clauses.
 - A test proving a citation to a clause that was never retrieved is refused, not rendered — the chat surface
   must not become a way around the grounding rails the decide path enforces.
+
+## Comments
+
+**Mostly built, and the part that is missing is the part that matters.**
+
+Built: `policy/use-cases/Ask/AskCorpus.ts` with `AskRpcLive` as its edge, and five tests including that it
+offers exactly one tool and that the tool is read-only, and that the retrieval bound is the one captured at
+layer build rather than one the model could influence.
+
+Missing, both bullets of "done looks like":
+
+- **The answer is not streamed.** `AskRpcLive` returns a value; there is no `Stream` in it. For a question
+  answered over a corpus this is a user-visible difference, not an implementation detail.
+- **There is no test that a citation to a clause which was never retrieved is refused rather than rendered.**
+  This is the one that should block: the decide path enforces grounding through rails, and a chat surface that
+  renders an ungrounded citation is a way around them. `VerifySpans` and `containsVerbatim` already exist to
+  be reused, so this is a test plus a refusal, not new machinery.

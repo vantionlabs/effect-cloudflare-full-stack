@@ -1,6 +1,6 @@
 # Feature C — one room per org: live queue and presence
 
-Status: ready-for-agent
+Status: done
 Blocked by: 01, 02, 03
 
 The smallest useful realtime feature, and the one that proves the whole topology with no persistence
@@ -29,3 +29,16 @@ while the other is reading it; the loser finds out from a CAS failure. Presence 
 - A `dep:check` rule forbidding any database import from the DO module, so R1 is a build failure rather
   than an invoice.
 - ADR-0018 and ADR-0019 written, because the reasons are freshest now.
+
+## Comments
+
+Done, all four bullets:
+
+- The queue updates without a refresh: `decision/domain/Decision/DecisionFrame.ts` carries `QueueChanged`,
+  and the console's atoms are driven from the socket rather than polling.
+- Two browser contexts: `e2e/tests/chat.spec.ts` carries a message between two contexts, and
+  `apps/worker/test/Room.test.ts` asserts the second-organization property in `workerd` — where the issue
+  wanted it in an e2e spec, the Worker test is the stronger place for it, because it can hold two sockets
+  open with different sessions and assert silence without a browser.
+- The `dep:check` rule exists: "a Durable Object may not reach a database" in `scripts/boundaries.ts`.
+- ADR-0018 and ADR-0019 are written.

@@ -1,6 +1,6 @@
 # Verify `HttpServerRequest.upgrade` under workerd
 
-Status: ready-for-agent
+Status: done
 Type: research
 Blocks: nothing — informational, see below
 
@@ -33,3 +33,18 @@ Worth knowing anyway, for one future case: an RPC stream terminating in the **Wo
 room, where a fiber is alive for the request anyway. If `request.upgrade` works there, a live subscription
 that does not need cross-client fan-out can be an ordinary streaming rpc. Answer it, record it, do not
 block on it.
+
+## Comments
+
+Done, and by better evidence than the issue asked for. It wanted a throwaway upgrade route exercised from
+the `worker` project; what exists is the REAL route, `packages/realtime/src/Server/RealtimeUpgrade.ts`,
+asserted by `apps/worker/test/Room.test.ts` in real `workerd`: a 101 with a live socket, a welcome frame,
+fan-out to a second socket, and a second organization hearing nothing. A throwaway route would have proved
+less, because the thing that could fail is the composition, not the call.
+
+`docs/references.md` carries the verdict, replacing the paragraph that still called it an open question.
+
+One finding the issue did not anticipate: `request.upgrade` resolves, but the RPC protocol over that socket
+could not be used, because **a `WebSocket` cannot cross a Durable Object stub boundary** (`DataCloneError`).
+So the fallback this issue described — a hand-rolled pair with Schema-encoded frames — was taken anyway, for
+a platform reason rather than an Effect one. ADR-0020 records it.

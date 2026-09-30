@@ -334,11 +334,27 @@ under hibernation: the array is empty on the next wake.
   `const socket = yield* Effect.orDie(request.upgrade)`.
 - Also present: `layerProtocolSocketServer`, `makeProtocolStdio`, `makeProtocolWorkerRunner`.
 
-**So the open question is not whether Effect supports it, but whether `request.upgrade` resolves under
+**The open question was not whether Effect supports it, but whether `request.upgrade` resolves under
 `workerd`**, where an upgrade is performed by returning a 101 response carrying a `webSocket` rather than
-by upgrading a request object in place. Unverified by execution — a step-0 item for the chat work, in the
-same class as ADR-0009's `cloudflare:sockets` question, and with the same shape of fallback (a hand-rolled
-`WebSocketPair` with Schema-encoded frames) if it does not hold.
+by upgrading a request object in place.
+
+**Answered 2026-09-30: it does, and the fallback was taken anyway for a different reason.**
+
+- `HttpServerRequest.upgrade` resolves under real `workerd`. Verified by execution, not by reading:
+  `apps/worker/test/Room.test.ts` boots the deployed Worker through `createTestHarness` and asserts a 101
+  with a live socket, a welcome frame, fan-out to a second socket, and that a second organization's socket
+  receives nothing.
+- **The RPC protocol over that socket is what could not be used**, and the reason is a platform rule rather
+  than an Effect one: a `WebSocket` cannot cross a Durable Object stub boundary (`DataCloneError`), so the
+  room cannot be handed a socket that the API's RPC server accepted. The frames are therefore Schema-encoded
+  and pushed from the room — the shape this note predicted as the fallback, reached by a different argument
+  (ADR-0020).
+- **The upgrade also survives a service binding**, which was the second open question: the console forwards
+  `/api/*` to the API with `env.API.fetch(request)` and the 101 comes back with its `webSocket` intact. The
+  e2e spec `realtime.spec.ts` opens the socket from a real browser at the console's origin and reads the
+  welcome frame, so this is verified end to end rather than at the binding in isolation. The API side must
+  return the response with `HttpServerResponse.raw`; `fromWeb` destructures it and drops `webSocket`, which
+  is in `AGENTS.md` as a trap.
 
 Related and already recorded above: `RpcServer.layerHttp` mounts a WebSocket when `protocol` is omitted,
 which is in `AGENTS.md` as a trap because a plain POST then 404s with nothing in the logs.

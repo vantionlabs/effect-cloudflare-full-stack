@@ -24,3 +24,21 @@ matter, by observation rather than by reading:
 A test file that survives being read by somebody sceptical, plus rows in `docs/references.md`. If
 hibernation cannot be observed under miniflare at all, that itself is the finding, and R1's mitigation
 becomes entirely static (the `dep:check` rule) rather than partly empirical.
+
+## Comments
+
+**Half of this is answered; recording which half so it is not redone.**
+
+Answered: how to test a Durable Object here. Not with `runInDurableObject` — `apps/worker/test/Room.test.ts`
+drives the room through `createTestHarness`, i.e. through the real upgrade route as a client, which is what
+made the second-organization property testable at all. And `setWebSocketAutoResponse` is verified: the test
+at `Room.test.ts:153` asserts a ping is answered **without a frame reaching the application**, which is the
+observable half of "it does not wake the room".
+
+Still open: whether hibernation itself can be OBSERVED under miniflare — that a room actually leaves memory
+and that a socket's attachment survives the return. The design already assumes it (nothing is kept on the
+instance; the viewer list is derived from `deserializeAttachment` every time), so a negative finding would
+not change the code — it would move R1's mitigation to being entirely static, which is the issue's own
+stated alternative.
+
+Worth keeping because the cost of being wrong is an invoice rather than a bug.
