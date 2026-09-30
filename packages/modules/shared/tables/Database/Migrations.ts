@@ -25,6 +25,7 @@ import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
+import { MessageTable } from "@ea/modules/realtime/tables/Message"
 import { Migrator } from "effect/sql"
 import { EventTable } from "../Event/EventTable.ts"
 import { TenancyTable } from "../Tenancy/TenancyTable.ts"
@@ -64,7 +65,9 @@ export const migrations = {
    * again under a new key, rather than editing 0010 in place and leaving every existing database on the
    * old shape. The added statements are `add column if not exists`, so re-running is a no-op.
    */
-  "0015_rule_conditions": RuleTable
+  "0015_rule_conditions": RuleTable,
+  // Chat: `messages`, the record a room deliberately is not (ADR-0018).
+  "0016_messages": MessageTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

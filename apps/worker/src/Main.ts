@@ -32,6 +32,7 @@ import {
   IdentityRpcLive,
   IntakeHttp,
   IntakeRpcLive,
+  MessageRpcLive,
   RPC_V1_PATH,
   RpcV1
 } from "@ea/api/v1"
@@ -253,6 +254,7 @@ const AppLayer = (env: Env) =>
     Layer.provide(IdentityRpcLive),
     Layer.provide(IntakeRpcLive),
     Layer.provide(DecisionRpcLive),
+    Layer.provide(MessageRpcLive),
     // The agent. Brings its own language model, locally — see AskRpcLive.ts.
     Layer.provide(AskRpcLive),
     // JSON rather than msgpack: the console is a browser, the payloads are small, and a wire format a

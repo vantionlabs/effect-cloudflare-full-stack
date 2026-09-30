@@ -15,6 +15,7 @@ import { Highlight } from "./highlight.tsx"
 import { useIdentity } from "./hooks/use-session.ts"
 import { approveAtom, decisionAtom, queueAtom, rejectAtom, REVIEW_KEYS, reviewingAtom } from "./queue-atoms.ts"
 import { usePresence } from "./realtime/use-presence.ts"
+import { Thread } from "./thread.tsx"
 
 export function QueueScreen() {
   const queue = useAtomValue(queueAtom)
@@ -338,6 +339,9 @@ function Inspector({ decisionId }: { readonly decisionId: string }) {
             )}
         </article>
       ))}
+
+      {/* The humans' reasoning, next to the machine's. See thread.tsx. */}
+      <Thread decisionId={decisionId} />
 
       <footer style={{ marginTop: "2rem", color: "#666", fontSize: "0.85rem" }}>
         <kbd>j</kbd>/<kbd>k</kbd> move · <kbd>a</kbd> approve · <kbd>r</kbd> reject

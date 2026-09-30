@@ -12,13 +12,14 @@
  */
 import { useAtomSet } from "@effect/atom-react"
 import { useIdentity } from "../hooks/use-session.ts"
-import { invalidateDecisionsAtom, viewersAtom } from "./realtime-atoms.ts"
+import { invalidateDecisionsAtom, invalidateThreadAtom, viewersAtom } from "./realtime-atoms.ts"
 import { useServerFrame } from "./use-socket.ts"
 
 export const RealtimeBridge = (): null => {
   const identity = useIdentity()
   const setViewers = useAtomSet(viewersAtom)
   const invalidateDecisions = useAtomSet(invalidateDecisionsAtom)
+  const invalidateThread = useAtomSet(invalidateThreadAtom)
 
   useServerFrame("Welcome", (frame) => setViewers(frame.viewers))
   useServerFrame("Presence", (frame) => setViewers(frame.viewers))
@@ -31,6 +32,23 @@ export const RealtimeBridge = (): null => {
      */
     if (frame.byUserId === identity.id) return
     invalidateDecisions()
+  })
+
+  useServerFrame("MessagePosted", (frame) => {
+    /*
+     * INVALIDATE rather than append, even though the frame carries the whole message.
+     *
+     * Appending would be one fewer round trip and a second way for messages to arrive: a client that appended
+     * a live message and then refetched could show it twice, and one that appended while a refetch was in
+     * flight could show it out of order. Re-reading keeps the thread's contents coming from exactly one place,
+     * which is the same rule the queue follows. The frame carries the message so that a future optimistic
+     * render has it; nothing needs it yet.
+     *
+     * Own echo included on purpose, unlike the queue: posting does not invalidate locally, so this is how the
+     * poster's own thread updates. One refetch either way.
+     */
+    if (frame.message.subject.kind !== "decision") return
+    invalidateThread(frame.message.subject.id)
   })
 
   return null

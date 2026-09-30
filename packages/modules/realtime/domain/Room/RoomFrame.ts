@@ -19,6 +19,7 @@
  */
 import { UserId } from "@ea/modules/shared/domain/Identity"
 import { Schema } from "effect"
+import { Message } from "../Message/Message.ts"
 
 /**
  * The keepalive pair, as bare strings rather than JSON.
@@ -91,7 +92,25 @@ export class QueueChanged extends Schema.TaggedClass<QueueChanged>("QueueChanged
   byUserId: Schema.NullOr(UserId)
 }) {}
 
-export const ServerFrame = Schema.Union([Welcome, Presence, QueueChanged])
+/**
+ * A message was posted. Carries the message, unlike `QueueChanged`, which carries a reason.
+ *
+ * **The exception to "a frame is a nudge", and worth stating why.** A queue nudge omits rows because the queue
+ * is a list a client can re-read cheaply and precisely — fifty rows behind one indexed query. A thread is
+ * append-only, so the frame *is* the delta: sending the message avoids a round trip per message on the hottest
+ * path in a chat, and there is no staleness risk because nothing about a posted message changes afterwards.
+ * If editing ever arrives, this becomes a nudge like the other.
+ *
+ * It is broadcast into the ORGANIZATION's room rather than a room per thread, and the subject is inside so a
+ * client can decide whether it cares. That keeps one socket per person and no subscribe protocol — at the cost
+ * of every member receiving frames for threads they are not reading. Revisit when a single organization's
+ * message rate makes that wasteful, or when a thread needs to be visible to fewer people than the tenant.
+ */
+export class MessagePosted extends Schema.TaggedClass<MessagePosted>("MessagePosted")("MessagePosted", {
+  message: Message
+}) {}
+
+export const ServerFrame = Schema.Union([Welcome, Presence, QueueChanged, MessagePosted])
 export type ServerFrame = typeof ServerFrame.Type
 
 /** Encoding is JSON both ways: the payloads are tiny and a frame a human can read in devtools is worth more

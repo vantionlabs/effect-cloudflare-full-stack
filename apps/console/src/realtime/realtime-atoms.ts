@@ -10,6 +10,7 @@ import { Effect } from "effect"
 import { Atom, Reactivity } from "effect/reactivity"
 import { DECISIONS_KEY } from "../queue-atoms.ts"
 import { Api } from "../rpc.ts"
+import { threadKey } from "../thread-atoms.ts"
 
 /**
  * Everyone connected to this organization's room, including you.
@@ -19,6 +20,19 @@ import { Api } from "../rpc.ts"
  * with a sequence number, for a list of a handful of names.
  */
 export const viewersAtom = Atom.make<ReadonlyArray<Viewer>>([])
+
+/**
+ * Invalidate ONE thread, by subject.
+ *
+ * Keyed rather than coarse, unlike decisions: a busy tenant-wide channel would otherwise refetch every open
+ * thread on every message. The key is computed from the frame's subject, so a client only re-reads the thread
+ * it is actually showing.
+ */
+export const invalidateThreadAtom = Api.runtime.fn(
+  Effect.fnUntraced(function*(decisionId: string) {
+    yield* Reactivity.invalidate([threadKey(decisionId)])
+  })
+)
 
 /**
  * Invalidate everything about decisions, from outside the atom graph.

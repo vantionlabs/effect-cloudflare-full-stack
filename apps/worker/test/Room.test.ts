@@ -9,6 +9,7 @@
  * property `apps/console/src/platform/RealtimeHttp.ts` depends on and `HttpServerResponse.fromWeb` would have
  * silently destroyed.
  */
+import { RPC_V1_PATH } from "@ea/api/v1"
 import { expect } from "vitest"
 import { afterAll, beforeAll, describe, it } from "vitest"
 import { type Harness, startHarness } from "./Harness.ts"
@@ -173,5 +174,63 @@ describe("GET /api/v1/realtime", () => {
     expect(pongs).toHaveLength(1)
 
     socket.close()
+  })
+})
+
+describe("a message reaches a connected socket", () => {
+  /**
+   * The envelope matters: `id` is a string and `headers` is an array of PAIRS, not an object. A hand-written
+   * object there fails with `TypeError: .for is not iterable`, which is a long way from the cause — see
+   * Rpc.test.ts, which documents the same trap.
+   */
+  const call = (tag: string, payload: unknown, cookie: string) =>
+    harness.fetch(RPC_V1_PATH, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: harness.origin, cookie },
+      body: JSON.stringify([{ _tag: "Request", id: "1", tag, payload, headers: [] }])
+    })
+
+  it("writes it, then announces it — in that order", async () => {
+    const { cookie } = await harness.signedInWithOrg()
+    const { frames, socket } = await connect(cookie)
+    await waitForFrame(frames, "Welcome")
+
+    const response = await call(
+      "Message.post",
+      { subjectKind: "decision", subjectId: "dec_broadcast", body: "checked the PO" },
+      cookie
+    )
+    expect(response.status).toBe(200)
+
+    /*
+     * The frame is the integration this whole feature rests on: the use case wrote a row, the transport edge
+     * broadcast it, and the room delivered it to a socket that was already open. Each half is unit-tested
+     * elsewhere; only here do they meet.
+     */
+    const posted = await waitForFrame(frames, "MessagePosted")
+    const message = posted["message"] as { readonly body: string; readonly subject: { readonly id: string } }
+    expect(message.body).toBe("checked the PO")
+    expect(message.subject.id).toBe("dec_broadcast")
+
+    socket.close()
+  })
+
+  it("does not reach another organization", async () => {
+    const mine = await harness.signedInWithOrg()
+    const theirs = await harness.signedInWithOrg()
+    const listener = await connect(theirs.cookie)
+    await waitForFrame(listener.frames, "Welcome")
+
+    await call("Message.post", { subjectKind: "decision", subjectId: "dec_private", body: "ours" }, mine.cookie)
+
+    /*
+     * Asserted by waiting and then finding nothing, which is the only way to test an absence: the room name is
+     * derived from the poster's session, so a frame for one tenant cannot be addressed to another's room. A
+     * generous wait, because a false pass here would be a cross-tenant leak.
+     */
+    await new Promise((resolve) => setTimeout(resolve, 1_500))
+    expect(listener.frames.filter((frame) => frame["_tag"] === "MessagePosted")).toHaveLength(0)
+
+    listener.socket.close()
   })
 })
