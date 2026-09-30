@@ -7,18 +7,27 @@
  */
 import { Db } from "@ea/database/Database"
 import { DecisionDetail, QueueItem } from "@ea/modules/decision/domain/Decision"
+import { clampPageSize } from "@ea/modules/shared/domain/Page"
 import { Effect, Schema } from "effect"
-
-const MAX_LIMIT = 200
-const DEFAULT_LIMIT = 50
 
 /** Statuses a reviewer can still act on. `approved` and `rejected` are settled and leave the queue. */
 const OPEN_STATUSES = ["pending_review", "needs_attention"] as const
 
-export const ListQueue = (input: { readonly limit?: number | undefined }) =>
+export const ListQueue = (input: {
+  readonly limit?: number | undefined
+  /**
+   * The keyset from a previous page: the last row's decided-at and id, in that order.
+   *
+   * Decoded by the caller, because a cursor that cannot be read is a transport-level refusal (a 400) and not
+   * something this use case should have an error channel for.
+   */
+  readonly after?: readonly [decidedAt: string, decisionId: string] | undefined
+  /** Narrows to one intake, which is how a client polls for the outcome of a document it just uploaded. */
+  readonly intakeId?: string | undefined
+}) =>
   Effect.gen(function*() {
     const db = yield* Db
-    const limit = Math.min(Math.max(input.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT)
+    const limit = clampPageSize(input.limit)
 
     const rows = yield* db.scoped((sql, orgId) =>
       sql<{
@@ -38,7 +47,28 @@ export const ListQueue = (input: { readonly limit?: number | undefined }) =>
           join source_documents s on s.id = d.document_id
          where d.organization_id = ${orgId}
            and d.status = any(${sql.literal(`array['${OPEN_STATUSES.join("','")}']`)})
-         order by d.decided_at asc
+           ${
+        input.intakeId === undefined
+          ? sql``
+          /*
+           * The tenant predicate is on `orgId`, not on `d.organization_id`. They are equal here — the outer query
+           * already filters the decision — but `dep:check` insists on the literal form, and it is right to: a
+           * correlated predicate is only as good as the correlation, and a later edit to the outer query could
+           * quietly widen this one. The intake id is caller-supplied, so without this the filter is an oracle for
+           * whether an id exists in some other organization.
+           */
+          : sql`and exists (select 1 from intakes i where i.id = ${input.intakeId}
+                        and i.organization_id = ${orgId}
+                        and i.document_id = d.document_id)`
+      }
+           ${
+        input.after === undefined
+          ? sql``
+          // A row-value comparison, so the keyset is one index range rather than an OR of two predicates.
+          // Ascending here, because the queue is a backlog and the oldest item is the urgent one.
+          : sql`and (d.decided_at, d.id) > (${input.after[0]}::timestamptz, ${input.after[1]})`
+      }
+         order by d.decided_at asc, d.id asc
          limit ${limit}
       `
     )

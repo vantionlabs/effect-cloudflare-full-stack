@@ -8,22 +8,20 @@
 import { Db } from "@ea/database/Database"
 import { IntakeListItem } from "@ea/modules/intake/domain/Intake"
 import type { Collection } from "@ea/modules/shared/domain/Corpus"
+import { clampPageSize } from "@ea/modules/shared/domain/Page"
 import { Effect, Schema } from "effect"
-
-/** Hard ceiling on a page, applied to whatever the caller asked for. A client-supplied limit is a
- * request, not an instruction: an unbounded one is a trivial way to make the database do too much. */
-const MAX_LIMIT = 200
-const DEFAULT_LIMIT = 50
 
 export interface ListIntakesInput {
   readonly limit?: number | undefined
   readonly collection?: Collection | undefined
+  /** The keyset from a previous page: the last row's received-at and intake id, in that order. */
+  readonly after?: readonly [receivedAt: string, intakeId: string] | undefined
 }
 
 export const ListIntakes = (input: ListIntakesInput) =>
   Effect.gen(function*() {
     const db = yield* Db
-    const limit = Math.min(Math.max(input.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT)
+    const limit = clampPageSize(input.limit)
 
     const rows = yield* db.scoped((sql, orgId) =>
       sql<{
@@ -57,6 +55,12 @@ export const ListIntakes = (input: ListIntakesInput) =>
         -- another organization's rows the moment the connecting role happened to bypass RLS.
         where i.organization_id = ${orgId}
         ${input.collection === undefined ? sql`` : sql`and d.collection = ${input.collection}`}
+        ${
+        input.after === undefined
+          ? sql``
+          // Descending, matching the sort: arrivals are read newest-first.
+          : sql`and (i.received_at, i.id) < (${input.after[0]}::timestamptz, ${input.after[1]})`
+      }
         order by i.received_at desc, i.id desc
         limit ${limit}
       `

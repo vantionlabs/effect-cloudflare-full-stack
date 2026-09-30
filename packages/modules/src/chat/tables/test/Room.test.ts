@@ -123,6 +123,44 @@ describe("CreateRoom", () => {
   })
 })
 
+describe("ListRooms paging", () => {
+  /*
+   * Rooms are the case where the sort key is NOT a timestamp or an id: channels are ordered by name, so the
+   * cursor is `(name, id)` and the first component is a string a user typed. Both tests below exist because of
+   * that, and the second is the end-to-end half of a bug the cursor's unit test caught.
+   */
+  it("walks channels in name order exactly once across pages", async () => {
+    for (const name of ["Delta", "Alpha", "Charlie", "Bravo"]) {
+      await runAs(alice, CreateRoom({ name }))
+    }
+
+    const first = await runAs(alice, ListRooms({ limit: 2 }))
+    expect(first.map((room) => room.name)).toEqual(["Alpha", "Bravo"])
+
+    const last = first[first.length - 1]
+    const second = await runAs(alice, ListRooms({ limit: 2, after: [last!.name, last!.id] }))
+    expect(second.map((room) => room.name)).toEqual(["Charlie", "Delta"])
+  })
+
+  it("pages correctly when a channel name contains the cursor's separator", async () => {
+    // `Sales, EU` holds the separator the cursor joins on. It is escaped, so this works — and it did not
+    // when the separator was a character `encodeURIComponent` leaves alone.
+    for (const name of ["Sales, EU", "Support"]) await runAs(alice, CreateRoom({ name }))
+
+    const first = await runAs(alice, ListRooms({ limit: 1 }))
+    expect(first.map((room) => room.name)).toEqual(["Sales, EU"])
+
+    const last = first[0]
+    const second = await runAs(alice, ListRooms({ limit: 1, after: [last!.name, last!.id] }))
+    expect(second.map((room) => room.name)).toEqual(["Support"])
+  })
+
+  it("clamps an absurd limit rather than passing it to SQL", async () => {
+    await runAs(alice, CreateRoom({ name: "One" }))
+    expect(await runAs(alice, ListRooms({ limit: 10_000 }))).toHaveLength(1)
+  })
+})
+
 describe("ListRooms", () => {
   it("lists channels by name and hides archived ones", async () => {
     await runAs(alice, CreateRoom({ name: "Zebra" }))

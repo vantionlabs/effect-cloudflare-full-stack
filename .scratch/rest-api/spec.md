@@ -49,3 +49,25 @@ without `02`, and `02` is pointless without `01`.
 Out of scope here, and already tracked elsewhere: webhooks (PLAN slice 1.5), and the RPC surface, which is
 deliberately not REST — it ships with the console, carries domain types, and is versioned by the same
 prefix rule.
+
+## Scope decided 2026-09-30
+
+**Full REST parity — all 16 RPC operations get a path — and `X-API-Key` in the same pass.** Measured before
+deciding: the OpenAPI document described **3 of 19 operations**, because `Ask`, `Decision`, `Message` and
+`Room` are RPC-only and RPC has no per-method URL (one `POST /api/rpc/v1`, method in the envelope).
+
+The two halves are one pass on purpose: endpoints only a session cookie can reach are unusable by the
+integrating client they exist for, and the console already has RPC. Shipping reads without key auth would add
+17 paths that nothing outside a browser can call.
+
+RPC stays. It is not replaced by this — it carries domain types for the console and is versioned by the same
+prefix rule (ADR-0012). What changes is that the _public_ surface stops being a third of the product.
+
+Build order, each stage green on its own:
+
+| Stage | What                                                                               | Issue |
+| ----- | ---------------------------------------------------------------------------------- | ----- |
+| A     | the paging shape, and cursors in the list use cases                                | 03    |
+| B     | frozen wire types + the 8 read endpoints                                           | 01    |
+| C     | the 9 write endpoints, with approve/reject routed to the existing single emit site | 04    |
+| D     | `X-API-Key` resolving to the same `Identity`, plus CORS scoped to that path        | 02    |

@@ -1,6 +1,6 @@
 # The read half of the async contract: GET decisions and intakes
 
-Status: needs-triage
+Status: ready-for-agent
 
 `POST /api/v1/intakes` answers **202 with two ids and no way to read the outcome**. `docs/PLAN.md` names the
 missing endpoint by path — _"the caller polls `GET /api/v1/decisions?intake_id=…`"_ — so this is an unfinished
@@ -37,3 +37,9 @@ So the work is a transport edge plus wire types, not a feature.
 `GET /api/v1/decisions/{id}/approve` or any state change. Approval is a CAS against a decision row with an
 `approved_by`, and the one execution path is load-bearing (`grep -c` asserts a single emit call site); adding
 a second door to it belongs in its own issue with its own tenancy test.
+
+## Comments
+
+Scope confirmed as **stage B** of full parity: the eight read endpoints, not decisions alone —
+`GET /decisions`, `/decisions/{id}`, `/intakes`, `/rooms`, `/rooms/{id}/messages`, plus the three that exist.
+Blocked on 03, because a collection endpoint freezes its paging shape the moment it ships.

@@ -1,6 +1,6 @@
 # X-API-Key: a second auth path resolving to the same Identity
 
-Status: needs-triage
+Status: ready-for-agent
 
 Today the only way to authenticate is a better-auth session cookie, which a browser gets by signing in. So
 **no third party can call this API at all** — including the Laravel consumer that is the stated reason the
@@ -32,3 +32,13 @@ other. `@ea/domain/Identity` already holds `IdentityResolver` as the port, and `
   that path so the two cannot be confused.
 - **`HttpApiSecurity`** so the scheme appears in the OpenAPI document, or the docs page tells a client the API
   needs a cookie it cannot get.
+
+## Comments
+
+Confirmed for **stage D**, in the same pass as the endpoints rather than after them: 17 paths reachable only
+by a session cookie would be unusable by the client they are for.
+
+The open decision this issue names — a key is not a member, but `Identity` carries `MemberRole` — is now the
+first thing to settle, and it needs an ADR because "what can a key do" is an authorisation question with an
+audit consequence: a key that can approve a payment while recording a human's name in `approved_by` is worse
+than one that cannot approve at all.

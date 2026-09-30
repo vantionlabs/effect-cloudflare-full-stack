@@ -1,6 +1,6 @@
 # One paging shape for every collection, decided before the first one is frozen
 
-Status: needs-triage
+Status: ready-for-agent
 
 `ListQueue` and `ListIntakes` both clamp a caller-supplied `limit` against a hard ceiling — the right
 instinct, and already tested — but **neither returns a cursor**, so there is no way to ask for the next page.
@@ -27,3 +27,9 @@ more conventional and less likely to survive a hand-written PHP client.
 - Whether a total count is ever returned. It is a second query against a tenant-filtered table and almost
   nothing needs it; saying no once is cheaper than saying it per endpoint.
 - The ceiling, named in one place. Two use cases currently define their own `MAX_LIMIT`.
+
+## Comments
+
+**Stage A, and it goes first.** Decision taken as this issue recommended: keyed paging on `id` (UUIDv7, so
+`order by id desc` is chronological and a page does not drift as rows are inserted), `next_cursor` in the
+response **body** rather than a `Link` header, and one `MAX_LIMIT` named in one place instead of per use case.
