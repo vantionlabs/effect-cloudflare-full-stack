@@ -1,0 +1,322 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "effect-ai",
+    "version": "1.0.0",
+    "description": "Document decisioning: upload a document, and read back a decision with citations somebody can audit. Every response under /api/v1 is frozen — fields are added, never renamed or removed.\n\nUploads are asynchronous: POST /api/v1/intakes answers 202 with the ids to read the outcome by, because the decide pipeline runs on a queue after the response is written."
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "operationId": "health.get",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "HealthV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthV1Encoded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "operationId": "me.get",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "MeV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeV1Encoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intakes": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "operationId": "intake.upload",
+        "parameters": [
+          {
+            "name": "collection",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "policy",
+                "transactional"
+              ]
+            },
+            "required": true
+          },
+          {
+            "name": "filename",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "content_type",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          }
+        ],
+        "security": [],
+        "responses": {
+          "202": {
+            "description": "UploadAcceptedV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadAcceptedV1Encoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "UnsupportedDocumentV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnsupportedDocumentV1Encoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "effect_HttpApiError_UnauthorizedEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "Unauthorized"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "UnsupportedDocumentV1Encoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "UnsupportedDocumentV1"
+            ]
+          },
+          "filename": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "_tag",
+          "filename",
+          "content_type",
+          "supported"
+        ],
+        "additionalProperties": false
+      },
+      "UploadAcceptedV1Encoded": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string"
+          },
+          "intake_id": {
+            "type": "string"
+          },
+          "text_length": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "document_id",
+          "intake_id",
+          "text_length"
+        ],
+        "additionalProperties": false
+      },
+      "MeV1Encoded": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "reviewer",
+              "viewer"
+            ]
+          }
+        },
+        "required": [
+          "user_id",
+          "email",
+          "organization_id",
+          "role"
+        ],
+        "additionalProperties": false
+      },
+      "HealthV1Encoded": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "database": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DatabaseHealthV1Encoded"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "database"
+        ],
+        "additionalProperties": false
+      },
+      "DatabaseHealthV1Encoded": {
+        "type": "object",
+        "properties": {
+          "postgres_version": {
+            "type": "string"
+          },
+          "pgvector_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dutch_stemming": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "postgres_version",
+          "pgvector_version",
+          "dutch_stemming"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {}
+  },
+  "security": [],
+  "tags": [
+    {
+      "name": "health"
+    },
+    {
+      "name": "me"
+    },
+    {
+      "name": "intake"
+    }
+  ]
+}
