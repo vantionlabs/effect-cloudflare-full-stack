@@ -69,6 +69,12 @@ const work = (env: ProbeEnv) => ({
     await bump(env.COUNTS, "decide")
     return { outcome: "route_for_approval", citations: [], rationale: "omdat" }
   },
+  finish: async () => {
+    await bump(env.COUNTS, "finish")
+  },
+  fail: async () => {
+    await bump(env.COUNTS, "fail")
+  },
   settle: async () => {
     const attempt = await bump(env.COUNTS, "settle")
     if (attempt === 1) {
@@ -154,6 +160,7 @@ export const TerminalWorkflow = makeDecideWorkflow(terminalWork as never)
 export const RetryableWorkflow = makeDecideWorkflow(retryableWork as never)
 
 const PARAMS = {
+  eventId: "evt_probe",
   orgId: "org_probe",
   documentId: "doc_probe",
   vertical: "invoice"
@@ -189,6 +196,8 @@ export default {
         "settle",
         "sc_existing",
         "sc_extract",
+        "finish",
+        "fail",
         "term_existing",
         "term_parse",
         "retry_existing",

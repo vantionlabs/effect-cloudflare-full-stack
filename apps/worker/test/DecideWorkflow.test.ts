@@ -39,6 +39,8 @@ interface Counts {
   readonly settle: number
   readonly sc_existing: number
   readonly sc_extract: number
+  readonly finish: number
+  readonly fail: number
   readonly term_parse: number
   readonly retry_parse: number
 }
@@ -147,4 +149,25 @@ describe("the terminal-versus-retryable classification", () => {
     expect(await runToCompletion("retryable")).toBe("errored")
     expect((await counts()).retry_parse).toBeGreaterThan(1)
   }, 300_000)
+})
+
+describe("the events row's finish, which the queue can no longer write", () => {
+  /*
+   * The property the flip turns on. The queue acks the moment an instance starts, so if the instance did
+   * not finish the row, a decided document would sit at `processing` forever — and `events` exists because
+   * "Queues has no queryable history", so a row that misreports state is worse than no row.
+   */
+  it("marks the row done exactly once on success", async () => {
+    const observed = await counts()
+    expect(observed.finish).toBe(1)
+  })
+
+  it("records a failure on the row when the instance dies", async () => {
+    /*
+     * The terminal probe's `Parse` throws `NonRetryableError`, so the instance errors — and `run`'s catch
+     * must still record the reason before it goes. Best-effort and not a step on purpose: a step's failure
+     * is what brought us there, so retrying the recovery through the same machinery risks burying the cause.
+     */
+    expect((await counts()).fail).toBeGreaterThan(0)
+  })
 })

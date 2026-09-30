@@ -77,12 +77,13 @@ import { AssistantConversationsAgent } from "@ea/modules/policy/server/Assistant
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
 import { isTerminal } from "@ea/modules/shared/domain/Errors"
+import { EventId } from "@ea/modules/shared/domain/Event"
 import type { Retrieval } from "@ea/modules/shared/domain/Retrieval"
 import { CacheKv } from "@ea/modules/shared/server/Cache"
 import { EventQueue, QueueBus } from "@ea/modules/shared/server/Event"
 import { IdsUuid } from "@ea/modules/shared/server/Ids"
 import { TelemetryOtlp } from "@ea/modules/shared/server/Telemetry"
-import { describeFailure } from "@ea/modules/shared/use-cases/Event"
+import { describeFailure, markEventDone, markEventFailed } from "@ea/modules/shared/use-cases/Event"
 import { SweepEnqueueGap } from "@ea/modules/shared/use-cases/Event"
 import { RealtimeUpgrade, RoomsLive } from "@ea/realtime/Server"
 import anydocWasm from "@firecrawl/anydoc-wasm/anydoc_wasm_bg.wasm"
@@ -102,7 +103,7 @@ import {
 } from "./DecideWorkflow.ts"
 import { AuthenticatedLive } from "./platform/AuthenticatedLive.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
-import { dispatchEvent, documentTextFor } from "./platform/DispatchEvent.ts"
+import { cachedDocumentTextFor, dispatchEvent } from "./platform/DispatchEvent.ts"
 import { ConnectHyperdrive, ReactivityLive } from "./platform/HyperdriveConnect.ts"
 import { consumeBatch, type QueueBatchLike } from "./platform/QueueHandler.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
@@ -512,7 +513,14 @@ const decideWork = (env: Env, orgId: string): DecideWork => {
     existing: (params) => run(existingDecision(params)),
     // The same derivation the queue path runs, so a document parsed by the workflow and one parsed by the
     // queue are the same bytes — which is what `source_span` is checked against.
-    parse: (params) => run(documentTextFor(params.documentId)),
+    /*
+     * Through the CACHE, not the raw derivation.
+     *
+     * The step memo covers a retry within one instance; this covers two different events naming the same
+     * document, which the memo cannot see. The key carries the parser version AND whether OCR is
+     * configured, so a deployment that turns OCR on cannot read text produced without it.
+     */
+    parse: (params) => run(Effect.flatMap(mistralOcrConfig, (ocr) => cachedDocumentTextFor(params.documentId, ocr))),
     extract: (_params, documentText) => run(extractStep({ documentText })) as Promise<ExtractedFields>,
     retrieve: (_params, query) => run(retrieveStep(query)) as Promise<RetrievedPolicy>,
     decide: (_params, fields, policy) =>
@@ -524,7 +532,16 @@ const decideWork = (env: Env, orgId: string): DecideWork => {
         retrieval: retrieval as unknown as Retrieval,
         proposal: proposal as unknown as ProposedDecision,
         startedAt
-      }))
+      })),
+    /*
+     * The event row's finish, which the queue can no longer write.
+     *
+     * The SAME two functions `ConsumeEvent` uses, imported rather than rewritten: two definitions of "done"
+     * would drift, and the one that drifted would be the one nothing reads until an operator asks why a
+     * decision looks unfinished.
+     */
+    finish: (params) => run(Effect.asVoid(markEventDone(EventId.make(params.eventId)))),
+    fail: (params, reason) => run(Effect.asVoid(markEventFailed(EventId.make(params.eventId), reason)))
   }
 }
 
@@ -560,7 +577,7 @@ export default {
     env: Env,
     _ctx: ExecutionContext
   ): Promise<void> {
-    await getQueueRuntime(env).runPromise(consumeBatch(batch, dispatchEvent))
+    await getQueueRuntime(env).runPromise(consumeBatch(batch, dispatchEvent(env.DECIDE)))
   },
 
   /**

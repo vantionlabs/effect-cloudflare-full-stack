@@ -53,6 +53,15 @@ import type { Env } from "./platform/Bindings.ts"
  * rather than 16 ms of wasm.
  */
 export interface DecideParams {
+  /**
+   * The `events` row this instance works for, so the instance can finish it.
+   *
+   * After the flip the queue acks as soon as the instance starts, so the row's `done` or `failed` is the
+   * INSTANCE's to write — the queue no longer knows when the work ended. Carrying the id makes that
+   * possible, and it also lets an operator go the other way: the row stores the instance id, the instance
+   * knows the row.
+   */
+  readonly eventId: string
   readonly orgId: string
   readonly documentId: string
   readonly vertical: string
@@ -79,6 +88,10 @@ export interface DecideWork {
     proposal: ProposedValue,
     startedAt: number
   ) => Promise<DecideResult>
+  /** Marks the `events` row done. The queue cannot: it acked before this work existed. */
+  readonly finish: (params: DecideParams) => Promise<void>
+  /** Marks it failed, with the reason, so an operator reads it in the product rather than a dashboard. */
+  readonly fail: (params: DecideParams, reason: string) => Promise<void>
 }
 
 /**
@@ -159,6 +172,31 @@ export const makeDecideWorkflow = (work: (env: Env, orgId: string) => DecideWork
       step: WorkflowStep
     ): Promise<DecideResult> {
       const params = event.payload
+      try {
+        return await this.decide(params, step)
+      } catch (cause) {
+        /*
+         * Record the failure ON THE ROW before letting the instance die.
+         *
+         * Without this the row sits at `processing` forever and the only account of what went wrong is the
+         * Workflows dashboard — precisely the situation `events` exists to avoid ("Queues has no queryable
+         * history", now applied to Workflows). The queue used to write this; it acked long ago, so the
+         * instance has to.
+         *
+         * NOT a step, deliberately: a step's failure is what brought us here, and wrapping the recovery in
+         * the same retry machinery risks it failing for the same reason and burying the original cause. It
+         * is one UPDATE and it is allowed to be best-effort — if it fails, the row stays `processing` with
+         * an instance id on it, which is exactly what a stuck-work report looks for.
+         */
+        await work(this.env, params.orgId)
+          .fail(params, cause instanceof Error ? cause.message : String(cause))
+          .catch(() => {})
+        throw cause
+      }
+    }
+
+    /** The pipeline. Split out so the catch above covers every step without nesting them all in a try. */
+    private async decide(params: DecideParams, step: WorkflowStep): Promise<DecideResult> {
       const bound = work(this.env, params.orgId)
       const startedAt = Date.now()
 
@@ -226,10 +264,20 @@ export const makeDecideWorkflow = (work: (env: Env, orgId: string) => DecideWork
        * decision already written — so the insert became a claim (`on conflict … do nothing returning id`).
        * See `settleDecision`.
        */
-      return await step.do(
+      const result = await step.do(
         "Settle",
         RETRIES,
         () => bound.settle(params, extraction, retrieval, proposal, startedAt)
       ) as DecideResult
+
+      /*
+       * (5) Finish the event row. A step, so it retries and does not repeat.
+       *
+       * The queue acked the moment this instance started, so nothing else will ever mark this row done.
+       * Being a step matters both ways: a transient database failure must not leave a decided document
+       * looking unfinished forever, and a replay must not rewrite a finish that already happened.
+       */
+      await step.do("FinishEvent", RETRIES, () => bound.finish(params))
+      return result
     }
   }

@@ -2,3 +2,4 @@
 export * from "./DocumentBlobMissing.ts"
 export * from "./DocumentRowMissing.ts"
 export * from "./UnknownEventType.ts"
+export * from "./WorkflowNotStarted.ts"

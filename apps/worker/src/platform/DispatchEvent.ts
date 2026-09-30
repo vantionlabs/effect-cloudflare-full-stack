@@ -28,22 +28,20 @@
  * the only correct place given a per-invocation connection and a per-message tenant.
  */
 import { Db, withDatabase } from "@ea/database/Database"
-import { DocumentBlobMissing, DocumentRowMissing, UnknownEventType } from "@ea/modules/decision/domain/Errors"
-import { WorkflowEnginePg } from "@ea/modules/decision/server/Workflow"
-import { DecideDocumentLayer, DecideDocumentWorkflow } from "@ea/modules/decision/use-cases/Decision"
+import { CurrentOrg } from "@ea/domain/Identity"
+import {
+  DocumentBlobMissing,
+  DocumentRowMissing,
+  UnknownEventType,
+  WorkflowNotStarted
+} from "@ea/modules/decision/domain/Errors"
 import { ExecuteDecision } from "@ea/modules/decision/use-cases/Execution"
 import { Blobs, DocumentParser } from "@ea/modules/intake/domain/Document"
-import {
-  ANYDOC_PARSER_VERSION,
-  type MistralOcrConfig,
-  mistralOcrConfig,
-  ocrParserVersion
-} from "@ea/modules/intake/server/Document"
-import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
+import { ANYDOC_PARSER_VERSION, type MistralOcrConfig, ocrParserVersion } from "@ea/modules/intake/server/Document"
 import { readThrough } from "@ea/modules/shared/domain/Cache"
 import type { QueueMessage } from "@ea/modules/shared/domain/Event"
 import { ConsumeEvent, type EventRow } from "@ea/modules/shared/use-cases/Event"
-import { Effect, Layer, Schema } from "effect"
+import { Effect, Schema } from "effect"
 
 /**
  * The payload shapes, decoded rather than trusted.
@@ -62,6 +60,18 @@ const ExecutePayload = Schema.Struct({
   decisionId: Schema.String,
   action: Schema.Literals(["dry_run", "post_to_ledger", "schedule_payment"])
 })
+
+/**
+ * The slice of the `DECIDE` Workflow binding this file uses.
+ *
+ * Structural for the same reason every other binding here is: it keeps the shape to what is actually called
+ * and lets `Bindings.ts` take its type from the caller rather than the reverse.
+ */
+export interface DecideBinding {
+  readonly create: (
+    options: { readonly id: string; readonly params: unknown }
+  ) => Promise<{ readonly id: string }>
+}
 
 /** An event type this build does not know. Terminal: a retry cannot teach it. */
 
@@ -83,14 +93,14 @@ const ExecutePayload = Schema.Struct({
  */
 
 /*
- * Exported so the Cloudflare Workflow's `Parse` step runs the SAME derivation the queue path runs.
+ * Private again: the Workflow's `Parse` step goes through `cachedDocumentTextFor` below, not this.
  *
  * It stays in `apps/worker` rather than moving to a slice, and that is a boundary decision rather than
  * laziness: it needs `Blobs` and `DocumentParser` (intake's ports) and fails with `DocumentRowMissing` and
  * `DocumentBlobMissing` (decision's errors), so any slice it moved into would have to import another
  * slice's domain. The app is the one place allowed to name both.
  */
-export const documentTextFor = (documentId: string) =>
+const documentTextFor = (documentId: string) =>
   Effect.gen(function*() {
     const db = yield* Db
     const blobs = yield* Blobs
@@ -156,31 +166,64 @@ const documentTextKey = (documentId: string, ocr: MistralOcrConfig | undefined) 
 /** One hour. Long enough to cover a redelivery storm, short enough that a stale entry costs nothing. */
 const DOCUMENT_TEXT_TTL_SECONDS = 3600
 
-const cachedDocumentTextFor = (documentId: string, ocr: MistralOcrConfig | undefined) =>
+/*
+ * Exported so the Workflow's `Parse` step goes through the SAME cache the queue path used to.
+ *
+ * The step memo covers a retry within one instance; this covers two different events naming one document,
+ * which the memo cannot see. Both are needed, and they key on the same parser version.
+ */
+export const cachedDocumentTextFor = (documentId: string, ocr: MistralOcrConfig | undefined) =>
   readThrough({
     key: documentTextKey(documentId, ocr),
     ttlSeconds: DOCUMENT_TEXT_TTL_SECONDS,
     compute: documentTextFor(documentId)
   })
 
-/** Maps one event row to the work it names. Requires `CurrentOrg`, which `ConsumeEvent` supplies. */
-const workFor = (row: EventRow) =>
+/**
+ * Maps one event row to the work it names. Requires `CurrentOrg`, which `ConsumeEvent` supplies.
+ *
+ * Takes the `DECIDE` binding as a parameter rather than reaching for `env`: the same inversion every
+ * adapter uses, and it keeps this file testable without a Worker.
+ */
+const workFor = (startDecide: DecideBinding) => (row: EventRow) =>
   Effect.gen(function*() {
     switch (row.type) {
       case "document.decide": {
         const payload = yield* Schema.decodeUnknownEffect(DecidePayload)(row.payload)
+        const orgId = yield* CurrentOrg
         /*
-         * Read per message rather than captured once, because it decides the CACHE KEY.
-         * `Config` is memoised by the provider, so this is a lookup and not an environment read.
+         * **The flip.** The pipeline is no longer run here — a Workflow instance is started and this
+         * returns, and the message is acked.
+         *
+         * Three things move with it, and each is why this was not a one-line change:
+         *
+         * - **The row's finish belongs to the instance.** Returning normally would have `ConsumeEvent`
+         *   mark the event `done` while the decision was still being made, which is the one thing this
+         *   table must not do. Hence `WorkflowStarted`.
+         * - **The retry policy moves to the Workflow.** The message is acked, so Queues will not redeliver
+         *   it; the instance's per-step retries own transient failure, and `NonRetryableError` owns terminal.
+         * - **The tenant travels in the params**, because an instance has no session and no event row.
+         *
+         * The instance id is DERIVED from the event, not generated: Cloudflare rejects a duplicate id, so a
+         * redelivery that somehow reaches here cannot start a second instance for the same event. That is
+         * the same "derived, never generated" rule the decide key follows, applied one layer out.
          */
-        const ocr = yield* mistralOcrConfig
-        const documentText = yield* cachedDocumentTextFor(payload.documentId, ocr)
-        yield* DecideDocumentWorkflow.execute({
-          documentId: payload.documentId,
-          documentText,
-          vertical: payload.vertical
+        const instance = yield* Effect.tryPromise({
+          try: () =>
+            startDecide.create({
+              id: `event-${row.id}`,
+              params: {
+                eventId: row.id,
+                orgId,
+                documentId: payload.documentId,
+                vertical: payload.vertical
+              }
+            }),
+          // Transient by default: a failure to CREATE an instance means no work was started, so a
+          // redelivery is exactly right and `isTerminal` will not classify this as terminal.
+          catch: (cause) => new WorkflowNotStarted({ eventId: row.id, reason: String(cause) })
         })
-        return
+        return { _tag: "WorkflowStarted" as const, workflowInstanceId: instance.id }
       }
       case "decision.execute": {
         const payload = yield* Schema.decodeUnknownEffect(ExecutePayload)(row.payload)
@@ -197,28 +240,21 @@ const workFor = (row: EventRow) =>
       default:
         return yield* Effect.fail(new UnknownEventType({ type: row.type }))
     }
-  }).pipe(
-    /*
-     * ONE provide, with the dependency direction written down.
-     *
-     * Built per message: see the module docstring for why none of these can be memoised per isolate.
-     *
-     * This was three chained `Effect.provide` calls, which the Effect language service flags
-     * (`multipleEffectProvide`) because each chained provide builds its layer against its own memo
-     * map — so a dependency shared by two of them can be constructed twice, and anything scoped gets
-     * a second lifecycle. `DecideDocumentLayer` genuinely requires both `WorkflowEngine` and
-     * `PolicySearch`, so plain `Layer.mergeAll` of all three would NOT work: merge puts layers
-     * side by side, it does not wire one into another.
-     *
-     * `provideMerge` is the faithful form — it feeds the two dependencies into `DecideDocumentLayer`
-     * AND keeps their outputs visible to the effect, which is what the chain did.
-     */
-    Effect.provide(
-      DecideDocumentLayer.pipe(
-        Layer.provideMerge(Layer.mergeAll(WorkflowEnginePg, PolicySearchLive))
-      )
-    )
-  )
+  })
+
+/*
+ * **The provide block is gone, and that is the flip's dividend.**
+ *
+ * It used to build `DecideDocumentLayer` over `WorkflowEnginePg` and `PolicySearchLive` PER MESSAGE, with a
+ * module docstring explaining why none of it could be memoised: the engine captured a connection and a
+ * tenant at layer build, because `WorkflowEngine.Encoded` forces every method to have `R = never`. That was
+ * not a workaround — it was the only correct place given a per-invocation connection and a per-message
+ * tenant — and it existed entirely because the pipeline ran here.
+ *
+ * It does not run here any more. Starting a Workflow instance needs a binding and an id, so the queue path
+ * needs no engine, no policy port and no pipeline layer. `decision.execute` needs only what the app layer
+ * already provides.
+ */
 
 /**
  * Handles one message end to end: one connection, one tenant, one recorded outcome.
@@ -227,8 +263,8 @@ const workFor = (row: EventRow) =>
  * the tenant lookup, the workflow engine, the activities — needs that one connection. One per message,
  * which is what the Workers six-simultaneous-connection limit and the batch semaphore are sized against.
  */
-export const dispatchEvent = (message: QueueMessage) =>
-  withDatabase(ConsumeEvent(message.eventId, workFor)).pipe(
+export const dispatchEvent = (startDecide: DecideBinding) => (message: QueueMessage) =>
+  withDatabase(ConsumeEvent(message.eventId, workFor(startDecide))).pipe(
     /*
      * A failure to even record the outcome is a RETRY, not a crash.
      *

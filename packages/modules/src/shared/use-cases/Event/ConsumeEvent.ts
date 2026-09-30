@@ -43,6 +43,18 @@ export type Disposition =
   | { readonly _tag: "Terminal"; readonly reason: string }
   /** Transient: left for Queues to redeliver under its own backoff. */
   | { readonly _tag: "Retry"; readonly reason: string }
+  /**
+   * Handed to a Cloudflare Workflow. The message is acked; the row stays `processing`.
+   *
+   * The distinction that makes the flip safe. Without it, `work` returning successfully means "the work is
+   * done" and the row is marked `done` — which after the flip would be a lie, because all that succeeded
+   * was *starting* an instance. A row reading `done` while a decision is still being made would break the
+   * one thing this table exists for: `events` is here because "Queues has no queryable history", so a row
+   * that misreports state is worse than no row.
+   *
+   * The instance id is recorded on the row, so `processing` is answerable rather than merely true.
+   */
+  | { readonly _tag: "HandedOff"; readonly workflowInstanceId: string }
 
 /**
  * What gets written to `events.error`, and read by whoever is asked why a document was not decided.
@@ -62,12 +74,47 @@ export const describeFailure = (failure: unknown): string => {
 }
 
 /**
+ * Marks an event finished, and marks one failed.
+ *
+ * Extracted because the queue is no longer the only thing that finishes an event: after the flip, a
+ * Cloudflare Workflow instance owns the finish for `document.decide`, and it must write exactly what the
+ * queue used to write. Two definitions of "done" would drift, and the one that drifted would be the one
+ * nothing reads until an operator asks why a decision looks unfinished.
+ */
+export const markEventDone = (eventId: EventId) =>
+  Effect.flatMap(Db, (db) =>
+    db.scopedForOrg((sql, orgId) =>
+      sql`
+        update events set status = 'done', finished_at = now()
+         where id = ${eventId} and organization_id = ${orgId}
+      `
+    ))
+
+/** As `markEventDone`, for a failure. The reason is recorded IN THE PRODUCT, not only in a dashboard. */
+export const markEventFailed = (eventId: EventId, reason: string) =>
+  Effect.flatMap(Db, (db) =>
+    db.scopedForOrg((sql, orgId) =>
+      sql`
+        update events set status = 'failed', error = ${reason}, finished_at = now()
+         where id = ${eventId} and organization_id = ${orgId}
+      `
+    ))
+
+/**
  * Runs `work` for an event and records what happened.
  *
  * `work` receives the freshly read row. Its failures are classified by `isTerminal`, and the default for
  * an unrecognised failure is to RETRY — the safe direction, because paying twice beats silently dropping
  * a document.
  */
+/**
+ * What `work` reports back.
+ *
+ * `void` means it finished, which keeps every existing handler unchanged. A `WorkflowStarted` means it
+ * handed the work to a Cloudflare Workflow instance, and the row must NOT be marked done.
+ */
+export type WorkOutcome = void | { readonly _tag: "WorkflowStarted"; readonly workflowInstanceId: string }
+
 export const ConsumeEvent = <R>(
   eventId: EventId,
   /**
@@ -75,7 +122,7 @@ export const ConsumeEvent = <R>(
    * supplies it — so a caller may require the tenant without having to know it, which is the whole point
    * of resolving it from the row.
    */
-  work: (row: EventRow) => Effect.Effect<void, unknown, R>
+  work: (row: EventRow) => Effect.Effect<WorkOutcome, unknown, R>
 ) =>
   Effect.gen(function*() {
     const db = yield* Db
@@ -108,7 +155,7 @@ export const ConsumeEvent = <R>(
 /** The rest of the work, with the tenant established. Split out so `CurrentOrg` is provided exactly once. */
 const handle = <R>(
   eventId: EventId,
-  work: (row: EventRow) => Effect.Effect<void, unknown, R>
+  work: (row: EventRow) => Effect.Effect<WorkOutcome, unknown, R>
 ) =>
   Effect.gen(function*() {
     const db = yield* Db
@@ -146,12 +193,29 @@ const handle = <R>(
     const result = yield* Effect.result(work(row))
 
     if (result._tag === "Success") {
-      yield* db.scopedForOrg((sql, orgId) =>
-        sql`
-          update events set status = 'done', finished_at = now()
-           where id = ${eventId} and organization_id = ${orgId}
-        `
-      )
+      const outcome = result.success
+      /*
+       * Handed off: record WHICH instance and leave the row `processing`.
+       *
+       * The instance marks the row finished when it is actually finished. If it dies without doing so —
+       * evicted, terminated, or failed in a way its own catch did not see — the row stays `processing` with
+       * an instance id on it, which is exactly what a stuck-work report needs and is the reason the id is
+       * stored rather than merely logged.
+       */
+      if (outcome !== undefined && outcome._tag === "WorkflowStarted") {
+        yield* db.scopedForOrg((sql, orgId) =>
+          sql`
+            update events set workflow_instance_id = ${outcome.workflowInstanceId}
+             where id = ${eventId} and organization_id = ${orgId}
+          `
+        )
+        return {
+          _tag: "HandedOff",
+          workflowInstanceId: outcome.workflowInstanceId
+        } satisfies Disposition
+      }
+
+      yield* markEventDone(eventId)
       return { _tag: "Done" } satisfies Disposition
     }
 
@@ -161,12 +225,7 @@ const handle = <R>(
     if (isTerminal(failure)) {
       // Recorded in the product, not just in a dashboard: `failed` rows are queryable beside the
       // documents they concern, which is the whole reason this table exists.
-      yield* db.scopedForOrg((sql, orgId) =>
-        sql`
-          update events set status = 'failed', error = ${reason}, finished_at = now()
-           where id = ${eventId} and organization_id = ${orgId}
-        `
-      )
+      yield* markEventFailed(eventId, reason)
       return { _tag: "Terminal", reason } satisfies Disposition
     }
 

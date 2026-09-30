@@ -92,12 +92,30 @@ export const consumeBatch = <R>(
               eventId: message.eventId,
               type: message.type,
               disposition: disposition._tag,
-              ...(disposition._tag === "Done" ? {} : { reason: disposition.reason })
+              /*
+               * Three shapes now, so the annotation is a switch rather than a negation.
+               *
+               * `HandedOff` carries an instance id instead of a reason, and logging it is the link between
+               * a queue message and the Workflow that took over — without which the only record of that
+               * hand-off would be a database column nobody thought to read.
+               */
+              ...(disposition._tag === "Terminal" || disposition._tag === "Retry"
+                ? { reason: disposition.reason }
+                : disposition._tag === "HandedOff"
+                ? { workflowInstanceId: disposition.workflowInstanceId }
+                : {})
             })
           )
 
           return yield* Effect.sync(() =>
-            // Terminal is acked: it is recorded, and it would fail identically next time.
+            /*
+             * Only a transient failure is retried.
+             *
+             * Terminal is acked: it is recorded, and it would fail identically next time. **HandedOff is
+             * acked too**, and that is the flip's central change — the message's job was to start the work,
+             * and it did. Retrying it would start a SECOND instance for the same event; the Workflow's own
+             * retry policy owns what happens after.
+             */
             disposition._tag === "Retry" ? raw.retry() : raw.ack()
           )
         })),
