@@ -53,7 +53,15 @@ const runToCompletion = async (which?: "short" | "terminal" | "retryable"): Prom
   const { id } = await started.json() as { readonly id: string }
 
   const suffix = which === undefined ? "" : `&which=${which}`
-  for (let attempt = 0; attempt < 120; attempt = attempt + 1) {
+  /*
+   * 240 polls at 500 ms is a two-minute budget, and it is sized from the RETRY POLICY rather than guessed.
+   *
+   * `RETRIES` is production's — 5 attempts, exponential from 2 s — so a step that fails every time waits
+   * 2 + 4 + 8 + 16 + 32 = 62 s before the instance errors. The first version allowed 60 s, which is under
+   * that by two seconds: it passed locally and reported `timed out` in CI, where everything is a little
+   * slower. A budget derived from the thing under test would have been right the first time.
+   */
+  for (let attempt = 0; attempt < 240; attempt = attempt + 1) {
     const body = await (await server.fetch(`/status?id=${id}${suffix}`)).json() as { readonly status: string }
     if (["complete", "errored", "terminated"].includes(body.status)) return body.status
     await new Promise((resolve) => setTimeout(resolve, 500))
@@ -138,5 +146,5 @@ describe("the terminal-versus-retryable classification", () => {
      */
     expect(await runToCompletion("retryable")).toBe("errored")
     expect((await counts()).retry_parse).toBeGreaterThan(1)
-  }, 180_000)
+  }, 300_000)
 })
