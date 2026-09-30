@@ -25,7 +25,9 @@
  */
 import { CurrentOrg } from "@ea/domain/Identity"
 import { AgentModel } from "@ea/modules/policy/domain/Ask"
+import { UngroundedAnswer } from "@ea/modules/policy/domain/Errors"
 import { PolicySearch } from "@ea/modules/shared/domain/Retrieval"
+import { containsVerbatim } from "@ea/modules/shared/domain/Verbatim"
 import { Effect, Schema } from "effect"
 import { LanguageModel, Prompt, Tool, Toolkit } from "effect/ai"
 
@@ -39,6 +41,37 @@ const MAX_STEPS = 4
 
 /** How many clauses one search returns. The decide path uses 8; a reviewer reads, so fewer and better. */
 const SEARCH_LIMIT = 5
+
+/**
+ * A citation, in the same shape the decide path uses and for the same reason: a `chunk_id` to check against, and
+ * a verbatim excerpt to check with.
+ *
+ * `chunk_id` rather than only `clause_ref`, because a clause reference is text the model can invent that looks
+ * plausible, while a chunk id is an opaque value it can only have seen by calling the tool.
+ */
+export class AskCitation extends Schema.Class<AskCitation>("AskCitation")({
+  chunk_id: Schema.String,
+  clause_ref: Schema.NullOr(Schema.String),
+  /** The part relied on, quoted. Checked with `containsVerbatim` against what the tool actually returned. */
+  excerpt: Schema.String
+}) {}
+
+/**
+ * The final answer, as an object rather than prose.
+ *
+ * **The loop used to end at `response.text`, and that was the hole.** The model was *told* to cite; nothing
+ * checked that it had, or that what it cited existed. A structured final pass makes the citations addressable,
+ * which is what makes them checkable — the same move the decide path makes with `ProposedDecision`.
+ *
+ * `citations` is declared BEFORE `answer`, which is not cosmetic: a model emits keys in schema order, so it
+ * names the clauses it is relying on before it writes the prose that relies on them. That ordering accounted for
+ * 25 of 66 grounding failures the other way round in the predecessor project — the measurement recorded in
+ * ADR-0008.
+ */
+export class GroundedAnswer extends Schema.Class<GroundedAnswer>("GroundedAnswer")({
+  citations: Schema.Array(AskCitation),
+  answer: Schema.String
+}) {}
 
 /**
  * The one tool. Retrieval, and nothing else — no write, no execute, no database access of any kind.
@@ -117,10 +150,48 @@ Rules:
 
 export interface AskResult {
   readonly answer: string
+  /** The clauses relied on, every one of them verified against what the tool actually returned. */
+  readonly citations: ReadonlyArray<AskCitation>
   /** How many tool calls it took. Reported so a loop that always hits the bound is visible. */
   readonly steps: number
   /** True when the bound stopped it rather than the model finishing. The answer is then partial. */
   readonly truncated: boolean
+}
+
+/**
+ * Every citation must name a chunk the tool returned, and quote it verbatim.
+ *
+ * **This is the chat surface's version of rails 1 and 2, and it exists because without it this endpoint is the
+ * way around them.** The decide path refuses a decision whose excerpt is not verbatim in the cited chunk; an
+ * agent that can put an unverified quote in front of the same reviewer undoes that, and does it in the surface
+ * that reads most like a conversation and least like a claim.
+ *
+ * `containsVerbatim` is the SAME function the rails use and the console highlights with — whitespace-normalised
+ * and case-folded, so a re-wrapped line still matches, while punctuation, digits and currency symbols must not
+ * differ. Those are the things worth lying about.
+ *
+ * An answer with NO citations passes: "the corpus does not settle this" is a correct answer and the prompt asks
+ * for it. What must not pass is a citation that cannot be checked.
+ */
+const ungroundedCitations = (
+  citations: ReadonlyArray<AskCitation>,
+  served: ReadonlyMap<string, string>
+): ReadonlyArray<string> => {
+  const reasons: Array<string> = []
+  for (const citation of citations) {
+    const content = served.get(citation.chunk_id)
+    if (content === undefined) {
+      reasons.push(
+        `citation: chunk ${citation.chunk_id} was never returned by a search for this question` +
+          (citation.clause_ref === null ? "" : ` (cited as ${citation.clause_ref})`)
+      )
+      continue
+    }
+    if (!containsVerbatim(citation.excerpt, content)) {
+      reasons.push(`citation: excerpt is not verbatim in ${citation.clause_ref ?? citation.chunk_id}`)
+    }
+  }
+  return reasons
 }
 
 /**
@@ -144,6 +215,16 @@ export const AskCorpus = (question: string) =>
       { role: "user", content: [{ type: "text", text: question }] }
     ])
 
+    /*
+     * What the tool actually returned, accumulated across every search: chunk id → content.
+     *
+     * Read from `response.toolResults` rather than recorded inside the toolkit, on purpose. The handlers are
+     * built by the caller (they must have `R = never`), so a recorder there would be shared mutable state
+     * reaching across a layer boundary — and the loop already has the parts in hand. This map is the ONLY
+     * definition of "was retrieved for this question", which is what makes the check below meaningful.
+     */
+    const served = new Map<string, string>()
+
     for (let step = 1; step <= MAX_STEPS; step++) {
       const response = yield* Effect.provideService(
         LanguageModel.generateText({ prompt, toolkit: AskToolkit }),
@@ -152,10 +233,50 @@ export const AskCorpus = (question: string) =>
       )
       prompt = Prompt.concat(prompt, Prompt.fromResponseParts(response.content))
 
+      for (const part of response.toolResults) {
+        const result = part.result as { readonly clauses?: ReadonlyArray<{ chunk_id: string; content: string }> }
+        for (const clause of result.clauses ?? []) served.set(clause.chunk_id, clause.content)
+      }
+
       const calledATool = response.content.some((part) => part.type === "tool-call")
       if (!calledATool) {
+        /*
+         * The model has stopped searching and wants to answer. One more call, structured — this is where the
+         * free-text answer used to be returned unchecked.
+         *
+         * The extra model call is the cost of the citations being addressable, and it is bounded: one, after a
+         * loop that is already bounded at `MAX_STEPS`. Paying it on every question is cheaper than the failure
+         * it prevents, which is an unverifiable quote shown to somebody deciding whether to pay an invoice.
+         */
+        const structured = yield* Effect.provideService(
+          LanguageModel.generateObject({
+            prompt: Prompt.concat(
+              prompt,
+              Prompt.make([{
+                role: "user",
+                content: [{
+                  type: "text",
+                  text: "Now give your final answer as an object. For every clause you relied on, include its " +
+                    "chunk_id exactly as the tool returned it, its clause_ref, and the exact words you relied " +
+                    "on as excerpt. If the corpus does not settle the question, return an empty citations " +
+                    "array and say what is missing."
+                }]
+              }])
+            ),
+            schema: GroundedAnswer,
+            objectName: "GroundedAnswer"
+          }),
+          LanguageModel.LanguageModel,
+          model
+        )
+
+        const answer = structured.value as GroundedAnswer
+        const reasons = ungroundedCitations(answer.citations, served)
+        if (reasons.length > 0) return yield* Effect.fail(new UngroundedAnswer({ reasons }))
+
         return {
-          answer: response.text,
+          answer: answer.answer,
+          citations: answer.citations,
           steps: step,
           truncated: false
         } satisfies AskResult
@@ -170,6 +291,7 @@ export const AskCorpus = (question: string) =>
      */
     return {
       answer: "",
+      citations: [],
       steps: MAX_STEPS,
       truncated: true
     } satisfies AskResult

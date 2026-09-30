@@ -42,3 +42,29 @@ Missing, both bullets of "done looks like":
   This is the one that should block: the decide path enforces grounding through rails, and a chat surface that
   renders an ungrounded citation is a way around them. `VerifySpans` and `containsVerbatim` already exist to
   be reused, so this is a test plus a refusal, not new machinery.
+
+**The grounding half is done (2026-09-30).** The loop used to end at `response.text`: the model was _told_ to
+cite and nothing checked that it had, or that what it cited existed. So the chat surface was the way around the
+rails the decide path enforces — in the surface that reads most like a conversation and least like a claim.
+
+What changed: the loop now ends in a **structured pass** (`generateObject` over `GroundedAnswer`), which makes
+the citations addressable and therefore checkable. Every citation must name a `chunk_id` the tool actually
+returned _for this question_ and quote it verbatim, checked with the **same `containsVerbatim`** the rails use
+and the console highlights with. A failure refuses the whole answer with `UngroundedAnswer`, naming every
+reason — not just the first, and not a weakened answer with the bad citation stripped, because the prose relies
+on the claim.
+
+`chunk_id` rather than `clause_ref` is the load-bearing choice: a clause reference is text a model can invent
+and have look plausible, while a chunk id is a value it can only have seen by calling the tool.
+
+Costs, stated: **one extra model call per question** (bounded — one, after a loop already bounded at
+`MAX_STEPS`), and `steps` now deliberately differs from the model-call count, because `steps` means "how many
+times it went looking" and the structured pass is not a search.
+
+Two edges needed fixing to keep the refusal alive: both `AskRpcLive` and `AskHttp` used `Effect.orDie`, which
+would have turned `UngroundedAnswer` into a 500 and destroyed it. `catchTag("AiError", die)` now kills only the
+provider's failure — the same mistake `Serve.ts` records making on the intake path, where a typed 415 became a
+crash.
+
+**Still open: streaming.** `AskCorpus` returns a value; nothing streams. For a question answered over a corpus
+that is a user-visible difference, and it is the remaining bullet of "done looks like".

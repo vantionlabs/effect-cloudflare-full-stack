@@ -41,6 +41,20 @@ export const AskRpcLive = AskRpcs.toLayer(
            */
           Effect.provide(AskToolkitLive.pipe(Layer.provideMerge(PolicySearchLive)))
         )
-      ).pipe(Effect.orDie)
+      ).pipe(
+        /*
+         * `catchTag("AiError")`, NOT `orDie` — and this is the second time that distinction has mattered here.
+         *
+         * `orDie` discards the WHOLE error channel, so `UngroundedAnswer` would have died with the provider
+         * errors and become a 500: the refusal that exists to stop an unverifiable citation reaching a reviewer
+         * would have been reported as a server fault. `Serve.ts` records the same mistake being made and caught
+         * on the intake path.
+         *
+         * An `AiError` genuinely is a defect from a caller's point of view: the remedy for "the model was
+         * unavailable" is to retry, which a 500 already says, and freezing a provider's failure shape into a
+         * published contract would promise not to change something we do not control.
+         */
+        Effect.catchTag("AiError", Effect.die)
+      )
   })
 )

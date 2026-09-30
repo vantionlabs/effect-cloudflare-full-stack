@@ -14,6 +14,7 @@
  * the tenant capture, which is asserted by a test in `policy/domain/test/AskCorpus.test.ts` rather than by
  * being written once.
  */
+import { UngroundedAnswerV1 } from "@ea/modules/policy/domain/Ask"
 import { AskCorpus, AskToolkitLive } from "@ea/modules/policy/use-cases/Ask"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
 import { Effect, Layer } from "effect"
@@ -34,11 +35,10 @@ export const AskHttp = HttpApiBuilder.group(
         )
       ).pipe(
         /*
-         * `orDie` on the model's failure, matching the RPC edge. An `AiError` is not in the v1 contract and a
-         * client cannot act on it differently — the remedy for "the model was unavailable" is to retry, which a
-         * 500 already says. Freezing a provider's failure shape into a public schema would promise not to change
-         * something we do not control.
+         * The provider's failure dies; the REFUSAL does not. `orDie` would have discarded both — the mistake
+         * `Serve.ts` records making on the intake path, where a typed 415 became a crash.
          */
-        Effect.orDie
+        Effect.catchTag("AiError", Effect.die),
+        Effect.catchTag("UngroundedAnswer", (error) => Effect.fail(new UngroundedAnswerV1({ reasons: error.reasons })))
       ))
 )

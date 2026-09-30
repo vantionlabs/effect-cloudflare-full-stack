@@ -2152,12 +2152,43 @@
                     },
                     "truncated": {
                       "type": "boolean"
+                    },
+                    "citations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "chunk_id": {
+                            "type": "string"
+                          },
+                          "clause_ref": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "excerpt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "chunk_id",
+                          "clause_ref",
+                          "excerpt"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
                     "answer",
                     "steps",
-                    "truncated"
+                    "truncated",
+                    "citations"
                   ],
                   "additionalProperties": false
                 }
@@ -2170,6 +2201,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "UngroundedAnswerV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UngroundedAnswerV1Encoded"
                 }
               }
             }
@@ -2211,6 +2252,28 @@
         },
         "required": [
           "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "UngroundedAnswerV1Encoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "UngroundedAnswerV1"
+            ]
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "_tag",
+          "reasons"
         ],
         "additionalProperties": false
       },
