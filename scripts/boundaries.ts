@@ -56,17 +56,24 @@ const COMPOSITION_ROOT = new Set([
 
 const MODULES = "packages/modules/"
 
-/** `packages/modules/<slice>/<role>/...` → `<slice>`, or undefined outside the modules package. */
-const sliceOf = (path: string): string | undefined => path.startsWith(MODULES) ? path.split("/")[2] : undefined
+/*
+ * The package root, not `packages/modules/src/`, on purpose: every rule below keys on this prefix and must
+ * keep covering `test/` as well as `src/`. Only the POSITIONAL parsing knows about `src/`, which is why the
+ * two accessors below carry the offset and nothing else does.
+ */
+const SRC = 2
+
+/** `packages/modules/src/<slice>/<ring>/...` → `<slice>`, or undefined outside the modules package. */
+const sliceOf = (path: string): string | undefined => path.startsWith(MODULES) ? path.split("/")[SRC + 1] : undefined
 
 /**
- * `packages/modules/<slice>/<role>/...` → `<role>`.
+ * `packages/modules/src/<slice>/<ring>/...` → `<ring>`.
  *
  * The ring is a directory rather than a package now, so every rule that could once lean on a
  * package name keys on this instead — which makes this script the only thing keeping the rings
  * apart. See ADR-0011 for why that trade was taken.
  */
-const ringOf = (path: string): string | undefined => path.startsWith(MODULES) ? path.split("/")[3] : undefined
+const ringOf = (path: string): string | undefined => path.startsWith(MODULES) ? path.split("/")[SRC + 2] : undefined
 
 /** `@ea/modules/<slice>/<role>/...` → `<slice>`. */
 const sliceOfSpecifier = (specifier: string): string | undefined =>
@@ -301,8 +308,8 @@ const rules: ReadonlyArray<Rule> = [
     // composition points, which exist precisely to name every slice — `shared/api` composes the
     // groups into one contract, and `Migrations.ts` is the one place migration order is decided.
     permitted: (path, specifier) => {
-      if (path.startsWith("packages/modules/shared/api/")) return true
-      if (path === "packages/modules/shared/tables/Migrations/Migrations.ts") return true
+      if (path.startsWith("packages/modules/src/shared/api/")) return true
+      if (path === "packages/modules/src/shared/tables/Migrations/Migrations.ts") return true
       const target = sliceOfSpecifier(specifier)
       return target === undefined || target === "shared" || target === sliceOf(path)
     }
@@ -517,7 +524,7 @@ for (const unscoped of tenantQueries.found) {
  */
 const CONSUME_EVENT_ALLOWED = new Set([
   "apps/worker/src/platform/DispatchEvent.ts",
-  "packages/modules/shared/use-cases/Event/index.ts"
+  "packages/modules/src/shared/use-cases/Event/index.ts"
 ])
 
 const consumeEventImporters = (): Array<string> => {

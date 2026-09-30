@@ -102,6 +102,23 @@ assembles `RpcV1`. A transport has no business knowing what a `QueueChanged` is.
 - **Import paths get shorter and truer.** `@ea/modules/shared/tables/Database` becomes `@ea/database` — a path that
   currently says "shared tables" for something that is neither.
 
+## Added after the split: every package keeps its source under `src/`
+
+Not part of the original decision, and worth recording as a revision rather than a silent edit. The four
+extractions inherited the older shape — concept folders directly at the package root — because that is what
+`packages/api` and `packages/modules` already did. The seven packages now all use `src/`, with `test/` beside
+it, and the exports map absorbs the change (`"./*": "./src/*/index.ts"`), so no import path moved.
+
+The argument for it is that a package root is now a place where several kinds of thing meet: a manifest, three
+tsconfigs, a build-info directory, a `test/` tree and the code. `src/` is the one boundary that says which of
+those is the package. The argument against was consistency with what existed, and that argument expired the
+moment the split doubled the number of package roots a reader has to recognise.
+
+What it cost: `scripts/boundaries.ts` reads positional path segments to find a slice and a ring, so it carries
+a `SRC` offset; the vitest globs name `src/`; and `scripts/auth-schema.ts` points at two files by path. All
+mechanical, all covered by the gates — the check that mattered was `dep:check` still reporting 1015 file-rule
+checks afterwards, because a silently-unmatched rule is the failure mode here, not a broken import.
+
 ## Revisit when
 
 - **A capability package starts wanting a feature type.** That is the signal the cut was wrong, not that the rule

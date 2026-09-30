@@ -62,8 +62,28 @@ copy of the answers.
 
 ## Filename conventions
 
+**Every package keeps its source under `src/`, with `test/` beside it.** So `packages/domain/src/Identity/`,
+`packages/api/src/v1/`, `packages/modules/src/chat/`. The exports map is `"./*": "./src/*/index.ts"`, which
+keeps the import path unchanged — `@ea/domain/Identity`, never `@ea/domain/src/Identity` — so `src/` is a
+layout fact and not something a caller has to know.
+
+Two places tests live, and the rule is which code they sit beside:
+
+- **A package-level `test/`, beside `src/`**, when the package is one thing: `packages/realtime/test/`,
+  `packages/domain/test/`, `packages/api/test/`.
+- **Nested inside the ring**, when the package holds many slices: `packages/modules/src/chat/tables/test/`.
+  A ring is the unit that gets tested, so the tests travel with it rather than being hoisted away from it.
+
+`tsconfig.src.json` includes `src/**/*.ts` and excludes `**/test/**`; `tsconfig.test.json` includes
+`**/test/**/*.ts`, which catches both shapes without naming either. **`rootDir` stays the package**, not
+`src`, because both trees live under it.
+
+One consequence worth knowing before editing `scripts/boundaries.ts`: its rules key on the package prefix
+(`packages/modules/`) so they still cover `test/`, but `sliceOf` and `ringOf` read POSITIONAL segments, so
+they carry a `SRC` offset. That offset is the only place in the script that knows `src/` exists.
+
 **`packages/` and `apps/worker/`: PascalCase, filename = exported symbol. No dots.** Concept folders are
-PascalCase, rings are lowercase.
+PascalCase, rings are lowercase. Paths below are shown relative to a package's `src/`.
 
 ```
 decision/domain/Decision/Decision.ts          the concept's own types

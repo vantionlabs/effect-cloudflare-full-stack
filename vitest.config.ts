@@ -17,15 +17,16 @@ export default defineConfig({
         test: {
           name: "domain",
           include: [
-            "packages/modules/*/domain/test/**/*.test.ts",
-            "packages/modules/*/use-cases/test/**/*.test.ts",
+            "packages/modules/src/*/domain/test/**/*.test.ts",
+            "packages/modules/src/*/use-cases/test/**/*.test.ts",
             "packages/api/test/**/*.test.ts",
             /*
              * The capability packages (ADR-0021). Their tests belong here rather than in `tables` because they
              * need nothing: `RoomProtocol` is arithmetic over attachments, tested against three-line fakes, which
              * is the whole reason that logic was lifted out of the Durable Object class.
              */
-            "packages/{domain,database,realtime}/test/**/*.test.ts"
+            "packages/{domain,database,realtime}/test/**/*.test.ts",
+            "packages/integrations/*/test/**/*.test.ts"
           ],
           environment: "node"
         }
@@ -37,10 +38,10 @@ export default defineConfig({
         // tenant predicate is now enforced statically by `scripts/boundaries.ts` instead.)
         test: {
           name: "tables",
-          include: ["packages/modules/*/tables/test/**/*.test.ts"],
+          include: ["packages/modules/src/*/tables/test/**/*.test.ts"],
           // Migrate once, before any file. Without this every database test depends on whichever file
           // happened to call `migrate` having sorted first — and the failure looks like a bad query.
-          globalSetup: ["packages/modules/shared/tables/test/migrate.setup.ts"],
+          globalSetup: ["packages/modules/src/shared/tables/test/migrate.setup.ts"],
           environment: "node",
           testTimeout: 30_000,
           hookTimeout: 30_000

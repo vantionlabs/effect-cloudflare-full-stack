@@ -16,7 +16,7 @@
 import { getAuthTables } from "better-auth/db"
 import { readFileSync } from "node:fs"
 import { writeFile } from "node:fs/promises"
-import { makeAuth } from "../packages/integrations/better-auth/Session/BetterAuth.ts"
+import { makeAuth } from "../packages/integrations/better-auth/src/Session/BetterAuth.ts"
 
 /** A throwaway config: only the plugin list affects the emitted schema. */
 const auth = makeAuth({
@@ -176,7 +176,7 @@ ${statements.map((s) => `  yield* sql\`\n    ${s.split("\n").join("\n    ")}\n  
 `
 
 const target = new URL(
-  "../packages/modules/iam/tables/Session/SessionTable.ts",
+  "../packages/modules/src/iam/tables/Session/SessionTable.ts",
   import.meta.url
 ).pathname
 

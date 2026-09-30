@@ -7,7 +7,7 @@
  */
 import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
-import { ApiV1, DatabaseHealthV1, HealthV1 } from "../v1/index.ts"
+import { ApiV1, DatabaseHealthV1, HealthV1 } from "../src/v1/index.ts"
 
 describe("ApiV1 contract", () => {
   it("declares the health group under the /api/v1 prefix", () => {

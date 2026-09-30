@@ -19,7 +19,7 @@ import {
   staleSockets,
   viewersOf,
   welcomeFor
-} from "../Server/index.ts"
+} from "../src/Server/index.ts"
 
 /** A socket that records what it was sent. Three methods, because that is all the protocol uses. */
 const fakeSocket = (attachment: unknown): RoomSocket & { readonly sent: Array<string> } => {

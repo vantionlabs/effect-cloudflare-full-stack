@@ -6,13 +6,14 @@
   // ambient here, so a server-ring file that needs `R2Bucket` has to import the type by name.
   // An explicit import is greppable; an ambient global available to every domain file is not.
   "extends": "../../tsconfig.base.json",
-  "include": ["**/*.ts"],
+  "include": ["src/**/*.ts"],
   // Tests are their own project. Overlapping includes would put a file in two projects, which
   // `tsc -b` rejects.
   "exclude": ["**/test/**"],
   "compilerOptions": {
     "noEmit": true,
-    // Tests sit beside the code they test, so rootDir is the package rather than a src/ dir.
+    // The package, not `src`: a package-level `test/` sits beside `src/`, and where tests are nested
+    // inside a ring they travel with it, so both live under this root.
     "rootDir": ".",
     "tsBuildInfoFile": ".tsbuildinfo/src.tsbuildinfo",
     "types": []
