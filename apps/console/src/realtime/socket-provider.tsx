@@ -24,7 +24,7 @@
  * - Backoff is **jittered** because a deploy disconnects every client in an organization at the same instant,
  *   and identical backoff would bring them all back in lockstep.
  */
-import { decodeServerFrame, PING, PONG, REALTIME_PATH, type ServerFrame } from "@ea/modules/shared/domain/Room"
+import { decodeServerFrame, PING, PONG, REALTIME_PATH, type ServerFrame } from "@ea/modules/realtime/domain/Room"
 import { createContext, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 const PING_INTERVAL_MS = 30_000

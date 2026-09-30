@@ -8,7 +8,7 @@
  * `j`/`k` move, `a` approves, `r` rejects. Bound once on the document rather than per row, so a shortcut never
  * depends on which element has focus — a reviewer who clicked a citation should still be able to press `a`.
  */
-import type { Viewer } from "@ea/modules/shared/domain/Room"
+import type { Viewer } from "@ea/modules/realtime/domain/Room"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Highlight } from "./highlight.tsx"

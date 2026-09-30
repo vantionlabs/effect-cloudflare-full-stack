@@ -7,7 +7,7 @@
  * second caller. Deriving `connected` from status and holding the list in an atom removes the state that made
  * that tempting.
  */
-import type { Viewer } from "@ea/modules/shared/domain/Room"
+import type { Viewer } from "@ea/modules/realtime/domain/Room"
 import { useAtomValue } from "@effect/atom-react"
 import { useCallback } from "react"
 import { viewersAtom } from "./realtime-atoms.ts"

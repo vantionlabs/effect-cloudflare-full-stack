@@ -29,18 +29,29 @@ const COMPOSITION_ROOT = new Set([
   "apps/worker/src/Main.ts",
   "apps/worker/src/platform/DispatchEvent.ts",
   /*
-   * The WebSocket upgrade, which composes the session seam with the rooms binding.
+   * The Durable Object class, which is a DEPLOYMENT ARTIFACT rather than an adapter.
    *
-   * It belongs here for the same reason `DispatchEvent.ts` does: it is wiring, not a use case. It has to name
-   * `resolveIdentity` because a socket has to be authenticated before a room accepts it, and the room cannot
-   * do it — a room holds no database by design (ADR-0019). It also returns a `Response` carrying a
-   * `webSocket`, which no schema describes and only workerd understands, so it could not live in
-   * `packages/api` either.
+   * The runtime requires a class extending `DurableObject` from `cloudflare:workers`, exported from the
+   * Worker's entry and declared in `exports` in wrangler.jsonc. `packages/modules` keeps platform globals
+   * non-ambient on purpose, so the class cannot live there — but everything it *decides* does, in
+   * `realtime/server/Room/RoomProtocol.ts`, which is why this file is glue and is allowed to name it.
    *
    * Added deliberately rather than by loosening the rule to a prefix: the point of an explicit set is that a
    * fourth entry is a decision somebody makes in a diff.
    */
-  "apps/worker/src/platform/RealtimeHttp.ts"
+  /*
+   * The `Env` declaration, which names adapters' binding TYPES on purpose.
+   *
+   * That naming is the inversion the cleanup rests on: an adapter declares the one capability it needs
+   * (`RoomsBinding`), and this file composes those into the deployment's environment — rather than adapters
+   * importing `Env` and thereby depending on everything the deployment has. The dependency has to point one
+   * way or the other, and this way is what allows an adapter to live in a module at all.
+   *
+   * Type-only, and worth keeping that way: a value import here would make the environment declaration
+   * construct things, which is `Main.ts`'s job.
+   */
+  "apps/worker/src/platform/Bindings.ts",
+  "apps/worker/src/RoomDurableObject.ts"
 ])
 
 const MODULES = "packages/modules/"

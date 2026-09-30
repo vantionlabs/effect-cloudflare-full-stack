@@ -38,11 +38,18 @@ import {
 import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
 import { DryRunAdapter } from "@ea/modules/decision/server/Execution"
 import { LanguageModelWorkersAiBinding, WORKERS_AI_MODEL } from "@ea/modules/decision/server/Extraction"
-import { SessionHttp, SessionLive, SessionRpcLive, SessionStore } from "@ea/modules/iam/server/Session"
+import {
+  IdentityResolverLive,
+  SessionHttp,
+  SessionLive,
+  SessionRpcLive,
+  SessionStore
+} from "@ea/modules/iam/server/Session"
 import { DocumentParserText } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
 import { AgentModel } from "@ea/modules/policy/domain/Ask"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
+import { RealtimeUpgrade, RoomsLive } from "@ea/modules/realtime/server/Room"
 import { LanguageModelWorkersAiOpenAi } from "@ea/modules/shared/server/Model"
 import { Db } from "@ea/modules/shared/tables/Database"
 import { withDatabase } from "@ea/modules/shared/tables/Database"
@@ -60,8 +67,6 @@ import { ConnectHyperdrive, ReactivityLive } from "./platform/HyperdriveConnect.
 import { IdsUuid } from "./platform/Ids.ts"
 import { EventQueue, QueueBus } from "./platform/QueueBus.ts"
 import { consumeBatch, type QueueBatchLike } from "./platform/QueueHandler.ts"
-import { RealtimeHttp } from "./platform/RealtimeHttp.ts"
-import { RoomsLive } from "./platform/RoomsLive.ts"
 import { TelemetryAnalytics } from "./platform/TelemetryAnalytics.ts"
 import { TelemetryOtlp } from "./platform/TelemetryOtlp.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
@@ -216,7 +221,7 @@ const AppLayer = (env: Env) =>
      * everything else; a socket that had to authenticate differently from a request would be a second
      * authorization seam (see RealtimeHttp.ts).
      */
-    RealtimeHttp,
+    RealtimeUpgrade(env.ROOMS),
     // better-auth's own routes, on the same router as the API — they must share an origin with each other
     // whatever the console does, because the session cookie is set by one and read by the other.
     SessionHttp
@@ -253,7 +258,21 @@ const AppLayer = (env: Env) =>
     // JSON rather than msgpack: the console is a browser, the payloads are small, and a wire format a
     // human can read in devtools is worth more here than a few bytes.
     Layer.provide(RpcSerialization.layerJson),
-    Layer.provide(RoomsLive),
+    Layer.provide(RoomsLive(env.ROOMS)),
+    /*
+     * The identity port, which the realtime upgrade requires and no middleware provides.
+     *
+     * Its absence was a compile error at the per-request door rather than a 500 at runtime — `toWebHandler`
+     * types the leftover requirements, so a service the app needs and the layer does not supply cannot ship.
+     * That is the property the whole composition-root shape exists for, and this is it paying off.
+     *
+     * **`provideMerge`, not `provide`**, and the difference is exactly what the door was reporting. A route
+     * handler's requirements are resolved from the app layer's OUTPUT context, because the handler runs per
+     * request rather than at layer-build time. `provide` satisfies the layers above and keeps the service to
+     * itself; `provideMerge` also leaves it in the output, where the router can find it. `SessionStore` is in
+     * the graph for the same reason — `ServicesLayer` is merged, not provided.
+     */
+    Layer.provideMerge(IdentityResolverLive),
     Layer.provide(SessionLive),
     Layer.provide(SessionRpcLive),
     Layer.provideMerge(ServicesLayer(env)),

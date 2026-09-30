@@ -25,6 +25,7 @@ import {
   AuthenticatedRpc,
   CurrentUser,
   Identity,
+  IdentityResolver,
   type MemberRole,
   OrgId,
   UserId
@@ -75,6 +76,30 @@ export const resolveIdentity = (config: AuthConfig, headers: Headers) =>
       role: role as MemberRole
     })
   }).pipe(Effect.scoped)
+
+/**
+ * The same seam as a plain service, for callers that are not handlers.
+ *
+ * Three layers now provide from one `resolveIdentity`: HTTP middleware, RPC middleware, and this. Each
+ * contributes only its own way of refusing — a 401, a tagged error, or `null` — which is what keeps them one
+ * authorization seam rather than three implementations that agree today.
+ *
+ * Its first consumer is the WebSocket upgrade, which needs the answer before a room accepts a socket and
+ * cannot be a handler because it returns a 101 carrying a socket.
+ */
+export const IdentityResolverLive = Layer.effect(IdentityResolver)(
+  Effect.map(authSettings, (config) => ({
+    fromHeaders: (headers: Record<string, string>) =>
+      /*
+       * `orDie` because this port cannot fail in its signature, and that is the right shape: every failure
+       * here — the database being unreachable, better-auth throwing — means we cannot say who the caller is.
+       * A caller's only correct response to that is to refuse, which is what `null` already says, and a
+       * typed error channel would invite treating "the database is down" as "not signed in". A defect is
+       * logged with its cause and answered with a 500 by whoever is above.
+       */
+      Effect.orDie(resolveIdentity(config, new Headers(headers)))
+  }))
+)
 
 export const SessionLive = Layer.effect(Authenticated)(
   // Settings are read once, when the layer is built: the binding and the secret are stable for an

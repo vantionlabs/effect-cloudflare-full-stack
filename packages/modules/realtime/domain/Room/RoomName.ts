@@ -11,8 +11,8 @@
  * ever tempted to read a room name from a query parameter, the brand makes that a compile error rather than
  * a cross-tenant read.
  */
+import type { OrgId } from "@ea/modules/shared/domain/Identity"
 import { Schema } from "effect"
-import type { OrgId } from "../Identity/Identity.ts"
 
 export const RoomName = Schema.String.pipe(Schema.brand("RoomName"))
 export type RoomName = typeof RoomName.Type

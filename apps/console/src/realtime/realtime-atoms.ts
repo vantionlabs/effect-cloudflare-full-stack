@@ -5,7 +5,7 @@
  * and at no other time. Context would re-render every consumer of the socket on every frame, which is the
  * thing the provider's `useMemo` is already careful to avoid for connection status.
  */
-import type { Viewer } from "@ea/modules/shared/domain/Room"
+import type { Viewer } from "@ea/modules/realtime/domain/Room"
 import { Effect } from "effect"
 import { Atom, Reactivity } from "effect/reactivity"
 import { DECISIONS_KEY } from "../queue-atoms.ts"

@@ -2,3 +2,4 @@
 // this the only way in, and `"./internal/*": null` makes anything else unresolvable.
 export * from "./Authenticated.ts"
 export * from "./Identity.ts"
+export * from "./IdentityResolver.ts"
