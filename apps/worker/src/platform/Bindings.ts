@@ -57,6 +57,23 @@ export interface Env {
    */
   readonly ROOMS: RoomsBinding
 
+  /**
+   * The reviewer's assistant: one Durable Object per conversation, for interaction state.
+   *
+   * Typed as the narrow slice the Worker uses rather than `DurableObjectNamespace`, matching how `AI` and
+   * `CACHE` are declared — this file composes what callers ask for. `getByName` is the Agents SDK's own
+   * accessor via `getAgentByName`, which resolves to an ordinary namespace lookup underneath.
+   *
+   * **A conversation id must carry an organization component.** One name is one instance and it never moves
+   * (ADR-0018), so a user-controlled name with no tenant in it lets one organization address another's
+   * conversation. The agent cannot defend itself here — it cannot validate the identity it is handed — so
+   * the Worker composing the name is the only thing standing between two tenants.
+   */
+  readonly ASSISTANTS: {
+    readonly idFromName: (name: string) => unknown
+    readonly get: (id: unknown) => { readonly fetch: (request: Request) => Promise<Response> }
+  }
+
   /** Source documents. Tenancy is a key prefix, enforced in @ea/modules/intake/domain/Document. */
   readonly DOCUMENTS: R2Bucket
   /** The event queue producer. Stable for an isolate's lifetime, so safe to capture. */

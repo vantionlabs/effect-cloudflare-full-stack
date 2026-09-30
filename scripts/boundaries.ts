@@ -159,7 +159,7 @@ const rules: ReadonlyArray<Rule> = [
     ]
   },
   /**
-   * A room may not reach a database, and this is a COST boundary rather than a layering one.
+   * A Durable Object may not reach a database — a COST boundary for a room, and a TENANCY one for an agent.
    *
    * An outbound `connect()` keeps a Durable Object resident and billable for up to 15 minutes, and our
    * Postgres client dials through `cloudflare:sockets` (ADR-0009). So a room that wrote to the database would
@@ -168,17 +168,28 @@ const rules: ReadonlyArray<Rule> = [
    *
    * A check rather than a comment because the failure is invisible: nothing errors, nothing logs, the code
    * reads fine, and the bill arrives a month later. See ADR-0019.
+   *
+   * **Extended to `AssistantAgent` when the Agents SDK arrived, and for an agent the stronger reason is not
+   * cost.** An agent that streams from a model holds an outbound connection anyway — the 15-minute rule
+   * exists so that model streaming is not cut off mid-answer — so residency is something it accepts by
+   * nature and the cost argument alone would not settle it. What does settle it: **a Durable Object cannot
+   * validate the identity it is handed** (ADR-0019), the corpus is tenant-scoped, and `Db.scoped` requires
+   * `CurrentOrg`. An agent querying the corpus itself would be querying for an identity it cannot check, in
+   * the one place the tenancy seam is not a compile error. See ADR-0025.
    */
   {
     label: "a Durable Object may not reach a database",
-    appliesTo: (p) => p.startsWith("apps/worker/src/Room"),
+    appliesTo: (p) => p.startsWith("apps/worker/src/Room") || p.startsWith("apps/worker/src/Assistant"),
     forbidden: [
       {
         pattern: /^@effect\/sql|^pg$|^@ea\/modules\/[a-z-]+\/tables(\/|$)/,
-        because: "a room must never hold a database connection: an outbound connect() keeps the object " +
-          "resident and billable for up to 15 minutes, which defeats hibernation and multiplies the cost " +
-          "of every room by about twenty. Writes belong in the Worker, which owns connection lifetime per " +
-          "request; the room is told what to broadcast afterwards (ADR-0019)"
+        because: "a Durable Object must never hold a database connection. For a room it is cost: an " +
+          "outbound connect() keeps the object resident and billable for up to 15 minutes, which defeats " +
+          "hibernation and multiplies the cost of every room by about twenty. For an agent it is tenancy: " +
+          "a Durable Object cannot validate the identity it is handed, and the corpus is tenant-scoped, so " +
+          "it would query on behalf of an identity it cannot check. Either way the database work belongs " +
+          "in the Worker, which resolves the session and owns connection lifetime per request; the object " +
+          "is told what to broadcast or record afterwards (ADR-0019, ADR-0025)"
       }
     ]
   },

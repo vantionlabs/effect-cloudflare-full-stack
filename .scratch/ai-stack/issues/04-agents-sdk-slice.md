@@ -26,6 +26,26 @@ communication and state management. Workflows excel at durable execution."_ So t
 way Workflows does — that was checked, and it is why `03` and this issue are both open rather than one
 replacing the other. Durable execution is Workflows'; state and scheduling are the Agents SDK's.
 
+## Status: started 2026-09-30
+
+Landed, and deliberately the thin end:
+
+- `policy/domain/Assistant` — the turn and conversation schemas, `appendTurn`, `MAX_TURNS = 50`. Pure, 7
+  tests, no platform.
+- `apps/worker/src/AssistantAgent.ts` — the `Agent` subclass. Glue only: state contract,
+  `validateStateChange` decoding through the domain schema, and `onRequest`.
+- Binding `ASSISTANTS` in every environment with `storage: "sqlite"`; `bindings:check` reconciles it.
+- `dep:check`'s no-database rule extended from rooms to agents, with the tenancy reason, verified to bite.
+- 6 tests in real `workerd` against the real class through a fixture Worker: state survives a request, two
+  names are two conversations, a refusal is recorded with no answer, an invalid turn is refused 400 and not
+  appended.
+- ADR-0025 records the boundary.
+
+**Still to do, in order:** the Worker edge that resolves a session, composes an org-scoped conversation id,
+runs `AskCorpus` and hands the turn over; then resumable streaming; then the console surface. The agent has
+**no production route yet**, which is why it is tested through a fixture — standing up a route early would
+mean an unauthenticated door onto a tenant-scoped conversation.
+
 ## Constraints from this codebase
 
 - **ADR-0019: no database in a Durable Object.** An agent's own SQLite state is fine — that is the DO's

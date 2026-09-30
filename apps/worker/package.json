@@ -18,6 +18,7 @@
     "@ea/modules": "workspace:*",
     "@ea/realtime": "workspace:*",
     "@effect/sql-pg": "catalog:",
+    "agents": "^0.24.0",
     "effect": "catalog:"
   },
   "devDependencies": {

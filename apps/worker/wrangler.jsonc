@@ -169,10 +169,25 @@
    * stateless: this namespace holds nothing anyone could lose.
    */
   "durable_objects": {
-    "bindings": [{ "name": "ROOMS", "class_name": "RoomDurableObject" }],
+    "bindings": [
+      { "name": "ROOMS", "class_name": "RoomDurableObject" },
+      // One instance per conversation. The NAME must carry an organization component —
+      // see the note on `ASSISTANTS` in platform/Bindings.ts.
+      { "name": "ASSISTANTS", "class_name": "AssistantAgent" },
+    ],
   },
   "exports": {
     "RoomDurableObject": { "type": "durable-object", "storage": "sqlite" },
+    /*
+     * The Agents SDK's `Agent` extends `DurableObject`, so it is declared exactly like one — and it MUST
+     * be `storage: "sqlite"`, because the SDK keeps its state and its schedule table in SQL storage. The
+     * key-value backend is not an option for it, and is not an option for a new namespace anyway.
+     *
+     * Unlike a room, this namespace HOLDS something: a reviewer's conversation. Deleting the class deletes
+     * that storage. It is recoverable in the sense that matters — every answer it refers to is a row in
+     * Postgres, and the conversation is a convenience copy (see `policy/domain/Assistant`).
+     */
+    "AssistantAgent": { "type": "durable-object", "storage": "sqlite" },
   },
 
   "hyperdrive": [
@@ -325,7 +340,12 @@
        */
       // Non-inheritable: see the top-level comment. Each environment gets its own namespace.
       "durable_objects": {
-        "bindings": [{ "name": "ROOMS", "class_name": "RoomDurableObject" }],
+        "bindings": [
+          { "name": "ROOMS", "class_name": "RoomDurableObject" },
+          // One instance per conversation. The NAME must carry an organization component —
+          // see the note on `ASSISTANTS` in platform/Bindings.ts.
+          { "name": "ASSISTANTS", "class_name": "AssistantAgent" },
+        ],
       },
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "6cf07f8655824f63a5c306f164feb196" },
@@ -408,7 +428,12 @@
        */
       // Non-inheritable: see the top-level comment. Each environment gets its own namespace.
       "durable_objects": {
-        "bindings": [{ "name": "ROOMS", "class_name": "RoomDurableObject" }],
+        "bindings": [
+          { "name": "ROOMS", "class_name": "RoomDurableObject" },
+          // One instance per conversation. The NAME must carry an organization component —
+          // see the note on `ASSISTANTS` in platform/Bindings.ts.
+          { "name": "ASSISTANTS", "class_name": "AssistantAgent" },
+        ],
       },
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "514e8b327dd048f3ac40de09165ef43b" },

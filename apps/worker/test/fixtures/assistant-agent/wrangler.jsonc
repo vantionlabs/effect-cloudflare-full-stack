@@ -1,0 +1,15 @@
+{
+  // A harness for the real class, not a deployment. See index.ts for why it is its own Worker.
+  "name": "assistant-agent-probe",
+  "main": "index.ts",
+  "compatibility_date": "2026-09-26",
+  // The SDK is built on Durable Objects and uses `node:` builtins, so this flag is not optional.
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "ASSISTANTS", "class_name": "AssistantAgent" }],
+  },
+  // `storage: "sqlite"` is required: the SDK keeps agent state and its schedule table in SQL storage.
+  "exports": {
+    "AssistantAgent": { "type": "durable-object", "storage": "sqlite" },
+  },
+}

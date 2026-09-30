@@ -368,6 +368,12 @@ const getQueueRuntime = (env: Env) => (queueRuntime ??= makeQueueRuntime(env))
  * appears and an `env.ROOMS` that is undefined at the first upgrade.
  */
 export { RoomDurableObject } from "./RoomDurableObject.ts"
+/*
+ * Exported from the entry for the same reason: a Durable Object class must be exported from the Worker's
+ * main module and declared in `exports`, or the namespace has nothing to instantiate. An `Agent` is a
+ * Durable Object — the SDK's class extends it — so it obeys exactly the same rule.
+ */
+export { AssistantAgent } from "./AssistantAgent.ts"
 
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

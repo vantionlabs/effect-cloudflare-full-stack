@@ -1,0 +1,20 @@
+{
+  /*
+   * Worker source living under `test/`, so it needs `@cloudflare/workers-types` — which
+   * `apps/worker/tsconfig.test.json` deliberately excludes, because workers-types declares a second global
+   * `Response`/`RequestInit` and `createTestHarness` needs Node's. Same split and same reason as the
+   * workflow probe beside it.
+   *
+   * Unlike that probe, this one imports PRODUCTION source — the agent class itself, which is the point: only
+   * the routing is a fixture. So the class is in `include` and there is no `rootDir`, which would otherwise
+   * refuse a file outside this directory. `noEmit` makes that harmless.
+   */
+  "extends": "../../../../../tsconfig.base.json",
+  "include": ["**/*.ts", "../../../src/AssistantAgent.ts"],
+  "compilerOptions": {
+    "noEmit": true,
+    // Both files live under apps/worker, so that is the root; the base config points at `src`.
+    "rootDir": "../../..",
+    "types": ["@cloudflare/workers-types"]
+  }
+}
