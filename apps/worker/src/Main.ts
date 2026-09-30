@@ -29,6 +29,7 @@ import {
   ApiV1,
   AskHttp,
   AskRpcLive,
+  AssistantRpcLive,
   DecisionHttp,
   DecisionRpcLive,
   IdentityHttp,
@@ -53,6 +54,7 @@ import { TelemetryAnalytics } from "@ea/modules/decision/server/Telemetry"
 import { DocumentParserText } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
 import { AgentModel } from "@ea/modules/policy/domain/Ask"
+import { AssistantConversationsAgent } from "@ea/modules/policy/server/Assistant"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
 import { CacheKv } from "@ea/modules/shared/server/Cache"
 import { EventQueue, QueueBus } from "@ea/modules/shared/server/Event"
@@ -163,6 +165,15 @@ const ServicesLayer = (env: Env) =>
      * against a neuron allocation.
      */
     EmbedderWorkersAiBinding(env.AI, env.AI_GATEWAY),
+    /*
+     * The conversation store, over the Agents SDK's Durable Object namespace.
+     *
+     * An adapter rather than glue, by the rule in AGENTS.md: it takes its binding as a parameter, so it is a
+     * `server`-ring implementation of the port its slice owns. What it composes is the Durable Object NAME,
+     * from `CurrentOrg` — which is why the port's methods carry that requirement and why a handler that
+     * forgot the tenant would not compile (ADR-0025).
+     */
+    AssistantConversationsAgent(env.ASSISTANTS),
     LanguageModelWorkersAiBinding(env.AI, WORKERS_AI_MODEL, env.AI_GATEWAY),
     /*
      * The agent's model, under its OWN tag — see `policy/domain/Ask/AgentModel.ts`.
@@ -216,7 +227,8 @@ const RpcEdges = Layer.mergeAll(
   DecisionRpcLive,
   MessageRpcLive,
   RoomRpcLive,
-  AskRpcLive
+  AskRpcLive,
+  AssistantRpcLive
 )
 
 /** The HTTP and RPC surfaces, over the shared services. */

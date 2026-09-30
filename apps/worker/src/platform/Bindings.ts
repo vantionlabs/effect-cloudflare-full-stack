@@ -12,6 +12,7 @@
  * Both are `Context.Service` with no default rather than `Context.Reference`: a default
  * value for "the database bindings" is a bug that compiles. Absence must be a type error.
  */
+import type { AssistantsBinding } from "@ea/modules/policy/server/Assistant"
 import type { RoomsBinding } from "@ea/realtime/Server"
 import { ConfigProvider, Context, type Layer } from "effect"
 
@@ -60,19 +61,18 @@ export interface Env {
   /**
    * The reviewer's assistant: one Durable Object per conversation, for interaction state.
    *
-   * Typed as the narrow slice the Worker uses rather than `DurableObjectNamespace`, matching how `AI` and
-   * `CACHE` are declared — this file composes what callers ask for. `getByName` is the Agents SDK's own
-   * accessor via `getAgentByName`, which resolves to an ordinary namespace lookup underneath.
+   * The TYPE comes from the adapter that uses it (`AssistantsBinding` in `policy/server/Assistant`), the
+   * same direction as `ROOMS` — this file composes what its adapters ask for, rather than adapters
+   * depending on a list of everything the deployment has.
    *
-   * **A conversation id must carry an organization component.** One name is one instance and it never moves
-   * (ADR-0018), so a user-controlled name with no tenant in it lets one organization address another's
-   * conversation. The agent cannot defend itself here — it cannot validate the identity it is handed — so
-   * the Worker composing the name is the only thing standing between two tenants.
+   * **A conversation id must carry an organization component**, because one name is one instance and it
+   * never moves (ADR-0018), so a name with no tenant in it lets one organization address another's
+   * conversation. That is not left to this comment: the port's methods require `CurrentOrg`, so the adapter
+   * composes the name from a tenant it was given rather than one a caller chose, and a handler that forgot
+   * it does not compile. `ConversationId` separately forbids the separator, so an id cannot close its own
+   * segment. The agent itself cannot help — it cannot validate the identity it is handed (ADR-0025).
    */
-  readonly ASSISTANTS: {
-    readonly idFromName: (name: string) => unknown
-    readonly get: (id: unknown) => { readonly fetch: (request: Request) => Promise<Response> }
-  }
+  readonly ASSISTANTS: AssistantsBinding
 
   /** Source documents. Tenancy is a key prefix, enforced in @ea/modules/intake/domain/Document. */
   readonly DOCUMENTS: R2Bucket

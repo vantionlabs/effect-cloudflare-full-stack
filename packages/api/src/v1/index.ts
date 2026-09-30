@@ -11,6 +11,7 @@
 export * from "./ApiV1.ts"
 export * from "./Ask/AskHttp.ts"
 export * from "./Ask/AskRpcLive.ts"
+export * from "./Assistant/AssistantRpcLive.ts"
 export * from "./Chat/MessageHttp.ts"
 export * from "./Chat/RoomHttp.ts"
 export * from "./Decision/DecisionHttp.ts"

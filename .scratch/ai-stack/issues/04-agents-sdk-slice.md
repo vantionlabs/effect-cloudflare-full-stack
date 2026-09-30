@@ -41,10 +41,33 @@ Landed, and deliberately the thin end:
   appended.
 - ADR-0025 records the boundary.
 
-**Still to do, in order:** the Worker edge that resolves a session, composes an org-scoped conversation id,
-runs `AskCorpus` and hands the turn over; then resumable streaming; then the console surface. The agent has
-**no production route yet**, which is why it is tested through a fixture — standing up a route early would
-mean an unauthenticated door onto a tenant-scoped conversation.
+**The Worker edge landed the same day**, so the agent is now reachable:
+
+- `AssistantConversations` — the port. **Every method requires `CurrentOrg`**, which is the design: the
+  adapter composes the Durable Object name from a tenant it was given rather than one a caller chose, so a
+  handler that forgot the tenant does not compile. `ConversationId` separately forbids the name separator,
+  so a client-chosen id cannot close its own segment and address another organization.
+- `AssistantConversationsAgent` — the adapter, in `policy/server` because it takes its binding as a
+  parameter. `Bindings.ts` now takes its TYPE from the adapter, the same direction as `ROOMS`.
+- `AskInConversation` — answer first, record second. **A refusal is recorded and then re-raised**, which is
+  the subtle half: returning it as a turn would compile, read well, and turn the product's refusal into a
+  successful-looking answer with nothing in it.
+- `AssistantRpcs` + `AssistantRpcLive` — RPC only, and the error is a UNION, because
+  `ConversationUnavailable` (retry) and `UngroundedAnswer` (the product working) must not be confused by a
+  console.
+
+**Still to do, in order:** resumable streaming, then the console surface. Note that `Assistant.ask` is
+non-streaming by design for now — `AskProgress` streams the _searching_ and never the prose, because a
+citation is only checkable once the answer is complete.
+
+Findings worth keeping:
+
+- The scripted model had to **search before answering**, or every grounded case was refused with "chunk c1
+  was never returned by a search for this question". That is `ungroundedCitations` working exactly as
+  designed — a citation must have been served _for this question_ — so a model citing without searching is
+  ungrounded by definition. The rail caught the test, not the reverse.
+- `Schema.pattern` does not exist in rc.118. It is `Schema.String.check(Schema.isPattern(...)).annotate(...)`,
+  found by listing the installed module's exports.
 
 ## Constraints from this codebase
 
