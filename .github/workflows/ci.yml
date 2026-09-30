@@ -69,7 +69,29 @@ jobs:
       #
       # It also produces the `dist/` the Pages deploy uploads, so building here is not wasted work.
       - name: Build the console (generates the route tree `check` depends on)
-        run: bun run --filter @ea/console build
+        # The invocation is `cd` rather than `--filter`, and the diagnostics are not decoration.
+        #
+        # `bun run --filter @ea/console build` failed here with a bare `error: FileNotFound`, 30 ms
+        # into the step, before vite printed a line (run 36713531511). bun's own filter errors name
+        # what they could not find ("Script ... not found", "No workspace packages matched"), and a
+        # child's output is always prefixed with the package name, so that bare string is bun failing
+        # to open a file it did not name. It reproduces NOWHERE: not on macOS, not in a Linux
+        # container on the same bun build and the same 761 packages, not from a fresh clone of this
+        # remote, not with these environment variables set. The same step passed on the previous
+        # commit, so `--filter` is not broken on the runner either.
+        #
+        # So the filter machinery is removed from the path, and if the bare error returns it is vite's
+        # and the diagnostics below say which file. Do not quietly delete this block: it is the only
+        # record of a failure that a green local run cannot rule out.
+        run: |
+          if ! (cd apps/console && bun run build); then
+            echo "::group::console build failed — diagnostics"
+            bun --version && bun --revision
+            ls -la apps/console apps/console/src | head -40
+            bun pm ls | head -30
+            echo "::endgroup::"
+            exit 1
+          fi
 
       - name: Compose the Hyperdrive local connection string
         run: |
