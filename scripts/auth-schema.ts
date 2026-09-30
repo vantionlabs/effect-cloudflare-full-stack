@@ -16,7 +16,7 @@
 import { getAuthTables } from "better-auth/db"
 import { readFileSync } from "node:fs"
 import { writeFile } from "node:fs/promises"
-import { makeAuth } from "../packages/modules/iam/server/Session/BetterAuth.ts"
+import { makeAuth } from "../packages/integrations/better-auth/Session/BetterAuth.ts"
 
 /** A throwaway config: only the plugin list affects the emitted schema. */
 const auth = makeAuth({

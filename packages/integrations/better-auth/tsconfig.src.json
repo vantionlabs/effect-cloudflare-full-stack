@@ -1,0 +1,19 @@
+{
+  // The better-auth adapter. This package exists to CONTAIN `better-auth` and `pg` (ADR-0021): they were
+  // dependencies of `@ea/modules`, which the browser also imports wire schemas from.
+  //
+  // `types: []`, as everywhere else: this package implements ports declared in `@ea/domain`, and it should not be
+  // able to reach a platform global to do it.
+  "extends": "../../../tsconfig.base.json",
+  "include": ["**/*.ts"],
+  // Tests are their own project. Overlapping includes would put a file in two projects, which
+  // `tsc -b` rejects.
+  "exclude": ["**/test/**"],
+  "compilerOptions": {
+    "noEmit": true,
+    // Tests sit beside the code they test, so rootDir is the package rather than a src/ dir.
+    "rootDir": ".",
+    "tsBuildInfoFile": ".tsbuildinfo/src.tsbuildinfo",
+    "types": []
+  }
+}

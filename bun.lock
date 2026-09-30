@@ -62,7 +62,9 @@
       "name": "@ea/worker",
       "version": "0.0.0",
       "dependencies": {
+        "@ea/ai-openai": "workspace:*",
         "@ea/api": "workspace:*",
+        "@ea/better-auth": "workspace:*",
         "@ea/database": "workspace:*",
         "@ea/modules": "workspace:*",
         "@ea/realtime": "workspace:*",
@@ -138,21 +140,38 @@
         "effect": "catalog:",
       },
     },
+    "packages/integrations/ai-openai": {
+      "name": "@ea/ai-openai",
+      "version": "0.0.0",
+      "dependencies": {
+        "@effect/ai-openai": "catalog:",
+        "effect": "catalog:",
+      },
+    },
+    "packages/integrations/better-auth": {
+      "name": "@ea/better-auth",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ea/domain": "workspace:*",
+        "better-auth": "1.7.6",
+        "effect": "catalog:",
+        "pg": "^8.23.0",
+      },
+      "devDependencies": {
+        "@types/pg": "^8.23.1",
+      },
+    },
     "packages/modules": {
       "name": "@ea/modules",
       "version": "0.0.0",
       "dependencies": {
         "@ea/database": "workspace:*",
         "@ea/domain": "workspace:*",
-        "@effect/ai-openai": "catalog:",
-        "better-auth": "1.7.6",
         "effect": "catalog:",
-        "pg": "^8.23.0",
         "uuid": "^14.0.2",
       },
       "devDependencies": {
         "@effect/sql-pg": "catalog:",
-        "@types/pg": "^8.23.1",
         "vitest": "catalog:",
       },
     },
@@ -339,7 +358,11 @@
 
     "@dprint/win32-x64": ["@dprint/win32-x64@0.57.4", "", { "os": "win32", "cpu": "x64" }, "sha512-P91JJG2sDvK+SvZHdqjKygy7fYABbMH1KYop+WCowyjZUin09977qltdXwJ1vb77Cbi2OD0GWUuAlqO0PjNmaw=="],
 
+    "@ea/ai-openai": ["@ea/ai-openai@workspace:packages/integrations/ai-openai"],
+
     "@ea/api": ["@ea/api@workspace:packages/api"],
+
+    "@ea/better-auth": ["@ea/better-auth@workspace:packages/integrations/better-auth"],
 
     "@ea/console": ["@ea/console@workspace:apps/console"],
 

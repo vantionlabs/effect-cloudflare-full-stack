@@ -50,7 +50,7 @@ packages/
   modules/       FEATURES: decision, intake, policy, iam, chat
   api/           the contract manifests and transport edges
   integrations/  one package per vendor, each owning its SDK
-    better-auth/  openai/  stripe/  twilio/
+    better-auth/  ai-openai/  stripe/  twilio/
 apps/worker      the entrypoint (ADR: see AGENTS.md, "What stays in apps/worker")
 ```
 
@@ -63,6 +63,15 @@ package can reach it even by accident, and the browser bundle cannot contain it 
 tree-shaking. The **port stays in the feature slice** (`modules/billing/domain/Payments.ts`); the adapter
 implements it; `apps/worker` wires them. A vendor swap becomes a package swap, and `knip` and `syncpack` see each
 SDK where it is actually used.
+
+**Moving an adapter out of a `server` ring silently un-enforces it, which was found on execution rather than
+predicted here.** The existing rule "nothing but the composition root may reach into a server ring" keys on
+`@ea/modules/<slice>/server`, so the moment `BetterAuth.ts` left `iam/server` it stopped being covered: a use case
+could have imported `@ea/better-auth` and put the SDK straight back into the graph the package exists to keep it out
+of. Two rules replace the coverage, and they are the general form rather than a patch for these two vendors —
+_nothing but the composition root may name an integration_, and _an integration implements ports, it does not use
+features_ (a domain ring, never a `use-cases`, `tables` or `server` one). So the containment is the manifest **and**
+the check, in the shape ADR-0005 uses for tenancy: neither trusted alone.
 
 **Where an integration does NOT get a package:** when it brings no dependency. An HTTP call with `fetch` against a
 documented endpoint is a `server`-ring file in the slice that owns the port, and inventing a package for it would

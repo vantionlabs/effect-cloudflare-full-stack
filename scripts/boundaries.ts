@@ -198,6 +198,56 @@ const rules: ReadonlyArray<Rule> = [
       }
     ]
   },
+  /**
+   * Only the composition root may name a vendor.
+   *
+   * The `server`-ring version of this rule has always existed — an adapter may only be named by the composition
+   * root — and moving better-auth and OpenAI into their own packages took them out of its reach, because it matches
+   * `@ea/modules/<slice>/server`. Without this, a use case could import `@ea/better-auth` directly and put the SDK
+   * back into the module graph the packages exist to keep it out of (ADR-0021).
+   *
+   * `evals/` is exempt for the same reason it is exempt from the server rule: it is a composition root of its own.
+   */
+  {
+    label: "nothing but the composition root may name an integration",
+    appliesTo: (p) =>
+      (p.startsWith(MODULES) || p.startsWith("packages/api/") || p.startsWith("packages/domain/") ||
+        p.startsWith("packages/database/") || p.startsWith("packages/realtime/") ||
+        (p.startsWith("apps/worker/src/") && !COMPOSITION_ROOT.has(p))) &&
+      !p.includes("/test/"),
+    forbidden: [
+      {
+        pattern: /^@ea\/(better-auth|ai-openai)(\/|$)/,
+        because: "an integration package owns a vendor SDK, and only the composition root may choose a vendor. " +
+          "Importing one here would bind this code to it and drag the SDK back into the graph — which is what " +
+          "these packages were created to prevent (ADR-0021). Depend on the PORT instead; `@ea/domain` holds the " +
+          "identity ports, and a feature's own ports live in its domain ring"
+      }
+    ]
+  },
+  /**
+   * An integration may reach a DOMAIN ring and nothing deeper.
+   *
+   * An adapter implements a port, and ports live in domain rings — `@ea/domain` for identity, a slice's own domain
+   * for anything else (a future Stripe adapter implements `modules/billing/domain/Payments`). Reaching a use case or
+   * another slice's server ring would make the adapter a participant in the feature rather than an implementation
+   * of its contract.
+   */
+  {
+    label: "an integration implements ports, it does not use features",
+    appliesTo: (p) => p.startsWith("packages/integrations/"),
+    forbidden: [
+      {
+        pattern: /^@ea\/modules\/[a-z-]+\/(use-cases|tables|server)(\/|$)/,
+        because: "an adapter implements a PORT. Ports live in domain rings; a use case, a table or another " +
+          "adapter is not one, and importing it makes the vendor code part of the feature"
+      },
+      {
+        pattern: /^@ea\/api(\/|$)/,
+        because: "the api package collects contracts and edges; an adapter sits below it, not beside it"
+      }
+    ]
+  },
   {
     label: "modules never depend on the api package",
     appliesTo: (p) => p.startsWith(MODULES),

@@ -24,6 +24,7 @@
  *
  * `dispose` from `toWebHandler` is dropped on purpose: Workers offers no hook to call it.
  */
+import { LanguageModelWorkersAiOpenAi } from "@ea/ai-openai/Model"
 import {
   ApiV1,
   AskRpcLive,
@@ -38,19 +39,13 @@ import {
   RpcV1
 } from "@ea/api/v1"
 import { HealthHttp } from "@ea/api/v1"
+import { IdentityResolverLive, SessionHttp, SessionLive, SessionRpcLive, SessionStore } from "@ea/better-auth/Session"
 import { Db } from "@ea/database/Database"
 import { withDatabase } from "@ea/database/Database"
 import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
 import { DryRunAdapter } from "@ea/modules/decision/server/Execution"
 import { LanguageModelWorkersAiBinding, WORKERS_AI_MODEL } from "@ea/modules/decision/server/Extraction"
 import { TelemetryAnalytics } from "@ea/modules/decision/server/Telemetry"
-import {
-  IdentityResolverLive,
-  SessionHttp,
-  SessionLive,
-  SessionRpcLive,
-  SessionStore
-} from "@ea/modules/iam/server/Session"
 import { DocumentParserText } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
 import { AgentModel } from "@ea/modules/policy/domain/Ask"
@@ -58,7 +53,6 @@ import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
 import { CacheKv } from "@ea/modules/shared/server/Cache"
 import { EventQueue, QueueBus } from "@ea/modules/shared/server/Event"
 import { IdsUuid } from "@ea/modules/shared/server/Ids"
-import { LanguageModelWorkersAiOpenAi } from "@ea/modules/shared/server/Model"
 import { TelemetryOtlp } from "@ea/modules/shared/server/Telemetry"
 import { SweepEnqueueGap } from "@ea/modules/shared/use-cases/Event"
 import { RealtimeUpgrade, RoomsLive } from "@ea/realtime/Server"

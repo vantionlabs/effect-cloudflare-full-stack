@@ -1,0 +1,15 @@
+{
+  "name": "@ea/ai-openai",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./*": "./*/index.ts",
+    "./internal/*": null,
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@effect/ai-openai": "catalog:",
+    "effect": "catalog:"
+  }
+}

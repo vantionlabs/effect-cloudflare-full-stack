@@ -15,7 +15,9 @@
     "@effect/sql-pg": "catalog:",
     "effect": "catalog:",
     "@ea/database": "workspace:*",
-    "@ea/realtime": "workspace:*"
+    "@ea/realtime": "workspace:*",
+    "@ea/better-auth": "workspace:*",
+    "@ea/ai-openai": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260926.1",

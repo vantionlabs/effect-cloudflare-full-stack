@@ -1,5 +1,5 @@
 {
-  "name": "@ea/modules",
+  "name": "@ea/better-auth",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,13 +9,12 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "effect": "catalog:",
-    "uuid": "^14.0.2",
     "@ea/domain": "workspace:*",
-    "@ea/database": "workspace:*"
+    "better-auth": "1.7.6",
+    "effect": "catalog:",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
-    "@effect/sql-pg": "catalog:",
-    "vitest": "catalog:"
+    "@types/pg": "^8.23.1"
   }
 }
