@@ -191,6 +191,19 @@ your disk because you ran `vite` at some point, which is exactly why local green
 `bun run --filter @ea/console build` first; CI does, before `check`, for this reason. Found when the first
 push to the remote failed CI on a tree whose `preflight` had just passed.
 
+**CI builds the console with `cd apps/console && bun run build`, not `bun run --filter`, and the difference
+is not style.** The `--filter` form failed once on the GitHub runner with a bare `error: FileNotFound` 30 ms
+into the step, before vite printed a line, on a tree whose `preflight` had just passed locally — and the
+identical step had passed on the commit before. The string is bun failing to open a file it did not name:
+bun's own filter errors are descriptive, and a filtered child's output is always prefixed with the package
+name, so an unprefixed error is not vite's. It reproduced nowhere — macOS, a Linux container on the same bun
+build and the same package count, a fresh clone of the remote, the same environment variables. Four theories
+were tested and discarded rather than shipped as a fix with a story: a grouping directory matched by
+`packages/*` with no manifest (a minimal repro of exactly that shape passes ten times out of ten), a stale
+workspace path in `bun.lock`, a dangling committed symlink, and the platform. **The cause is still unknown**,
+and one green run does not prove `--filter` was at fault rather than something transient — so the step keeps
+diagnostics that print if the bare error returns. `--filter` is fine locally and is used everywhere else.
+
 **`bun run hygiene` now needs a built console**, because `bundle:check` reads emitted bytes rather than the
 import graph — tree-shaking is the thing being verified, and only the output can answer whether it worked. CI
 already builds the console before `check` for the route-tree reason, so the order is right there; locally, run
