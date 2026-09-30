@@ -7,24 +7,19 @@
  * something that did not happen.
  */
 import { CurrentUser } from "@ea/domain/Identity"
-import { type MessageId, MessageRpcs } from "@ea/modules/realtime/domain/Message"
-import {
-  MessageChanged,
-  MessagePosted,
-  orgRoom,
-  type RoomId,
-  type RoomRef,
-  Rooms
-} from "@ea/modules/realtime/domain/Room"
+import { type MessageId, MessageRpcs } from "@ea/modules/chat/domain/Message"
+import { MessageChanged, MessagePosted, type RoomId, type RoomRef } from "@ea/modules/chat/domain/Room"
 import {
   DeleteMessage,
   EditMessage,
   ListMessages,
   PostMessage,
   RoomIdOfMessage
-} from "@ea/modules/realtime/use-cases/Message"
-import { ToggleReaction } from "@ea/modules/realtime/use-cases/Reaction"
+} from "@ea/modules/chat/use-cases/Message"
+import { ToggleReaction } from "@ea/modules/chat/use-cases/Reaction"
+import { orgRoom, Rooms } from "@ea/realtime/Room"
 import { Effect } from "effect"
+import { encodeFrame } from "../Frames.ts"
 import { serve } from "../Serve.ts"
 
 /**
@@ -39,7 +34,10 @@ const announceChange = (messageId: MessageId) =>
     const identity = yield* CurrentUser
     const roomId = yield* serve(RoomIdOfMessage(messageId))
     if (roomId === null) return
-    yield* rooms.broadcast(orgRoom(identity.orgId), new MessageChanged({ roomId: roomId as RoomId, messageId }))
+    yield* rooms.broadcast(
+      orgRoom(identity.orgId),
+      encodeFrame(new MessageChanged({ roomId: roomId as RoomId, messageId }))
+    )
   })
 
 export const MessageRpcLive = MessageRpcs.toLayer(
@@ -67,7 +65,7 @@ export const MessageRpcLive = MessageRpcs.toLayer(
          * Not awaited for correctness — `broadcast` cannot fail — so an unreachable room costs the sender
          * nothing. The message is already saved, which is the only part anybody can lose.
          */
-        yield* rooms.broadcast(orgRoom(identity.orgId), new MessagePosted({ message }))
+        yield* rooms.broadcast(orgRoom(identity.orgId), encodeFrame(new MessagePosted({ message })))
 
         return message
       }),

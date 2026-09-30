@@ -9,6 +9,9 @@
       "path": "./packages/database"
     },
     {
+      "path": "./packages/realtime"
+    },
+    {
       "path": "./packages/modules"
     },
     {

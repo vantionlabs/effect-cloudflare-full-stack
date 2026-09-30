@@ -1,7 +1,7 @@
 /**
  * The room, as the runtime requires it: a class extending `DurableObject`, exported from the Worker's entry.
  *
- * **Glue only.** Everything this decides lives in `@ea/modules/realtime/server/Room` as plain functions —
+ * **Glue only.** Everything this decides lives in `@ea/realtime/Server` as plain functions —
  * who is present, who gets told, when a socket is retired — and is unit-tested there against fakes with no
  * `workerd` involved. What is left here is the part that genuinely belongs to the deployment: the class
  * itself, the hibernation handlers, and the runtime globals.
@@ -30,9 +30,9 @@ import {
   type RoomSocket,
   staleSockets,
   welcomeFor
-} from "@ea/modules/realtime/server/Room"
+} from "@ea/realtime/Server"
 // The keepalive pair comes from the DOMAIN, because both ends of the socket must agree on it.
-import { PING, PONG } from "@ea/modules/realtime/domain/Room"
+import { PING, PONG } from "@ea/realtime/Room"
 import { DurableObject } from "cloudflare:workers"
 
 export class RoomDurableObject extends DurableObject {

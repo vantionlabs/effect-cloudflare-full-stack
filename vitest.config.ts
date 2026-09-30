@@ -19,7 +19,13 @@ export default defineConfig({
           include: [
             "packages/modules/*/domain/test/**/*.test.ts",
             "packages/modules/*/use-cases/test/**/*.test.ts",
-            "packages/api/test/**/*.test.ts"
+            "packages/api/test/**/*.test.ts",
+            /*
+             * The capability packages (ADR-0021). Their tests belong here rather than in `tables` because they
+             * need nothing: `RoomProtocol` is arithmetic over attachments, tested against three-line fakes, which
+             * is the whole reason that logic was lifted out of the Durable Object class.
+             */
+            "packages/{domain,database,realtime}/test/**/*.test.ts"
           ],
           environment: "node"
         }

@@ -9,12 +9,12 @@
  * Mounted by the composition root with `RpcServer.layerHttp`, which puts it on the *same* router as the
  * HTTP API. One origin, one auth seam, one deploy.
  */
+import { MessageRpcs } from "@ea/modules/chat/domain/Message"
+import { RoomRpcs } from "@ea/modules/chat/domain/Room"
 import { DecisionRpcs } from "@ea/modules/decision/domain/Decision"
 import { IdentityRpcs } from "@ea/modules/iam/domain/Identity"
 import { IntakeRpcs } from "@ea/modules/intake/domain/Intake"
 import { AskRpcs } from "@ea/modules/policy/domain/Ask"
-import { MessageRpcs } from "@ea/modules/realtime/domain/Message"
-import { RoomRpcs } from "@ea/modules/realtime/domain/Room"
 
 export const RpcV1 = IdentityRpcs.merge(IntakeRpcs).merge(DecisionRpcs).merge(AskRpcs).merge(MessageRpcs).merge(
   RoomRpcs

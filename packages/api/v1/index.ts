@@ -11,6 +11,7 @@
 export * from "./ApiV1.ts"
 export * from "./Ask/AskRpcLive.ts"
 export * from "./Decision/DecisionRpcLive.ts"
+export * from "./Frames.ts"
 export * from "./Health/HealthHttp.ts"
 export * from "./Health/HealthWire.ts"
 export * from "./Identity/IdentityHttp.ts"

@@ -1,0 +1,19 @@
+{
+  // The socket: presence, fan-out, the upgrade, keepalive. Knows nothing about what it carries.
+  //
+  // `types: []`, which is why `RoomProtocol` describes the part of a `WebSocket` it uses structurally and the
+  // `DurableObject` subclass lives in `apps/worker`. A class defined by a platform contract cannot be structural
+  // about it, so it stays with the deployment and delegates here.
+  "extends": "../../tsconfig.base.json",
+  "include": ["**/*.ts"],
+  // Tests are their own project. Overlapping includes would put a file in two projects, which
+  // `tsc -b` rejects.
+  "exclude": ["**/test/**"],
+  "compilerOptions": {
+    "noEmit": true,
+    // Tests sit beside the code they test, so rootDir is the package rather than a src/ dir.
+    "rootDir": ".",
+    "tsBuildInfoFile": ".tsbuildinfo/src.tsbuildinfo",
+    "types": []
+  }
+}

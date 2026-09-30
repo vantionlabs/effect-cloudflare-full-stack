@@ -12,7 +12,7 @@
  * Both are `Context.Service` with no default rather than `Context.Reference`: a default
  * value for "the database bindings" is a bug that compiles. Absence must be a type error.
  */
-import type { RoomsBinding } from "@ea/modules/realtime/server/Room"
+import type { RoomsBinding } from "@ea/realtime/Server"
 import { ConfigProvider, Context, type Layer } from "effect"
 
 /** Bindings and vars this Worker declares. Extended as alchemy.run.ts provisions more. */

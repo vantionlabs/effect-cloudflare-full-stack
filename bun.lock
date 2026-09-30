@@ -28,6 +28,7 @@
         "@base-ui/react": "^1.8.0",
         "@ea/api": "workspace:*",
         "@ea/modules": "workspace:*",
+        "@ea/realtime": "workspace:*",
         "@effect/atom-react": "catalog:",
         "@fontsource-variable/geist": "^5.3.0",
         "@tanstack/ai": "catalog:",
@@ -64,6 +65,7 @@
         "@ea/api": "workspace:*",
         "@ea/database": "workspace:*",
         "@ea/modules": "workspace:*",
+        "@ea/realtime": "workspace:*",
         "@effect/sql-pg": "catalog:",
         "effect": "catalog:",
       },
@@ -114,6 +116,7 @@
         "@ea/database": "workspace:*",
         "@ea/domain": "workspace:*",
         "@ea/modules": "workspace:*",
+        "@ea/realtime": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -151,6 +154,14 @@
         "@effect/sql-pg": "catalog:",
         "@types/pg": "^8.23.1",
         "vitest": "catalog:",
+      },
+    },
+    "packages/realtime": {
+      "name": "@ea/realtime",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ea/domain": "workspace:*",
+        "effect": "catalog:",
       },
     },
     "scripts": {
@@ -343,6 +354,8 @@
     "@ea/infra": ["@ea/infra@workspace:infra"],
 
     "@ea/modules": ["@ea/modules@workspace:packages/modules"],
+
+    "@ea/realtime": ["@ea/realtime@workspace:packages/realtime"],
 
     "@ea/scripts": ["@ea/scripts@workspace:scripts"],
 

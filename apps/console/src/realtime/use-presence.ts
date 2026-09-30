@@ -7,7 +7,7 @@
  * second caller. Deriving `connected` from status and holding the list in an atom removes the state that made
  * that tempting.
  */
-import type { Viewer } from "@ea/modules/realtime/domain/Room"
+import type { Viewer } from "@ea/realtime/Presence"
 import { useAtomValue } from "@effect/atom-react"
 import { useCallback } from "react"
 import { viewersAtom } from "./realtime-atoms.ts"
@@ -17,8 +17,13 @@ export interface Presence {
   /** Everyone connected, including you. */
   readonly viewers: ReadonlyArray<Viewer>
   readonly connected: boolean
-  /** Tell the room which decision you have open, or `null` for the list. */
-  readonly setViewing: (decisionId: string | null) => void
+  /**
+   * Tell the room what you have open, or `null` for nothing.
+   *
+   * An opaque string to the transport: presence lives in `@ea/realtime`, which cannot know whether this is a
+   * decision id or a room id (ADR-0021). The caller decides what it means; the room only echoes it.
+   */
+  readonly setViewing: (viewing: string | null) => void
 }
 
 export const usePresence = (): Presence => {
@@ -26,7 +31,7 @@ export const usePresence = (): Presence => {
   const viewers = useAtomValue(viewersAtom)
 
   const setViewing = useCallback(
-    (decisionId: string | null) => send({ _tag: "Viewing", decisionId }),
+    (viewing: string | null) => send({ _tag: "Viewing", viewing }),
     [send]
   )
 

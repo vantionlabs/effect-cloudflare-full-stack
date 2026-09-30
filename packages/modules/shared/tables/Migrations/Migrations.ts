@@ -15,6 +15,11 @@
  * **every** table including better-auth's — one migration system, one database — so
  * `better-auth migrate` is never run (plan risk R9).
  */
+import { MentionTable } from "@ea/modules/chat/tables/Mention"
+import { MessageLifecycle, MessageRooms, MessageTable } from "@ea/modules/chat/tables/Message"
+import { ReactionTable } from "@ea/modules/chat/tables/Reaction"
+import { RoomReadTable } from "@ea/modules/chat/tables/Read"
+import { RoomTable } from "@ea/modules/chat/tables/Room"
 import { DecisionTable } from "@ea/modules/decision/tables/Decision"
 import { ExecutionTable } from "@ea/modules/decision/tables/Execution"
 import { ExtractionTable } from "@ea/modules/decision/tables/Extraction"
@@ -25,11 +30,6 @@ import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
-import { MentionTable } from "@ea/modules/realtime/tables/Mention"
-import { MessageLifecycle, MessageRooms, MessageTable } from "@ea/modules/realtime/tables/Message"
-import { ReactionTable } from "@ea/modules/realtime/tables/Reaction"
-import { RoomReadTable } from "@ea/modules/realtime/tables/Read"
-import { RoomTable } from "@ea/modules/realtime/tables/Room"
 import { Migrator } from "effect/sql"
 import { EventTable } from "../Event/EventTable.ts"
 import { TenancyTable } from "../Tenancy/TenancyTable.ts"

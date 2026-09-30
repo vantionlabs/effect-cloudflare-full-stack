@@ -6,10 +6,11 @@
  * `ReviewResult` happens here so the use case never learns a transport exists.
  */
 import { CurrentUser } from "@ea/domain/Identity"
-import { DecisionRpcs } from "@ea/modules/decision/domain/Decision"
+import { DecisionRpcs, QueueChanged } from "@ea/modules/decision/domain/Decision"
 import { ApproveDecision, GetDecision, ListQueue, RejectDecision } from "@ea/modules/decision/use-cases/Decision"
-import { orgRoom, QueueChanged, Rooms } from "@ea/modules/realtime/domain/Room"
+import { orgRoom, Rooms } from "@ea/realtime/Room"
 import { Effect } from "effect"
+import { encodeFrame } from "../Frames.ts"
 import { serve, serveForTenant } from "../Serve.ts"
 
 /**
@@ -30,7 +31,10 @@ const announce = (reason: "approved" | "rejected") =>
   Effect.gen(function*() {
     const rooms = yield* Rooms
     const identity = yield* CurrentUser
-    yield* rooms.broadcast(orgRoom(identity.orgId), new QueueChanged({ reason, byUserId: identity.userId }))
+    yield* rooms.broadcast(
+      orgRoom(identity.orgId),
+      encodeFrame(new QueueChanged({ reason, byUserId: identity.userId }))
+    )
   })
 
 export const DecisionRpcLive = DecisionRpcs.toLayer(

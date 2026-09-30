@@ -4,7 +4,7 @@
  * Separate from the provider so that the provider is a component and this is the API. A screen never touches
  * a `WebSocket`; it asks for the frames it cares about.
  */
-import type { ServerFrame } from "@ea/modules/realtime/domain/Room"
+import type { ServerFrame } from "@ea/api/v1"
 import { useContext, useEffect, useRef } from "react"
 import { SocketContext, type SocketContextValue } from "./socket-provider.tsx"
 

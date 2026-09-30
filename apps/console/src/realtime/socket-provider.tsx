@@ -24,7 +24,14 @@
  * - Backoff is **jittered** because a deploy disconnects every client in an organization at the same instant,
  *   and identical backoff would bring them all back in lockstep.
  */
-import { decodeServerFrame, PING, PONG, REALTIME_PATH, type ServerFrame } from "@ea/modules/realtime/domain/Room"
+/*
+ * The frame union comes from `@ea/api`, not from a feature: the transport carries an opaque payload and the api
+ * package assembles every slice's frames into one schema, exactly as it assembles `RpcV1` (ADR-0021). The keepalive
+ * strings and the path come from the transport, because both ends of the socket must agree on them and no feature
+ * owns them.
+ */
+import { decodeFrame, type ServerFrame } from "@ea/api/v1"
+import { PING, PONG, REALTIME_PATH } from "@ea/realtime/Room"
 import { createContext, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 const PING_INTERVAL_MS = 30_000
@@ -125,7 +132,7 @@ export const WebSocketProvider = ({
          */
         let frame: ServerFrame
         try {
-          frame = decodeServerFrame(event.data)
+          frame = decodeFrame(event.data)
         } catch {
           return
         }

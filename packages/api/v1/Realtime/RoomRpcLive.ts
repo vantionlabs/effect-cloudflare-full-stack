@@ -10,18 +10,20 @@
  * never is. That asymmetry is the rule stated in `MessagePosted`, applied in the other direction.
  */
 import { CurrentUser } from "@ea/domain/Identity"
-import { RoomsChanged } from "@ea/modules/realtime/domain/Room"
-import { orgRoom, RoomRpcs, Rooms } from "@ea/modules/realtime/domain/Room"
-import { MarkRead } from "@ea/modules/realtime/use-cases/Read"
-import { ArchiveRoom, CreateRoom, ListRooms } from "@ea/modules/realtime/use-cases/Room"
+import { RoomsChanged } from "@ea/modules/chat/domain/Room"
+import { RoomRpcs } from "@ea/modules/chat/domain/Room"
+import { MarkRead } from "@ea/modules/chat/use-cases/Read"
+import { ArchiveRoom, CreateRoom, ListRooms } from "@ea/modules/chat/use-cases/Room"
+import { orgRoom, Rooms } from "@ea/realtime/Room"
 import { Effect } from "effect"
+import { encodeFrame } from "../Frames.ts"
 import { serve } from "../Serve.ts"
 
 /** Tell everybody the channel list moved. Same shape as `announce` in DecisionRpcLive. */
 const announce = Effect.gen(function*() {
   const rooms = yield* Rooms
   const identity = yield* CurrentUser
-  yield* rooms.broadcast(orgRoom(identity.orgId), new RoomsChanged())
+  yield* rooms.broadcast(orgRoom(identity.orgId), encodeFrame(new RoomsChanged()))
 })
 
 export const RoomRpcLive = RoomRpcs.toLayer(

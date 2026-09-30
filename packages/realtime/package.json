@@ -1,0 +1,15 @@
+{
+  "name": "@ea/realtime",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./*": "./*/index.ts",
+    "./internal/*": null,
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@ea/domain": "workspace:*",
+    "effect": "catalog:"
+  }
+}

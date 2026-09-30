@@ -11,7 +11,8 @@
     "@ea/modules": "workspace:*",
     "effect": "catalog:",
     "@ea/domain": "workspace:*",
-    "@ea/database": "workspace:*"
+    "@ea/database": "workspace:*",
+    "@ea/realtime": "workspace:*"
   },
   "devDependencies": {
     "vitest": "catalog:"
