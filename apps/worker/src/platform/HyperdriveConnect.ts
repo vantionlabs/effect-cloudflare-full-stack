@@ -5,7 +5,7 @@
  * Everything above it asks `Connect` for a connection and gets one scoped to the request — see
  * `@ea/modules/shared/tables`'s `Connect.ts` for why that scope is in the type rather than in a comment.
  */
-import { Connect } from "@ea/modules/shared/tables/Database"
+import { Connect } from "@ea/database/Database"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Layer } from "effect"
 import * as ReactivityModule from "effect/reactivity/Reactivity"

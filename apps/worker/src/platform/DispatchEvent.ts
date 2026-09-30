@@ -27,6 +27,7 @@
  * So the engine and the policy port are provided here, per message, and that is not a workaround — it is
  * the only correct place given a per-invocation connection and a per-message tenant.
  */
+import { Db, withDatabase } from "@ea/database/Database"
 import { DocumentBlobMissing, DocumentRowMissing, UnknownEventType } from "@ea/modules/decision/domain/Errors"
 import { WorkflowEnginePg } from "@ea/modules/decision/server/Workflow"
 import { DecideDocumentLayer, DecideDocumentWorkflow } from "@ea/modules/decision/use-cases/Decision"
@@ -35,7 +36,6 @@ import { Blobs, DocumentParser } from "@ea/modules/intake/domain/Document"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
 import { readThrough } from "@ea/modules/shared/domain/Cache"
 import type { QueueMessage } from "@ea/modules/shared/domain/Event"
-import { Db, withDatabase } from "@ea/modules/shared/tables/Database"
 import { ConsumeEvent, type EventRow } from "@ea/modules/shared/use-cases/Event"
 import { Effect, Layer, Schema } from "effect"
 

@@ -1,0 +1,19 @@
+{
+  // The database seam: the scoped transaction, the connection port, and the one encoding helper.
+  //
+  // `types: []`, and here it earns its keep twice over: nothing in this package should know which cloud it is on.
+  // The DRIVER lives in `apps/worker` (`HyperdriveConnect`, over a `cloudflare:sockets` Duplex) and reaches this
+  // package through the `Connect` port — so a Node script and a Worker use the same seam.
+  "extends": "../../tsconfig.base.json",
+  "include": ["**/*.ts"],
+  // Tests are their own project. Overlapping includes would put a file in two projects, which
+  // `tsc -b` rejects.
+  "exclude": ["**/test/**"],
+  "compilerOptions": {
+    "noEmit": true,
+    // Tests sit beside the code they test, so rootDir is the package rather than a src/ dir.
+    "rootDir": ".",
+    "tsBuildInfoFile": ".tsbuildinfo/src.tsbuildinfo",
+    "types": []
+  }
+}

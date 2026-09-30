@@ -6,7 +6,7 @@
  * SSR loader or the eval harness without going through HTTP. That is the property that
  * makes adding a transport additive rather than a rewrite.
  */
-import { withDatabase } from "@ea/modules/shared/tables/Database"
+import { withDatabase } from "@ea/database/Database"
 import { GetHealth } from "@ea/modules/shared/use-cases/Health"
 import { Config, Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"

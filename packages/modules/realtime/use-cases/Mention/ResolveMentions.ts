@@ -10,8 +10,8 @@
  *
  * Unmatched handles are simply not mentions. A typo should read as text, not fail a message.
  */
+import { Db, textArray } from "@ea/database/Database"
 import { CurrentUser } from "@ea/domain/Identity"
-import { Db, textArray } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 
 /**

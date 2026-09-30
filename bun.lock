@@ -62,6 +62,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@ea/api": "workspace:*",
+        "@ea/database": "workspace:*",
         "@ea/modules": "workspace:*",
         "@effect/sql-pg": "catalog:",
         "effect": "catalog:",
@@ -85,6 +86,7 @@
       "name": "@ea/evals",
       "version": "0.0.0",
       "dependencies": {
+        "@ea/database": "workspace:*",
         "@ea/domain": "workspace:*",
         "@ea/modules": "workspace:*",
         "@effect/sql-pg": "catalog:",
@@ -109,12 +111,21 @@
       "name": "@ea/api",
       "version": "0.0.0",
       "dependencies": {
+        "@ea/database": "workspace:*",
         "@ea/domain": "workspace:*",
         "@ea/modules": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
         "vitest": "catalog:",
+      },
+    },
+    "packages/database": {
+      "name": "@ea/database",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ea/domain": "workspace:*",
+        "effect": "catalog:",
       },
     },
     "packages/domain": {
@@ -128,6 +139,7 @@
       "name": "@ea/modules",
       "version": "0.0.0",
       "dependencies": {
+        "@ea/database": "workspace:*",
         "@ea/domain": "workspace:*",
         "@effect/ai-openai": "catalog:",
         "better-auth": "1.7.6",
@@ -319,6 +331,8 @@
     "@ea/api": ["@ea/api@workspace:packages/api"],
 
     "@ea/console": ["@ea/console@workspace:apps/console"],
+
+    "@ea/database": ["@ea/database@workspace:packages/database"],
 
     "@ea/domain": ["@ea/domain@workspace:packages/domain"],
 

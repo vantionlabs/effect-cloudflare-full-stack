@@ -12,8 +12,8 @@
  * correlated subquery over an index, and a channel list is short by nature; when it is not, the fix is a
  * materialised count with a documented staleness, not a counter maintained by hand.
  */
+import { Db } from "@ea/database/Database"
 import { CurrentUser } from "@ea/domain/Identity"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 import { ROOM_COLUMNS, toRoom } from "./ResolveRoom.ts"
 

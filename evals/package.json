@@ -7,7 +7,8 @@
     "@ea/modules": "workspace:*",
     "@effect/sql-pg": "catalog:",
     "effect": "catalog:",
-    "@ea/domain": "workspace:*"
+    "@ea/domain": "workspace:*",
+    "@ea/database": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:"

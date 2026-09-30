@@ -9,6 +9,7 @@
  * The second is the codebase's central architectural claim made checkable. Without it, "the automatic path
  * does the same thing as the human one" is a sentence in a document.
  */
+import { Db } from "@ea/database/Database"
 import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
 import { Ids } from "@ea/domain/Ids"
 import { Adapter, AdapterFailed, type AdapterService } from "@ea/modules/decision/domain/Execution"
@@ -16,7 +17,6 @@ import { DryRunAdapter } from "@ea/modules/decision/server/Execution"
 import { ApproveDecision, RejectDecision } from "@ea/modules/decision/use-cases/Decision"
 import { ExecuteDecision, executionKey } from "@ea/modules/decision/use-cases/Execution"
 import { EventBus, type EventBusService } from "@ea/modules/shared/domain/Event"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Layer, Redacted } from "effect"
 import { SqlClient } from "effect/sql"

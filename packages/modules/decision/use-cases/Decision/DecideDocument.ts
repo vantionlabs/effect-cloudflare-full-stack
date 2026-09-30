@@ -14,6 +14,7 @@
  * is the workflow's `executionId` and the row's `decide_key`, so a retry at either layer lands on the
  * same identity — and the UNIQUE constraint short-circuits *before any model call*.
  */
+import { Db, textArray } from "@ea/database/Database"
 import { Ids } from "@ea/domain/Ids"
 import { applyRails, type Outcome, ProposedDecision } from "@ea/modules/decision/domain/Decision"
 import { checkArithmetic, INVOICE, Invoice, invoiceRuleFacts } from "@ea/modules/decision/domain/Invoice"
@@ -22,7 +23,6 @@ import { Telemetry } from "@ea/modules/decision/domain/Telemetry"
 import { ExtractDocument } from "@ea/modules/decision/use-cases/Extraction"
 import { Cents } from "@ea/modules/shared/domain/Money"
 import { PolicySearch, Retrieval } from "@ea/modules/shared/domain/Retrieval"
-import { Db, textArray } from "@ea/modules/shared/tables/Database"
 import { Effect, Schema } from "effect"
 import { LanguageModel } from "effect/ai"
 import { Activity, Workflow } from "effect/workflow"

@@ -8,8 +8,8 @@
  * `null` rather than an error for a message that is not there — the caller has just acted on it, so absence here
  * means a concurrent delete, and there is nobody to tell.
  */
+import { Db } from "@ea/database/Database"
 import type { MessageId } from "@ea/modules/realtime/domain/Message"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 
 export const RoomIdOfMessage = (messageId: MessageId) =>

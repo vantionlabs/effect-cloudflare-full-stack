@@ -12,6 +12,7 @@
  * however the system is configured. Degraded retrieval that nobody can see is exactly the failure this
  * problem shape keeps producing.
  */
+import { Db } from "@ea/database/Database"
 import type { Collection } from "@ea/modules/shared/domain/Corpus"
 import {
   ChunkId,
@@ -21,7 +22,6 @@ import {
   type RetrievalMode,
   RetrievedChunk
 } from "@ea/modules/shared/domain/Retrieval"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect, Layer } from "effect"
 import { EmbeddingModel } from "effect/ai"
 import { SqlClient } from "effect/sql"

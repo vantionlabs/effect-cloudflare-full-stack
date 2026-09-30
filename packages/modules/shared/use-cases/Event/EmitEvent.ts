@@ -15,6 +15,7 @@
  * hits the UNIQUE constraint and returns the existing row's id. That makes this safe to call from a retry
  * path, a webhook, and a cron without coordinating between them.
  */
+import { Db } from "@ea/database/Database"
 import { Ids } from "@ea/domain/Ids"
 import {
   EventBus,
@@ -23,7 +24,6 @@ import {
   type EventType,
   QueueMessage
 } from "@ea/modules/shared/domain/Event"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 
 export interface EmitEventInput {

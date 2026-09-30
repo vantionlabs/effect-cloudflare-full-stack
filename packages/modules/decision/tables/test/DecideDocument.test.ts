@@ -9,6 +9,7 @@
  * model rather than trusting the engine's own bookkeeping: an engine reporting its own cache hits would
  * be the thing under test vouching for itself.
  */
+import { Db } from "@ea/database/Database"
 import { CurrentOrgFromUser, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
 import { Ids } from "@ea/domain/Ids"
 import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
@@ -19,7 +20,6 @@ import { EmbedderDeterministic } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
 import { EventBus, type EventBusService } from "@ea/modules/shared/domain/Event"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Layer, Redacted, Stream } from "effect"
 import { LanguageModel } from "effect/ai"

@@ -18,6 +18,7 @@
  *
  *   bun run evals:retrieval
  */
+import { Db } from "@ea/database/Database"
 import { CurrentOrgFromUser, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
 import { Ids } from "@ea/domain/Ids"
 import { type Chunker, ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
@@ -26,7 +27,6 @@ import { chunkerLangChain } from "@ea/modules/policy/server/Chunk"
 import { EmbedderDeterministic, EmbedderWorkersAiRest } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
 import { RetrievePolicy } from "@ea/modules/policy/use-cases/Retrieval"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { migrate } from "@ea/modules/shared/tables/Migrations"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Layer, Redacted } from "effect"

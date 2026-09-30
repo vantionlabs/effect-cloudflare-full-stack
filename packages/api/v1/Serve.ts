@@ -10,8 +10,8 @@
  * So the wrappers are named for the decision they encode rather than for the function they call, and there
  * are exactly two of them. A third would mean a third kind of handler, which is worth noticing.
  */
+import { type Connect, withDatabase } from "@ea/database/Database"
 import { CurrentOrg, CurrentUser } from "@ea/domain/Identity"
-import { type Connect, withDatabase } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 import type { SqlClient, SqlError } from "effect/sql"
 

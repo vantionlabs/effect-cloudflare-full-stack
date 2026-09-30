@@ -6,11 +6,11 @@
  * a different generator, a caller passing its own id — a thread silently reorders and a reconnecting client
  * silently skips messages. Neither would fail any other test.
  */
+import { Db } from "@ea/database/Database"
 import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
 import { Ids } from "@ea/domain/Ids"
 import { DeleteMessage, EditMessage, ListMessages, PostMessage } from "@ea/modules/realtime/use-cases/Message"
 import { ToggleReaction } from "@ea/modules/realtime/use-cases/Reaction"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Layer, Redacted } from "effect"
 import { SqlClient } from "effect/sql"

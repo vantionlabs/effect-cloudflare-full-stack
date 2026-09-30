@@ -13,7 +13,8 @@
     "@ea/api": "workspace:*",
     "@ea/modules": "workspace:*",
     "@effect/sql-pg": "catalog:",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "@ea/database": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260926.1",

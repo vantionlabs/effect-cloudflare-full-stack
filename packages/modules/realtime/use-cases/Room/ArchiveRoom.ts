@@ -8,9 +8,9 @@
  * One operation with a flag rather than `archive` and `restore`, because the two differ only in which
  * timestamp is written and a caller toggling a switch should not have to pick a method name.
  */
+import { Db } from "@ea/database/Database"
 import { RoomNotFound } from "@ea/modules/realtime/domain/Errors"
 import type { RoomId } from "@ea/modules/realtime/domain/Room"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 import { ROOM_COLUMNS, toRoom } from "./ResolveRoom.ts"
 

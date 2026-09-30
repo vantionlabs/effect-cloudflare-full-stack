@@ -22,10 +22,10 @@
  * the cron are the only places in the system that provide `CurrentOrg` directly rather than deriving it
  * from a session — which is the list a tenancy audit wants.
  */
+import { Db } from "@ea/database/Database"
 import { CurrentOrg, OrgId } from "@ea/domain/Identity"
 import { EventNotFound, isTerminal } from "@ea/modules/shared/domain/Errors"
 import { type EventId } from "@ea/modules/shared/domain/Event"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 
 export interface EventRow {

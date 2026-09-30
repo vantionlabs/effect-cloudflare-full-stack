@@ -43,6 +43,7 @@
  *     bun run evals --strict              # the CI gate
  *     EVAL_COUNT=12 bun run evals         # a cheap smoke run
  */
+import { Db, textArray } from "@ea/database/Database"
 import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
 import { Ids } from "@ea/domain/Ids"
 import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
@@ -54,7 +55,6 @@ import { EmbedderWorkersAiRest } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
 import { EventBus, type EventBusService } from "@ea/modules/shared/domain/Event"
-import { Db, textArray } from "@ea/modules/shared/tables/Database"
 import { migrate } from "@ea/modules/shared/tables/Migrations"
 import { PgClient } from "@effect/sql-pg"
 import { Cause, Effect, Layer, Redacted } from "effect"

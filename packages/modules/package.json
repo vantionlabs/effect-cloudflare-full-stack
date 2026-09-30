@@ -14,7 +14,8 @@
     "effect": "catalog:",
     "pg": "^8.23.0",
     "uuid": "^14.0.2",
-    "@ea/domain": "workspace:*"
+    "@ea/domain": "workspace:*",
+    "@ea/database": "workspace:*"
   },
   "devDependencies": {
     "@effect/sql-pg": "catalog:",

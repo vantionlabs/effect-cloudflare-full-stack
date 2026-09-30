@@ -28,7 +28,7 @@
  * itself it would be racing the consumer for the same row; instead it re-delivers and lets the
  * consumer's own claim decide. The only state this changes is in the queue.
  */
-import { Db } from "@ea/modules/shared/tables/Database"
+import { Db } from "@ea/database/Database"
 import { Effect } from "effect"
 import { EventBus, EventId as EventIdSchema, QueueMessage } from "../../domain/Event/index.ts"
 

@@ -6,6 +6,7 @@
  * catch an HNSW index built for the wrong operator class, a `security definer` slip on the function,
  * or a `collection` filter that stopped applying.
  */
+import { Db } from "@ea/database/Database"
 import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
 import { Ids } from "@ea/domain/Ids"
 import { type Chunker, ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
@@ -13,7 +14,6 @@ import type { EmbeddingProfile } from "@ea/modules/policy/domain/Embedding"
 import { EmbedderDeterministic } from "@ea/modules/policy/server/Embedding"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
 import { RetrievePolicy } from "@ea/modules/policy/use-cases/Retrieval"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Layer, Redacted } from "effect"
 import type { EmbeddingModel } from "effect/ai"

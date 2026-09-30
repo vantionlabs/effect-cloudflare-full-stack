@@ -10,12 +10,12 @@
  * matters: superusers and (unless forced) table owners bypass RLS entirely, so a suite run as the
  * owner would pass while proving nothing.
  */
+import { Db } from "@ea/database/Database"
 import { CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Layer, Redacted } from "effect"
 import { SqlClient } from "effect/sql"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { Db } from "../Database/Db.ts"
 import { migrate } from "../Migrations/Migrations.ts"
 
 const ORG_A = OrgId.make("org_a")

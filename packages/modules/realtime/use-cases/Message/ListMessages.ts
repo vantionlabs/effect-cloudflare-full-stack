@@ -13,10 +13,10 @@
  * by the first message, so "nobody has said anything" and "there is no row" are the same fact to a reader —
  * and `ResolveRoom` is asked not to create one, so reading never writes.
  */
+import { Db } from "@ea/database/Database"
 import { CurrentUser, UserId } from "@ea/domain/Identity"
 import { Message, type MessageId, MessageMention, MessageReaction } from "@ea/modules/realtime/domain/Message"
 import type { RoomId, RoomRef } from "@ea/modules/realtime/domain/Room"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 import { ResolveRoom } from "../Room/ResolveRoom.ts"
 

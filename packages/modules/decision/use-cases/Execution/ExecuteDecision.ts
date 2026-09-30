@@ -27,9 +27,9 @@
  *
  * Getting this wrong pays a supplier twice.
  */
+import { Db } from "@ea/database/Database"
 import { Ids } from "@ea/domain/Ids"
 import { Adapter, AdapterRequest, type ExecutionAction, ExecutionId } from "@ea/modules/decision/domain/Execution"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 
 export interface ExecuteDecisionInput {

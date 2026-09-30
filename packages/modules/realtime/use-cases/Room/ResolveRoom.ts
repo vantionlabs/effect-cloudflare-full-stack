@@ -10,10 +10,10 @@
  * create it, so `Message.post` passes `create: true`. The alternative, always creating, would have a reader
  * silently writing rows.
  */
+import { Db } from "@ea/database/Database"
 import { Ids } from "@ea/domain/Ids"
 import { RoomNotFound } from "@ea/modules/realtime/domain/Errors"
 import { Room, type RoomId, type RoomRef } from "@ea/modules/realtime/domain/Room"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 
 interface RoomRow {

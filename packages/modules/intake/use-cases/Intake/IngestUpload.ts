@@ -16,13 +16,13 @@
  * The parsed text is deliberately NOT stored yet: it belongs with the extraction, against which
  * the verbatim check runs. Storing it twice invites the two copies to disagree.
  */
+import { Db } from "@ea/database/Database"
 import { CurrentUser } from "@ea/domain/Identity"
 import { Ids } from "@ea/domain/Ids"
 import { Blobs, DocumentId, DocumentParser } from "@ea/modules/intake/domain/Document"
 import { IntakeId } from "@ea/modules/intake/domain/Intake"
 import type { Collection } from "@ea/modules/shared/domain/Corpus"
 import { decideEventKey } from "@ea/modules/shared/domain/Event"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { EmitEvent } from "@ea/modules/shared/use-cases/Event"
 import { Effect } from "effect"
 

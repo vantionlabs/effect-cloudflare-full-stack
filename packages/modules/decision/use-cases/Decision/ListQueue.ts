@@ -5,8 +5,8 @@
  * and the oldest item is the one closest to breaching whatever the client was promised. Newest-first would
  * bury the urgent work under the fresh work.
  */
+import { Db } from "@ea/database/Database"
 import { DecisionDetail, QueueItem } from "@ea/modules/decision/domain/Decision"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect, Schema } from "effect"
 
 const MAX_LIMIT = 200

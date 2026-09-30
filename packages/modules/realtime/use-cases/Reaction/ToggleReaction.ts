@@ -7,10 +7,10 @@
  *
  * It returns what the reaction now IS rather than what it was, because that is what a caller renders.
  */
+import { Db } from "@ea/database/Database"
 import { CurrentUser } from "@ea/domain/Identity"
 import { MessageNotFound } from "@ea/modules/realtime/domain/Errors"
 import type { MessageId } from "@ea/modules/realtime/domain/Message"
-import { Db } from "@ea/modules/shared/tables/Database"
 import { Effect } from "effect"
 
 export const ToggleReaction = (input: {
