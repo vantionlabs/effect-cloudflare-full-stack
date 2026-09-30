@@ -135,6 +135,27 @@ Two things follow, both now in code. A quota 429 is **not** transient and must n
 (`LanguageModelWorkersAi` tells the two apart by body, since the status does not) — and AI Gateway's
 response cache would have served the repeated identical runs for nothing (`services.md` §7).
 
+**Per-model neuron rates, checked 2026-09-30**, and they say the two gates are in completely different
+affordability classes. The free allocation is 10,000 neurons per day and **resets at 00:00 UTC**, on the paid
+plan as well as the free one; Workers Paid ($5/month) includes the same allocation and bills $0.011 per 1,000
+neurons above it.
+
+| Model this repo uses                       | Rate                                                        |
+| ------------------------------------------ | ----------------------------------------------------------- |
+| `@cf/baai/bge-m3` (embeddings)             | **1,075** neurons per M input tokens                        |
+| `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | **26,668** per M input, **204,805** per M **output** tokens |
+
+- **`evals:retrieval` is effectively free.** The whole fixture corpus is ~2,157 words (~3,200 tokens), so one
+  run costs single-digit neurons — under a thousandth of a day's allocation. **The retrieval gate was never
+  what exhausted the quota**, and it needs a token rather than a plan.
+- **`evals` (the 99-case decision run) costs roughly twice a day's allocation.** Estimated, not measured:
+  99 cases at ~4,000 input tokens is ~10,600 neurons, and ~450 output tokens each is ~9,100 more, because
+  output on a 70b model is **7.7× the price of input**. So a full scored run cannot fit in the free allocation
+  at all, however long one waits — which is why ADR-0008's A/B is blocked on account state.
+
+Three ways out, in increasing cost: AI Gateway response caching (identical re-runs stop costing anything),
+a smaller model for the eval loop, or Workers Paid. Only the third also raises the ceiling.
+
 ### Workers AI honours OpenAI-compatible `response_format: json_schema`
 
 **Verified by request 2026-09-29** against
