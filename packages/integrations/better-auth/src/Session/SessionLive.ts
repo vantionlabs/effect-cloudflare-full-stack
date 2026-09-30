@@ -26,11 +26,11 @@ import {
   CurrentUser,
   Identity,
   IdentityResolver,
-  type MemberRole,
+  MemberRole,
   OrgId,
   UserId
 } from "@ea/domain/Identity"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Result, Schema } from "effect"
 import { HttpServerRequest } from "effect/http"
 import { HttpApiError } from "effect/http-api"
 import type { AuthConfig } from "./BetterAuth.ts"
@@ -69,11 +69,29 @@ export const resolveIdentity = (config: AuthConfig, headers: Headers) =>
     const role = yield* auth.activeRole(headers)
     if (role === null) return null
 
+    /*
+     * The role is DECODED, not cast — and this was `role as MemberRole`, which was a hole.
+     *
+     * better-auth owns the `member.role` column and **its default value is `member`**, which is not in our
+     * closed set (`owner`, `reviewer`, `viewer`). The cast let that string through into `Identity`, whose
+     * constructor then threw — so a member added through better-auth's own invitation flow got a **500 with an
+     * empty body** on every authenticated request, with nothing in the response to explain it. Invisible until
+     * now because the console's own flow makes the creator an `owner`.
+     *
+     * An unrecognised role is treated as NO SESSION, which answers 401. Two alternatives were worse: dying (the
+     * current behaviour, which reports a server fault for a membership problem) and mapping `member` onto one of
+     * ours, which would be inventing an authorisation — precisely what a closed role set exists to prevent.
+     *
+     * The product consequence is real and is tracked: whatever invites a member must set one of OUR roles.
+     */
+    const decoded = Schema.decodeUnknownResult(MemberRole)(role)
+    if (!Result.isSuccess(decoded)) return null
+
     return new Identity({
       userId: UserId.make(session.userId),
       orgId: OrgId.make(organizationId),
       email: session.email,
-      role: role as MemberRole
+      role: decoded.success
     })
   }).pipe(Effect.scoped)
 

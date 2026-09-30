@@ -663,6 +663,162 @@
         }
       }
     },
+    "/api/v1/decisions/{decisionId}/approve": {
+      "post": {
+        "tags": [
+          "decisions"
+        ],
+        "operationId": "decisions.approve",
+        "parameters": [
+          {
+            "name": "decisionId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "decision_id": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "approved",
+                        "rejected"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "decision_id",
+                    "result"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "DecisionNotFoundV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionNotFoundV1Encoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "DecisionNotPendingV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionNotPendingV1Encoded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/decisions/{decisionId}/reject": {
+      "post": {
+        "tags": [
+          "decisions"
+        ],
+        "operationId": "decisions.reject",
+        "parameters": [
+          {
+            "name": "decisionId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "decision_id": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "approved",
+                        "rejected"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "decision_id",
+                    "result"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "DecisionNotFoundV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionNotFoundV1Encoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "DecisionNotPendingV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionNotPendingV1Encoded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/rooms": {
       "get": {
         "tags": [
@@ -822,6 +978,370 @@
               }
             }
           }
+        }
+      },
+      "post": {
+        "tags": [
+          "rooms"
+        ],
+        "operationId": "rooms.create",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "channel",
+                        "decision"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "topic": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "archived_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "unread_count": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "name",
+                    "slug",
+                    "topic",
+                    "created_by",
+                    "created_at",
+                    "archived_at",
+                    "unread_count"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RoomSlugTakenV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomSlugTakenV1Encoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RoomNameInvalidV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomNameInvalidV1Encoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "topic": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/api/v1/rooms/{roomId}/archived": {
+      "put": {
+        "tags": [
+          "rooms"
+        ],
+        "operationId": "rooms.setArchived",
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "channel",
+                        "decision"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "topic": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "archived_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "unread_count": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "name",
+                    "slug",
+                    "topic",
+                    "created_by",
+                    "created_at",
+                    "archived_at",
+                    "unread_count"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RoomNotFoundV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomNotFoundV1Encoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "archived": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "archived"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/api/v1/rooms/{roomId}/read": {
+      "put": {
+        "tags": [
+          "rooms"
+        ],
+        "operationId": "rooms.markRead",
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "room_id": {
+                      "type": "string"
+                    },
+                    "last_read_message_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id",
+                    "last_read_message_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RoomNotFoundV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomNotFoundV1Encoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "message_id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
         }
       }
     },
@@ -1046,6 +1566,562 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "messages"
+        ],
+        "operationId": "messages.post",
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "room_id": {
+                      "type": "string"
+                    },
+                    "author_user_id": {
+                      "type": "string"
+                    },
+                    "author_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "edited_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "deleted_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "reactions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "emoji": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer"
+                          },
+                          "mine": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "emoji",
+                          "count",
+                          "mine"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "mentions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "user_id": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "user_id",
+                          "email"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "room_id",
+                    "author_user_id",
+                    "author_email",
+                    "body",
+                    "created_at",
+                    "edited_at",
+                    "deleted_at",
+                    "reactions",
+                    "mentions"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RoomNotFoundV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomNotFoundV1Encoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "body"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/api/v1/messages/{messageId}": {
+      "patch": {
+        "tags": [
+          "messages"
+        ],
+        "operationId": "messages.edit",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message_id": {
+                      "type": "string"
+                    },
+                    "edited_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message_id",
+                    "edited_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotMessageAuthorV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotMessageAuthorV1Encoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "MessageNotFoundV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageNotFoundV1Encoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "body"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": [
+          "messages"
+        ],
+        "operationId": "messages.delete",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotMessageAuthorV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotMessageAuthorV1Encoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "MessageNotFoundV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageNotFoundV1Encoded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/messages/{messageId}/reactions/{emoji}": {
+      "put": {
+        "tags": [
+          "messages"
+        ],
+        "operationId": "messages.react",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "emoji",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message_id": {
+                      "type": "string"
+                    },
+                    "emoji": {
+                      "type": "string"
+                    },
+                    "reacted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "message_id",
+                    "emoji",
+                    "reacted"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "MessageNotFoundV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageNotFoundV1Encoded"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "messages"
+        ],
+        "operationId": "messages.unreact",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "emoji",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message_id": {
+                      "type": "string"
+                    },
+                    "emoji": {
+                      "type": "string"
+                    },
+                    "reacted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "message_id",
+                    "emoji",
+                    "reacted"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "MessageNotFoundV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageNotFoundV1Encoded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ask": {
+      "post": {
+        "tags": [
+          "ask"
+        ],
+        "operationId": "ask.question",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "answer": {
+                      "type": "string"
+                    },
+                    "steps": {
+                      "type": "integer"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "answer",
+                    "steps",
+                    "truncated"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "question"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
       }
     }
   },
@@ -1066,18 +2142,41 @@
         ],
         "additionalProperties": false
       },
-      "effect_HttpApiError_BadRequestEncoded": {
+      "MessageNotFoundV1Encoded": {
         "type": "object",
         "properties": {
           "_tag": {
             "type": "string",
             "enum": [
-              "BadRequest"
+              "MessageNotFoundV1"
             ]
+          },
+          "message_id": {
+            "type": "string"
           }
         },
         "required": [
-          "_tag"
+          "_tag",
+          "message_id"
+        ],
+        "additionalProperties": false
+      },
+      "NotMessageAuthorV1Encoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "NotMessageAuthorV1"
+            ]
+          },
+          "message_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "message_id"
         ],
         "additionalProperties": false
       },
@@ -1097,6 +2196,82 @@
         "required": [
           "_tag",
           "room_id"
+        ],
+        "additionalProperties": false
+      },
+      "effect_HttpApiError_BadRequestEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "BadRequest"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "RoomSlugTakenV1Encoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "RoomSlugTakenV1"
+            ]
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "slug"
+        ],
+        "additionalProperties": false
+      },
+      "RoomNameInvalidV1Encoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "RoomNameInvalidV1"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "name",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "DecisionNotPendingV1Encoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "DecisionNotPendingV1"
+            ]
+          },
+          "decision_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "decision_id"
         ],
         "additionalProperties": false
       },
@@ -1278,6 +2453,9 @@
     },
     {
       "name": "messages"
+    },
+    {
+      "name": "ask"
     }
   ]
 }

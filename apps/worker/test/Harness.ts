@@ -6,6 +6,7 @@
  * `baseURL`, **not** against the request URL, and the harness binds a random port. So requests
  * carry the baseURL as `Origin` and use relative paths.
  */
+import { Client } from "pg"
 import { expect } from "vitest"
 import { createTestHarness } from "wrangler"
 
@@ -30,6 +31,18 @@ export interface Harness {
   readonly post: (path: string, body: unknown, cookie?: string) => Promise<HarnessResponse>
   /** Signs up a fresh user, creates an organization and activates it. */
   readonly signedInWithOrg: () => Promise<{ cookie: string; organizationId: string }>
+  /**
+   * Signs up a fresh user and makes them a member of an EXISTING organization.
+   *
+   * The membership row is written directly rather than through better-auth's invitation flow, which is an invite
+   * plus an accept plus an email. What the tests using this need is a second person in one organization — the
+   * only shape in which 403-not-404 is observable — and the invitation mechanics are better-auth's to test.
+   *
+   * The role is `reviewer`, one of OURS. better-auth's own default is `member`, which is not in our closed set —
+   * writing that here produced a 500 and found a real bug in `resolveIdentity`, which used to CAST the role
+   * rather than decode it.
+   */
+  readonly signedInAs: (organizationId: string) => Promise<{ cookie: string; userId: string }>
   readonly origin: string
   readonly dispose: () => Promise<void>
 }
@@ -82,10 +95,49 @@ export const startHarness = async (): Promise<Harness> => {
     return { cookie, organizationId }
   }
 
+  const signedInAs = async (organizationId: string) => {
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const email = `member-${unique}@example.com`
+    const signUp = await post("/api/auth/sign-up/email", {
+      email,
+      password: "correct-horse-battery-staple",
+      name: "Second User"
+    })
+    expect(signUp.status).toBe(200)
+    let cookie = cookiesFrom(signUp)
+
+    const client = new Client({
+      host: process.env["PGHOST"] ?? "localhost",
+      port: Number(process.env["PGPORT"] ?? 55433),
+      user: process.env["PGUSER"] ?? "effect_ai",
+      password: process.env["PGPASSWORD"] ?? "local_dev_only",
+      database: process.env["PGDATABASE"] ?? "effect_ai"
+    })
+    await client.connect()
+    let userId: string
+    try {
+      const found = await client.query<{ id: string }>(`select id from "user" where email = $1`, [email])
+      userId = found.rows[0]!.id
+      await client.query(
+        `insert into member (id, "organizationId", "userId", role, "createdAt") values ($1, $2, $3, 'reviewer', now())`,
+        [`member_${unique}`, organizationId, userId]
+      )
+    } finally {
+      await client.end()
+    }
+
+    const activated = await post("/api/auth/organization/set-active", { organizationId }, cookie)
+    expect(activated.status).toBe(200)
+    cookie = cookiesFrom(activated) || cookie
+
+    return { cookie, userId }
+  }
+
   return {
     fetch,
     post,
     signedInWithOrg,
+    signedInAs,
     origin: ORIGIN,
     /*
      * `close`, not `dispose`. This called `server?.dispose?.()` — a method `TestHarness` does not

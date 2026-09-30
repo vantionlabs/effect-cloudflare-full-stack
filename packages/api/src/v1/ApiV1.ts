@@ -14,6 +14,7 @@ import { RoomGroup } from "@ea/modules/chat/domain/Room"
 import { DecisionGroup } from "@ea/modules/decision/domain/Decision"
 import { MeGroup } from "@ea/modules/iam/domain/Identity"
 import { IntakeGroup } from "@ea/modules/intake/domain/Intake"
+import { AskGroup } from "@ea/modules/policy/domain/Ask"
 import { HttpApi, OpenApi } from "effect/http-api"
 import { HealthGroup } from "./Health/HealthWire.ts"
 
@@ -33,6 +34,7 @@ export const ApiV1 = HttpApi.make("effect-ai-v1")
   .add(DecisionGroup)
   .add(RoomGroup)
   .add(MessageGroup)
+  .add(AskGroup)
   .prefix("/api/v1")
   .annotate(OpenApi.Title, "effect-ai")
   .annotate(OpenApi.Version, "1.0.0")

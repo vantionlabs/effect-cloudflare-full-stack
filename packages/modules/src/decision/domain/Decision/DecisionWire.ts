@@ -71,6 +71,20 @@ export class DecisionNotFoundV1 extends Schema.Error<DecisionNotFoundV1>(
   "DecisionNotFoundV1"
 )({ _tag: Schema.tag("DecisionNotFoundV1"), decision_id: Schema.String }, { httpApiStatus: 404 }) {}
 
+/**
+ * 409, because the decision exists and is no longer open.
+ *
+ * The compare-and-swap that settles a decision matches only a `pending_review` row, so a second caller — a
+ * second tab, a retried request, another client — finds nothing to update. That is a conflict with the current
+ * state and not a failure: exactly one caller wins, which is the property the queue depends on.
+ */
+export class DecisionNotPendingV1 extends Schema.Error<DecisionNotPendingV1>(
+  "DecisionNotPendingV1"
+)({ _tag: Schema.tag("DecisionNotPendingV1"), decision_id: Schema.String }, { httpApiStatus: 409 }) {}
+
+/** What a review did. `not_pending` never reaches a client — it becomes the 409 above. */
+export const ReviewResultV1 = wire({ decisionId: Schema.String, result: Schema.Literals(["approved", "rejected"]) })
+
 export const DecisionGroup = HttpApiGroup.make("decisions")
   .add(
     HttpApiEndpoint.get("list", "/decisions", {
@@ -97,6 +111,28 @@ export const DecisionGroup = HttpApiGroup.make("decisions")
       params: { decisionId: Schema.String },
       success: DecisionDetailV1,
       error: DecisionNotFoundV1
+    })
+  )
+  .add(
+    /*
+     * `POST` to an action sub-resource, not `PATCH /decisions/{id}` with a status.
+     *
+     * Approving is not a field assignment. It is a compare-and-swap that emits an execution event, and the single
+     * emit call site is asserted by a `grep -c` test — the mechanical half of the claim that a human approval and
+     * an automatic one take the same path. Modelling it as a status write would invite a client to think it could
+     * set any status, and would hide that something happens as a result.
+     */
+    HttpApiEndpoint.post("approve", "/decisions/:decisionId/approve", {
+      params: { decisionId: Schema.String },
+      success: ReviewResultV1,
+      error: [DecisionNotFoundV1, DecisionNotPendingV1]
+    })
+  )
+  .add(
+    HttpApiEndpoint.post("reject", "/decisions/:decisionId/reject", {
+      params: { decisionId: Schema.String },
+      success: ReviewResultV1,
+      error: [DecisionNotFoundV1, DecisionNotPendingV1]
     })
   )
   .middleware(Authenticated)

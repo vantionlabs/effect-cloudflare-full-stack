@@ -27,6 +27,7 @@
 import { LanguageModelWorkersAiOpenAi } from "@ea/ai-openai/Model"
 import {
   ApiV1,
+  AskHttp,
   AskRpcLive,
   DecisionHttp,
   DecisionRpcLive,
@@ -189,6 +190,27 @@ const ServicesLayer = (env: Env) =>
     Layer.provide(layerConfigProvider(env))
   )
 
+/** Every v1 HTTP edge. */
+const HttpEdges = Layer.mergeAll(
+  HealthHttp,
+  IdentityHttp,
+  IntakeHttp,
+  DecisionHttp,
+  RoomHttp,
+  MessageHttp,
+  AskHttp
+)
+
+/** Every v1 RPC edge. The agent brings its own language model, locally — see AskRpcLive.ts. */
+const RpcEdges = Layer.mergeAll(
+  IdentityRpcLive,
+  IntakeRpcLive,
+  DecisionRpcLive,
+  MessageRpcLive,
+  RoomRpcLive,
+  AskRpcLive
+)
+
 /** The HTTP and RPC surfaces, over the shared services. */
 const AppLayer = (env: Env) =>
   Layer.mergeAll(
@@ -259,19 +281,14 @@ const AppLayer = (env: Env) =>
         credentials: true
       })
     ),
-    Layer.provide(HealthHttp),
-    Layer.provide(IdentityHttp),
-    Layer.provide(IntakeHttp),
-    Layer.provide(DecisionHttp),
-    Layer.provide(RoomHttp),
-    Layer.provide(MessageHttp),
-    Layer.provide(IdentityRpcLive),
-    Layer.provide(IntakeRpcLive),
-    Layer.provide(DecisionRpcLive),
-    Layer.provide(MessageRpcLive),
-    Layer.provide(RoomRpcLive),
-    // The agent. Brings its own language model, locally — see AskRpcLive.ts.
-    Layer.provide(AskRpcLive),
+    /*
+     * Merged into two groups rather than listed one per `Layer.provide`, and that is forced: `pipe` accepts at
+     * most twenty arguments, and the full REST surface put this chain over it. Grouping by TRANSPORT keeps the
+     * list readable — every HTTP edge, then every RPC edge — and they are independent contributions to the same
+     * router, so merging changes nothing about how they compose.
+     */
+    Layer.provide(HttpEdges),
+    Layer.provide(RpcEdges),
     // JSON rather than msgpack: the console is a browser, the payloads are small, and a wire format a
     // human can read in devtools is worth more here than a few bytes.
     Layer.provide(RpcSerialization.layerJson),

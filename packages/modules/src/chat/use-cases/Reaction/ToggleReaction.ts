@@ -16,6 +16,15 @@ import { Effect } from "effect"
 export const ToggleReaction = (input: {
   readonly messageId: MessageId
   readonly emoji: string
+  /**
+   * The state to leave the reaction IN, when the caller knows it. Omit to toggle.
+   *
+   * **This exists because a toggle is not safe over HTTP.** A client that retries a request — after a timeout,
+   * a 502 from a proxy, a lost response — would toggle twice and silently take its own reaction back. So the
+   * REST edge always says what it wants (`PUT` means present, `DELETE` means absent) and is therefore
+   * idempotent, while the console keeps toggling, because to a user it is one button.
+   */
+  readonly desired?: boolean | undefined
 }) =>
   Effect.gen(function*() {
     const db = yield* Db
@@ -33,6 +42,23 @@ export const ToggleReaction = (input: {
     )
     if (found[0] === undefined) return yield* Effect.fail(new MessageNotFound({ messageId: input.messageId }))
 
+    /*
+     * Asked to remove it: delete unconditionally and report absence. Idempotent — deleting a row that is not
+     * there is not an error, and saying so is the whole point of accepting `desired`.
+     */
+    if (input.desired === false) {
+      yield* db.scoped((sql, orgId) =>
+        sql`
+          delete from message_reactions
+           where organization_id = ${orgId}
+             and message_id = ${input.messageId}
+             and user_id = ${identity.userId}
+             and emoji = ${input.emoji}
+        `
+      )
+      return { messageId: input.messageId, emoji: input.emoji, reacted: false }
+    }
+
     const inserted = yield* db.scoped((sql, orgId) =>
       sql<{ message_id: string }>`
         insert into message_reactions (organization_id, message_id, user_id, emoji)
@@ -44,6 +70,10 @@ export const ToggleReaction = (input: {
 
     // A row went in, so this is a new reaction and there is nothing else to do.
     if (inserted[0] !== undefined) return { messageId: input.messageId, emoji: input.emoji, reacted: true }
+
+    // Already there, and the caller asked for it to BE there. Nothing to do, which is what makes `PUT` safe
+    // to retry: the second call is a no-op rather than a removal.
+    if (input.desired === true) return { messageId: input.messageId, emoji: input.emoji, reacted: true }
 
     /*
      * It was already there, so the click means "take it back". Delete on the same key — which is also why this
