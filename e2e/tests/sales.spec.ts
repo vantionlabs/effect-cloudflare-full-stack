@@ -16,7 +16,7 @@ test("a customer's request becomes a priced draft, is approved by a person, and 
   await expect(sku).toBeEnabled()
   await sku.fill("SV-350")
   await page.getByLabel("Product name").fill("Pressure relief valve 350 bar")
-  await page.getByLabel("Price").fill("189,00")
+  await page.getByLabel("Price", { exact: true }).fill("189,00")
   await page.getByRole("button", { name: "Add product" }).click()
   await expect(page.getByRole("table", { name: "Products" })).toContainText("SV-350")
 
@@ -36,4 +36,29 @@ test("a customer's request becomes a priced draft, is approved by a person, and 
   await expect(quote.getByTestId("quote-status")).toHaveText("approved")
   await quote.getByRole("button", { name: "Send to customer" }).click()
   await expect(quote.getByTestId("quote-status")).toHaveText("sent")
+})
+
+test("an instruction becomes a proposed price change that only applies when a person applies it", async ({ page, baseURL }) => {
+  test.setTimeout(120_000)
+  await createAccount(page.request, baseURL ?? "")
+  await page.goto("/sales")
+  const sku = page.getByLabel("SKU")
+  await expect(sku).toBeEnabled()
+  await sku.fill("SV-350")
+  await page.getByLabel("Product name").fill("Pressure relief valve 350 bar")
+  await page.getByLabel("Price", { exact: true }).fill("189,00")
+  await page.getByRole("button", { name: "Add product" }).click()
+  const products = page.getByRole("table", { name: "Products" })
+  await expect(products).toContainText("189,00")
+
+  await page.getByLabel("Price list instruction").fill("Raise the price of SV-350 to 199 euro.")
+  await page.getByRole("button", { name: "Propose" }).click()
+  const proposal = page.getByTestId("proposal").first()
+  await expect(proposal).toContainText("199,00", { timeout: 60_000 })
+  // Proposed, not applied: the price list still says 189.
+  await expect(products).toContainText("189,00")
+
+  await proposal.getByRole("button", { name: "Apply" }).click()
+  await expect(products).toContainText("199,00")
+  await expect(page.getByTestId("proposal")).toHaveCount(0)
 })

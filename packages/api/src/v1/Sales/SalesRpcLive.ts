@@ -4,12 +4,22 @@
  * `serveForTenant`: every use case here writes or reads within the caller's organization, and the ones that record
  * a person (`created_by`, `approved_by`) also need `CurrentUser`, which the RPC middleware supplies.
  */
+import { AgentModel } from "@ea/modules/policy/domain/Ask"
 import type { QuoteStatus } from "@ea/modules/sales/domain/Quote"
 import { SalesRpcs } from "@ea/modules/sales/domain/Sales"
+import {
+  ApplyChange,
+  changeToolkitFor,
+  ListChanges,
+  MAX_INSTRUCTION_LENGTH,
+  ProposeChanges,
+  RejectChange
+} from "@ea/modules/sales/use-cases/Change"
 import type { UpsertProductInput } from "@ea/modules/sales/use-cases/Product"
 import { ListProducts, UpsertProduct } from "@ea/modules/sales/use-cases/Product"
 import { ApproveQuote, DiscardQuote, DraftQuote, ListQuotes, SendQuote } from "@ea/modules/sales/use-cases/Quote"
 import { Effect } from "effect"
+import { LanguageModel } from "effect/ai"
 import { serveForTenant } from "../Serve.ts"
 
 export const SalesRpcLive = SalesRpcs.toLayer(
@@ -23,6 +33,23 @@ export const SalesRpcLive = SalesRpcs.toLayer(
       serveForTenant(DraftQuote(payload)).pipe(Effect.catchTag("AiError", Effect.die)),
     "Sales.approveQuote": (payload: { readonly quoteId: string }) => serveForTenant(ApproveQuote(payload.quoteId)),
     "Sales.discardQuote": (payload: { readonly quoteId: string }) => serveForTenant(DiscardQuote(payload.quoteId)),
-    "Sales.sendQuote": (payload: { readonly quoteId: string }) => serveForTenant(SendQuote(payload.quoteId))
+    "Sales.sendQuote": (payload: { readonly quoteId: string }) => serveForTenant(SendQuote(payload.quoteId)),
+    "Sales.proposeChanges": (payload: { readonly instruction: string }) => {
+      const instruction = payload.instruction.slice(0, MAX_INSTRUCTION_LENGTH)
+      return serveForTenant(
+        Effect.gen(function*() {
+          // The agent's model (tool calling) under the plain tag the use case asks for, as `Data.ask` does; the
+          // toolkit is built for THIS instruction, which every proposed value is checked against.
+          const model = yield* AgentModel
+          return yield* ProposeChanges(instruction).pipe(
+            Effect.provide(changeToolkitFor(instruction)),
+            Effect.provideService(LanguageModel.LanguageModel, model)
+          )
+        })
+      ).pipe(Effect.catchTag("AiError", Effect.die))
+    },
+    "Sales.changes": () => serveForTenant(ListChanges),
+    "Sales.applyChange": (payload: { readonly changeId: string }) => serveForTenant(ApplyChange(payload.changeId)),
+    "Sales.rejectChange": (payload: { readonly changeId: string }) => serveForTenant(RejectChange(payload.changeId))
   })
 )

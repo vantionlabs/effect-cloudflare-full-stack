@@ -9,6 +9,10 @@ import { AuthenticatedRpc } from "@ea/domain/Identity"
 import { EmailNotSent } from "@ea/modules/shared/domain/Errors"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
+import { ProposalRun, ProposedChange } from "../Change/Change.ts"
+import { ChangeIsStale } from "../Errors/ChangeIsStale.ts"
+import { ChangeNotFound } from "../Errors/ChangeNotFound.ts"
+import { ChangeNotPending } from "../Errors/ChangeNotPending.ts"
 import { InvalidProduct } from "../Errors/InvalidProduct.ts"
 import { QuoteHasNoRecipient } from "../Errors/QuoteHasNoRecipient.ts"
 import { QuoteNotFound } from "../Errors/QuoteNotFound.ts"
@@ -60,5 +64,24 @@ export const SalesRpcs = RpcGroup.make(
     payload: QuoteRef,
     success: Quote,
     error: Schema.Union([QuoteNotFound, QuoteNotInState, QuoteHasNoRecipient, EmailNotSent])
+  }),
+  /** Turns an instruction into PROPOSED price-list changes. Writes proposals only; never a product. */
+  Rpc.make("Sales.proposeChanges", {
+    payload: { instruction: Schema.String },
+    success: ProposalRun
+  }),
+  Rpc.make("Sales.changes", {
+    payload: {},
+    success: Schema.Array(ProposedChange)
+  }),
+  Rpc.make("Sales.applyChange", {
+    payload: { changeId: Schema.String },
+    success: ProposedChange,
+    error: Schema.Union([ChangeNotFound, ChangeNotPending, ChangeIsStale])
+  }),
+  Rpc.make("Sales.rejectChange", {
+    payload: { changeId: Schema.String },
+    success: ProposedChange,
+    error: Schema.Union([ChangeNotFound, ChangeNotPending])
   })
 ).middleware(AuthenticatedRpc)

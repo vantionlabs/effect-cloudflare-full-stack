@@ -12,7 +12,7 @@ cash), the product models it.
 | 2 | Editing data by asking                                          | proposals a person approves before anything is written        |
 | 4 | Work-in-progress and cash-flow planning                         | quotes and their outcomes, as the source of pipeline and cash |
 
-**Order now: 2, then 4.** Sales comes first because it creates the business data the other three
+**Order now: 4.** Sales comes first because it creates the business data the other three
 operate on.
 
 **The rule all of them share: the model proposes, code computes, a person approves.** A model never sets a price,
@@ -44,3 +44,10 @@ shape the decide pipeline enforces with rails.
 - [x] Console `/sales`, server-rendered through Effect Atom hydration, every action an RPC mutation.
 - [ ] Customers as records of their own (today a quote carries the name and email read from the request).
 - [ ] Quote from an uploaded document (a PDF or email file), not only pasted text.
+
+## #2 — done (price list)
+
+- [x] Change the price list by asking (`/sales`): the model PROPOSES through tools that never touch `products`;
+      every value must appear verbatim in the instruction; each proposal shows its exact before -> after; applying is
+      a person's action, a compare-and-swap that also refuses a proposal the product has moved on from.
+- [ ] The same for other records — a quote's customer, a draft's lines — once there is a reason to edit them.

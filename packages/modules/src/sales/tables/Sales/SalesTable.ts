@@ -75,3 +75,33 @@ export const SalesTable = Effect.gen(function*() {
     )
   `
 })
+
+/**
+ * Proposed price-list changes (migration 0030). `before`/`after` are the full product fields as JSON, so what a
+ * person approves is exactly what is applied, and applying can check the product still equals `before`.
+ */
+export const ChangeProposalTable = Effect.gen(function*() {
+  const sql = yield* SqlClient.SqlClient
+
+  yield* sql`
+    create table if not exists change_proposals (
+      id               text primary key,
+      organization_id  text not null,
+      status           text not null check (status in ('pending', 'applied', 'rejected')),
+      kind             text not null check (kind in ('update_product', 'create_product')),
+      sku              text not null,
+      before           jsonb,
+      after            jsonb not null,
+      instruction      text not null,
+      created_by       text not null,
+      created_at       timestamptz not null default now(),
+      decided_by       text,
+      decided_at       timestamptz,
+      check ((kind = 'create_product') = (before is null))
+    )
+  `
+
+  yield* sql`
+    create index if not exists change_proposals_pending_idx on change_proposals (organization_id, status, created_at desc)
+  `
+})

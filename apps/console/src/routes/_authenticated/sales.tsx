@@ -14,14 +14,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { useHydrated } from "@/hooks/use-hydrated"
 import {
+  applyChangeAtom,
   approveQuoteAtom,
+  CHANGES_KEY,
+  changesAtom,
   discardQuoteAtom,
   draftQuoteAtom,
   loadSalesPage,
   PRODUCTS_KEY,
   productsAtom,
+  proposeChangesAtom,
   QUOTES_KEY,
   quotesAtom,
+  rejectChangeAtom,
   sendQuoteAtom,
   upsertProductAtom
 } from "@/sales/sales-atoms"
@@ -62,6 +67,10 @@ const explain = (exit: Exit.Exit<unknown, unknown>): string => {
       return `The email could not be sent (${failure.value.reason ?? "provider error"}). The quote is still approved.`
     case "InvalidProduct":
       return failure.value.reason ?? "That product was not accepted."
+    case "ChangeIsStale":
+      return "The product changed after this was proposed, so it was not applied. Reject it and ask again."
+    case "ChangeNotPending":
+      return "Someone already applied or rejected this change."
     default:
       return failure.value._tag ?? "Something went wrong."
   }
@@ -241,6 +250,8 @@ function SalesPage() {
           ))}
       </section>
 
+      <PriceListChanges hydrated={hydrated} explain={explain} />
+
       <Card>
         <CardHeader>
           <CardTitle>Price list</CardTitle>
@@ -367,5 +378,123 @@ function ProductForm(props: {
       </Button>
       {problem === undefined ? null : <p className="w-full text-sm" role="alert">{problem}</p>}
     </form>
+  )
+}
+
+const field = (cents: number | undefined, kind: "price" | "vat" | "active" | "name", value: unknown) =>
+  kind === "price" ? euro(cents ?? 0) : kind === "vat" ? `${Number(value) / 10}%` : String(value)
+
+/**
+ * "Change the price list by asking": an instruction becomes PROPOSALS, each shown as before -> after, and nothing
+ * changes until a person applies one. Refusals are the tools' own reasons (a price not in the instruction, an
+ * unknown SKU), so the person knows exactly what was not done.
+ */
+function PriceListChanges(props: {
+  readonly hydrated: boolean
+  readonly explain: (exit: Exit.Exit<unknown, unknown>) => string
+}) {
+  const changes = useAtomValue(changesAtom)
+  const propose = useAtomSet(proposeChangesAtom, { mode: "promiseExit" })
+  const apply = useAtomSet(applyChangeAtom, { mode: "promiseExit" })
+  const reject = useAtomSet(rejectChangeAtom, { mode: "promiseExit" })
+  const [instruction, setInstruction] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [refusals, setRefusals] = useState<ReadonlyArray<string>>([])
+  const [note, setNote] = useState<string | undefined>(undefined)
+
+  const decide = async (
+    changeId: string,
+    action: (
+      args: { payload: { changeId: string }; reactivityKeys: Array<string> }
+    ) => Promise<Exit.Exit<unknown, unknown>>
+  ) => {
+    setNote(undefined)
+    const exit = await action({ payload: { changeId }, reactivityKeys: [CHANGES_KEY, PRODUCTS_KEY] })
+    if (Exit.isFailure(exit)) setNote(props.explain(exit))
+  }
+
+  const pending = changes._tag === "Success" ? changes.value.filter((change) => change.status === "pending") : []
+  const FIELDS = [["name", "name"], ["unitPrice", "price"], ["vat", "vat"], ["active", "active"]] as const
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Change the price list by asking</CardTitle>
+        <CardDescription>
+          E.g. "raise SV-350 to 199 and stop offering OLD-1". You get proposals to approve; nothing changes until you
+          apply one.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 text-sm">
+        <form
+          method="post"
+          className="flex gap-2"
+          onSubmit={async (event) => {
+            event.preventDefault()
+            if (instruction.trim() === "") return
+            setBusy(true)
+            setNote(undefined)
+            const exit = await propose({ payload: { instruction }, reactivityKeys: [CHANGES_KEY] })
+            if (Exit.isSuccess(exit)) {
+              setRefusals(exit.value.refusals)
+              setInstruction("")
+            } else setNote(props.explain(exit))
+            setBusy(false)
+          }}
+        >
+          <Input
+            aria-label="Price list instruction"
+            value={instruction}
+            maxLength={1000}
+            disabled={!props.hydrated}
+            onChange={(event) => setInstruction(event.target.value)}
+          />
+          <Button type="submit" disabled={!props.hydrated || busy || instruction.trim() === ""}>
+            {busy ? "Working…" : "Propose"}
+          </Button>
+        </form>
+        {refusals.length === 0 ?
+          null :
+          (
+            <ul className="list-disc pl-5 text-amber-700 dark:text-amber-400" aria-label="Not proposed">
+              {refusals.map((reason) => <li key={reason}>{reason}</li>)}
+            </ul>
+          )}
+        {note === undefined ? null : <p role="alert">{note}</p>}
+        {pending.map((change) => (
+          <div key={change.id} className="rounded-md border p-3" data-testid="proposal">
+            <div className="mb-2 font-medium">
+              {change.kind === "create_product" ? "New product" : "Change"} {change.sku}
+            </div>
+            <table className="mb-2 w-full">
+              <tbody>
+                {FIELDS.filter(([key]) => change.before === null || change.before[key] !== change.after[key]).map(
+                  ([key, kind]) => (
+                    <tr key={key}>
+                      <td className="text-muted-foreground w-24">{kind}</td>
+                      <td className="tabular-nums">
+                        {change.before === null ? "" : `${field(change.before.unitPrice, kind, change.before[key])} → `}
+                        <span className="font-medium">{field(change.after.unitPrice, kind, change.after[key])}</span>
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={!props.hydrated} onClick={() => void decide(change.id, apply)}>Apply</Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!props.hydrated}
+                onClick={() => void decide(change.id, reject)}
+              >
+                Reject
+              </Button>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   )
 }

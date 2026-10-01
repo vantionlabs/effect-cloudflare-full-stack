@@ -9,6 +9,7 @@ import { createServerFn } from "@tanstack/react-start"
 
 export const PRODUCTS_KEY = "sales-products"
 export const QUOTES_KEY = "sales-quotes"
+export const CHANGES_KEY = "sales-changes"
 
 export const productsAtom = Api.query("Sales.products", { includeInactive: true }, {
   serializationKey: "sales-products",
@@ -20,11 +21,21 @@ export const quotesAtom = Api.query("Sales.quotes", {}, {
   reactivityKeys: [QUOTES_KEY]
 })
 
+export const changesAtom = Api.query("Sales.changes", {}, {
+  serializationKey: "sales-changes",
+  reactivityKeys: [CHANGES_KEY]
+})
+
 export const upsertProductAtom = Api.mutation("Sales.upsertProduct")
+export const proposeChangesAtom = Api.mutation("Sales.proposeChanges")
+export const applyChangeAtom = Api.mutation("Sales.applyChange")
+export const rejectChangeAtom = Api.mutation("Sales.rejectChange")
 export const draftQuoteAtom = Api.mutation("Sales.draftQuote")
 export const approveQuoteAtom = Api.mutation("Sales.approveQuote")
 export const discardQuoteAtom = Api.mutation("Sales.discardQuote")
 export const sendQuoteAtom = Api.mutation("Sales.sendQuote")
 
 /** The page's SSR data. A GET server function, so it always runs on the server. */
-export const loadSalesPage = createServerFn({ method: "GET" }).handler(() => dehydrateAtoms([productsAtom, quotesAtom]))
+export const loadSalesPage = createServerFn({ method: "GET" }).handler(() =>
+  dehydrateAtoms([productsAtom, quotesAtom, changesAtom])
+)
