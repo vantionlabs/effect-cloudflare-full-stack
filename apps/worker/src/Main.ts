@@ -69,6 +69,7 @@ import {
   retrieveStep,
   settleDecision
 } from "@ea/modules/decision/use-cases/Decision"
+import { ReportStuckWork } from "@ea/modules/decision/use-cases/Execution"
 import { DocumentParser } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
 import { anydocParse, mistralOcrConfig, mistralOcrParse } from "@ea/modules/intake/server/Document"
@@ -601,7 +602,18 @@ export default {
     _ctx: ExecutionContext
   ): Promise<void> {
     await getQueueRuntime(env).runPromise(
-      Effect.flatMap(withDatabase(SweepEnqueueGap), (result) =>
+      /*
+       * TWO jobs now, in one connection and in this order.
+       *
+       * The sweeper first, because re-sending a never-started event is cheap and might clear work the
+       * reporter would otherwise shout about. Then the report, which touches nothing (ADR-0013) and exists
+       * to put ids in front of a human.
+       *
+       * One `withDatabase` around both: a cron invocation is one connection's worth of work, and opening a
+       * second would double the per-tick cost of the thing least worth optimising.
+       */
+      withDatabase(Effect.gen(function*() {
+        const swept = yield* SweepEnqueueGap
         /*
          * `Effect.log`, not `console.log`: it goes through the logger the OTLP drain already consumes, so
          * the cron's output lands in telemetry rather than only in stdout — which matters for the one
@@ -612,10 +624,26 @@ export default {
          * handler exists to prevent. A persistently non-zero `resent` is the alarm: work is being
          * re-sent and still not completing.
          */
-        Effect.log(
-          `cron ${controller.cron}: re-sent ${result.resent} unenqueued event(s)` +
-            (result.more ? " — LIMIT HIT, a backlog remains for the next tick" : "")
-        ))
+        yield* Effect.log(
+          `cron ${controller.cron}: re-sent ${swept.resent} unenqueued event(s)` +
+            (swept.more ? " — LIMIT HIT, a backlog remains for the next tick" : "")
+        )
+
+        /*
+         * The stuck-work report, promised by `ExecutionTable.ts` and required by ADR-0013 — and now also
+         * the only thing that notices an `events` row whose Workflow instance never came back, a state the
+         * queue flip created on 2026-09-30.
+         *
+         * It logs one WARNING per stuck item with the ids; this line is the count, logged including zero
+         * for the same reason the sweeper's is.
+         */
+        const stuck = yield* ReportStuckWork
+        yield* Effect.log(
+          `cron ${controller.cron}: ${stuck.pendingExecutions} ambiguous execution claim(s), ` +
+            `${stuck.stuckEvents} event(s) stuck in processing` +
+            (stuck.more ? " — LIMIT HIT, more remain" : "")
+        )
+      }))
     )
   }
 } satisfies ExportedHandler<Env>

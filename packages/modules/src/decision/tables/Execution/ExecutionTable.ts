@@ -73,7 +73,8 @@ export const ExecutionTable = Effect.gen(function*() {
       on executions (organization_id, idempotency_key)
   `
 
-  // The stuck-claim report's index: pending, oldest first. A cron reads this and tells a human.
+  // The stuck-claim report's index: pending, oldest first. `ReportStuckWork` reads this and tells a human
+  // (wired into the cron 2026-10-01). It reports and never resolves — the restraint is the design.
   yield* sql`
     create index if not exists executions_pending_idx
       on executions (status, claimed_at)

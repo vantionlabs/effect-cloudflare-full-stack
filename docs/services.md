@@ -178,12 +178,14 @@ asserts the new semantics explicitly. Both were negative-tested.
 
 **Still not wired**, and neither is a one-liner:
 
-- ~~**The cron.** No `scheduled` export…~~ **Half of this was done and the row went stale — corrected
-  2026-09-30.** `Main.ts` has a `scheduled` export, `wrangler.jsonc` has `"crons": ["*/5 * * * *"]` at both
-  levels, and the sweeper runs: `SweepEnqueueGap`, the enqueue-gap recovery record. What is **still**
-  missing is the other half — the **stuck-claim report** that `ExecutionTable.ts` promises and ADR-0013
-  requires, which must report an ambiguous `pending` to an operator and must never resolve it. So the cron
-  exists and has one job of the two.
+- ~~**The cron.**~~ **Done.** `Main.ts` has a `scheduled` export, `wrangler.jsonc` has
+  `"crons": ["*/5 * * * *"]` at both levels, and it now runs BOTH jobs: `SweepEnqueueGap` (the enqueue-gap
+  recovery record) and `ReportStuckWork` (2026-10-01), the stuck-claim report `ExecutionTable.ts` promised
+  and ADR-0013 requires. The report touches nothing — an ambiguous `pending` may mean the adapter call
+  succeeded and only the recording write was lost, so "recovering" one pays a supplier twice.
+
+  The flip gave it a second job the plan never anticipated: an `events` row left `processing` with a
+  `workflow_instance_id` when an instance dies without recording. Nothing else notices that state.
 - **A second vertical.** `IngestUpload` hardcodes `invoice`, named as `INVOICE_VERTICAL` so the question
   "where is the vertical chosen?" has one answer when a second arrives.
 
