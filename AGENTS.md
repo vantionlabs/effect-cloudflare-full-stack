@@ -213,6 +213,31 @@ a `node_modules` link left by an earlier install, cached `wrangler login` creden
 dependency that only the hoisted layout satisfied. When a gate
 disagrees with CI, suspect local state before suspecting CI.
 
+**Everything emulates locally except Workers AI, and `env.dev` is the REMOTE target.**
+Worth stating because the opposite is a reasonable guess, and because it decides where `env.dev` earns its
+keep:
+
+| product         | `wrangler dev`        | how                                                                             |
+| --------------- | --------------------- | ------------------------------------------------------------------------------- |
+| KV, R2, Queues  | emulated              | miniflare; the bound production ids are never touched                           |
+| Durable Objects | real `workerd`        | locally, including the Agents SDK's                                             |
+| Workflows       | emulated              | the local engine — a probe's `status()` answers with `__LOCAL_DEV_STEP_OUTPUTS` |
+| Hyperdrive      | the compose container | `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_*` in `apps/worker/.env`         |
+| **Workers AI**  | **NOT emulated**      | always remote, which is the trap below                                          |
+
+So `bun run dev` plus `docker compose up` exercises the whole stack bar one binding, and the 92 tests in the
+`worker` project are the proof rather than the claim.
+
+**`bun run --filter @ea/worker dev:remote`** is `wrangler dev --remote --env dev`, and it is a different
+thing: it runs against the REAL products with `env.dev`'s own throwaway resources — its Neon project, KV
+namespace, R2 bucket and Hyperdrive pair. Reach for it when the question is "does this binding behave the way
+the emulator says", which is the question `cloudflare:sockets` (ADR-0009) and the Workflows step memo were
+both probed for. Plain `wrangler dev` binds the TOP-LEVEL config, which is production — harmless while
+everything is emulated, and exactly why `--env dev` matters the moment `--remote` is involved.
+
+One caution: `env.dev`'s Neon project is also what `DATABASE_URL` points at, so `bun run db:migrate` with no
+override migrates THAT and not the container. See the trap about two databases below.
+
 **The `worker` vitest project cannot run without `CLOUDFLARE_API_TOKEN`.**
 It boots a real Worker from `apps/worker/wrangler.jsonc`, which has an `ai` binding, and Workers AI has
 no local emulation — so wrangler starts a _remote_ runtime and refuses non-interactively without a token.

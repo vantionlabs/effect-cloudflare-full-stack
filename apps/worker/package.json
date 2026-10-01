@@ -7,7 +7,8 @@
     "dev": "wrangler dev",
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:production": "wrangler deploy --env production",
-    "types": "wrangler types"
+    "types": "wrangler types",
+    "dev:remote": "wrangler dev --remote --env dev"
   },
   "dependencies": {
     "@ea/ai-openai": "workspace:*",
