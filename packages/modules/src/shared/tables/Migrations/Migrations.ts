@@ -31,7 +31,7 @@ import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
 import { Migrator } from "effect/sql"
-import { EventTable } from "../Event/EventTable.ts"
+import { EventIndexType, EventTable } from "../Event/EventTable.ts"
 import { TenancyTable } from "../Tenancy/TenancyTable.ts"
 import { UsageTable } from "../Usage/UsageTable.ts"
 
@@ -120,7 +120,9 @@ export const migrations = {
    */
   "0024_event_workflow_instance": EventTable,
   // Usage metering: one row per metered consumption, written in the transaction of the work it counts.
-  "0025_usage": UsageTable
+  "0025_usage": UsageTable,
+  // `document.index`: uploads to a corpus collection are chunked and embedded, which nothing did before.
+  "0026_event_index_type": EventIndexType
 }
 
 export const loader = Migrator.fromRecord(migrations)

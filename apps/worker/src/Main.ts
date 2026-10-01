@@ -75,6 +75,7 @@ import { DocumentParser } from "@ea/modules/intake/domain/Document"
 import { BlobsR2, DocumentBucket } from "@ea/modules/intake/server/Document"
 import { anydocParse, mistralOcrConfig, mistralOcrParse } from "@ea/modules/intake/server/Document"
 import { AgentModel } from "@ea/modules/policy/domain/Ask"
+import { ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
 import { AssistantConversationsAgent } from "@ea/modules/policy/server/Assistant"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
@@ -227,6 +228,12 @@ const ServicesLayer = (env: Env) =>
      * against a neuron allocation.
      */
     EmbedderWorkersAiBinding(env.AI, env.AI_GATEWAY),
+    /*
+     * The chunker `document.index` uses: heading-aware, pure domain code, and the strategy the retrieval gate
+     * measured (hybrid recall 100% at k=3, ahead of the LangChain splitter above 150 characters). The eval and
+     * the product therefore chunk the same way, which is what makes the gate's number mean anything here.
+     */
+    ChunkerHeading,
     /*
      * The conversation store, over the Agents SDK's Durable Object namespace.
      *

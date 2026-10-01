@@ -22,7 +22,7 @@ import { Ids } from "@ea/domain/Ids"
 import { Blobs, DocumentId, DocumentParser } from "@ea/modules/intake/domain/Document"
 import { IntakeId } from "@ea/modules/intake/domain/Intake"
 import type { Collection } from "@ea/modules/shared/domain/Corpus"
-import { decideEventKey } from "@ea/modules/shared/domain/Event"
+import { decideEventKey, indexEventKey } from "@ea/modules/shared/domain/Event"
 import { EmitEvent } from "@ea/modules/shared/use-cases/Event"
 import { writeUsage } from "@ea/modules/shared/use-cases/Usage"
 import { Effect } from "effect"
@@ -120,6 +120,16 @@ export const IngestUpload = (input: UploadInput) =>
         type: "document.decide",
         idempotencyKey: decideEventKey(documentId, INVOICE_VERTICAL),
         payload: { documentId, vertical: INVOICE_VERTICAL }
+      })
+    } else {
+      /*
+       * A corpus document is indexed, not decided. Asynchronous for the same reason decide is: embedding a
+       * manual is many model calls, and the upload answers 202 before any of them.
+       */
+      yield* EmitEvent({
+        type: "document.index",
+        idempotencyKey: indexEventKey(documentId),
+        payload: { documentId, collection: input.collection, title: input.filename }
       })
     }
 

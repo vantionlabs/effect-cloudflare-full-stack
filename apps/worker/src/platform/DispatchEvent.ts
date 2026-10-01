@@ -38,8 +38,15 @@ import {
 import { ExecuteDecision } from "@ea/modules/decision/use-cases/Execution"
 import { Blobs, DocumentParser } from "@ea/modules/intake/domain/Document"
 import type { UnsupportedDocument } from "@ea/modules/intake/domain/Errors"
-import { ANYDOC_PARSER_VERSION, type MistralOcrConfig, ocrParserVersion } from "@ea/modules/intake/server/Document"
+import {
+  ANYDOC_PARSER_VERSION,
+  type MistralOcrConfig,
+  mistralOcrConfig,
+  ocrParserVersion
+} from "@ea/modules/intake/server/Document"
+import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
 import { type Cache, readThrough } from "@ea/modules/shared/domain/Cache"
+import { Collection } from "@ea/modules/shared/domain/Corpus"
 import type { QueueMessage } from "@ea/modules/shared/domain/Event"
 import { ConsumeEvent, type EventRow } from "@ea/modules/shared/use-cases/Event"
 import { Effect, Schema } from "effect"
@@ -56,6 +63,12 @@ import type { SqlClient, SqlError } from "effect/sql"
 const DecidePayload = Schema.Struct({
   documentId: Schema.String,
   vertical: Schema.String
+})
+
+const IndexPayload = Schema.Struct({
+  documentId: Schema.String,
+  collection: Collection,
+  title: Schema.String
 })
 
 const ExecutePayload = Schema.Struct({
@@ -247,6 +260,24 @@ const workFor = (startDecide: DecideBinding) => (row: EventRow) =>
          * auto-approved decision there genuinely is no person, which is itself the audit record.
          */
         yield* ExecuteDecision({ decisionId: payload.decisionId, action: payload.action })
+        return
+      }
+      case "document.index": {
+        /*
+         * Inline in the consumer rather than a Workflow: one parse and one batched embedding call, retried as a
+         * whole by Queues, and idempotent because `IndexPolicyDocument` REPLACES a document's chunks. The text
+         * comes through the same tiered parser and cache as decide, so a scanned manual reaches OCR when it is
+         * configured and is refused as `UnsupportedDocument` (terminal) when it is not.
+         */
+        const payload = yield* Schema.decodeUnknownEffect(IndexPayload)(row.payload)
+        const ocr = yield* mistralOcrConfig
+        const text = yield* cachedDocumentTextFor(payload.documentId, ocr)
+        yield* IndexPolicyDocument({
+          documentId: payload.documentId,
+          title: payload.title,
+          text,
+          collection: payload.collection
+        })
         return
       }
       default:

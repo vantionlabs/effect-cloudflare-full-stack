@@ -47,7 +47,10 @@ const TERMINAL_TAGS: ReadonlySet<string> = new Set([
   "DocumentBlobMissing",
   "DocumentRowMissing",
   // decision: this build does not know the event type. A deploy fixes it; a retry does not.
-  "UnknownEventType"
+  "UnknownEventType",
+  // policy: the embedder's width does not match the column. A configuration fact, so every retry fails the
+  // same way — and each would spend an embedding call to find out.
+  "EmbeddingWidthMismatch"
 ])
 
 export const isTerminal = (error: unknown): boolean =>

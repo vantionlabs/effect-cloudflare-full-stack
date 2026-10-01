@@ -10,7 +10,12 @@ import { Schema } from "effect"
 export const EventId = Schema.String.pipe(Schema.brand("EventId"))
 export type EventId = typeof EventId.Type
 
-export const EventType = Schema.Literals(["document.decide", "decision.execute"])
+/**
+ * `document.index` chunks and embeds a corpus document so it can be retrieved and cited. Before it existed an
+ * uploaded policy document was stored and NEVER indexed — only the eval harness and tests populated the corpus,
+ * so a customer had no way to add to it through the product.
+ */
+export const EventType = Schema.Literals(["document.decide", "decision.execute", "document.index"])
 export type EventType = typeof EventType.Type
 
 /**
@@ -37,3 +42,6 @@ export const decideEventKey = (documentId: string, vertical: string) => `decisio
  * reconciliation ask "did this already happen?" and get a usable answer.
  */
 export const executeEventKey = (decisionId: string, action: string) => `decision:${decisionId}:${action}`
+
+/** `document.index` — one per document. Re-indexing is idempotent anyway (chunks are replaced, not appended). */
+export const indexEventKey = (documentId: string) => `index:${documentId}`

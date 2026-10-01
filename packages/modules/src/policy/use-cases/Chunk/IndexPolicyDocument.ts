@@ -73,7 +73,8 @@ export const IndexPolicyDocument = (input: IndexPolicyDocumentInput) =>
 
     const vectors = embeddings._tag === "Some" ? embeddings.value : undefined
 
-    yield* db.scoped((sql, orgId) =>
+    // `scopedForOrg`: indexing runs on the queue, where there is a tenant but no signed-in person.
+    yield* db.scopedForOrg((sql, orgId) =>
       Effect.gen(function*() {
         // Replace rather than append: re-indexing must be idempotent, and a stale chunk that is
         // still retrievable is a citation to policy that no longer exists.

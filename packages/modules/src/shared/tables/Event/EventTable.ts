@@ -35,6 +35,7 @@ export const EventTable = Effect.gen(function*() {
        * The tagged union's tag. A closed set, because an unrecognised event type must not be storable:
        * the consumer dispatches on this, and a typo would produce a row nothing ever handles.
        */
+      -- Widened by EventIndexType (0026); this line stays as it was first applied.
       type             text not null check (type in ('document.decide', 'decision.execute')),
       /*
        * Derived from the work, never generated. UNIQUE per organization, so a duplicate emit hits the
@@ -107,5 +108,21 @@ export const EventTable = Effect.gen(function*() {
   yield* sql`
     create index if not exists events_org_created_idx
       on events (organization_id, created_at desc)
+  `
+})
+
+/**
+ * Widens `events.type` for `document.index`.
+ *
+ * Its own migration rather than an edit to `EventTable`, because a `check` constraint cannot be altered with
+ * `if not exists` — it is dropped and re-added, by its real name (read from `pg_constraint`, not assumed).
+ * Expand-only: the old code never writes the new type, so it runs before the code that does (AGENTS.md).
+ */
+export const EventIndexType = Effect.gen(function*() {
+  const sql = yield* SqlClient.SqlClient
+  yield* sql`alter table events drop constraint if exists events_type_check`
+  yield* sql`
+    alter table events add constraint events_type_check
+      check (type in ('document.decide', 'decision.execute', 'document.index'))
   `
 })
