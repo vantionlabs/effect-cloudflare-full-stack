@@ -20,6 +20,7 @@ import { apiKey } from "@better-auth/api-key"
 import { betterAuth, type BetterAuthOptions } from "better-auth"
 import { organization } from "better-auth/plugins"
 import { Client, Pool } from "pg"
+import { organizationRoles, productRoleGuard } from "./Roles.ts"
 
 /**
  * One transactional message, as better-auth's side of the `Email` port.
@@ -319,6 +320,9 @@ export const makeAuth = (config: AuthConfig): AuthInstance => {
       }
     },
 
+    // Refuses roles the product does not know on invite and role change — see `Roles.ts`.
+    hooks: { before: productRoleGuard },
+
     plugins: [
       // Organizations are the tenant boundary. better-auth owns `organization`, `member` and
       // `invitation`; our tables carry `organization_id` with no foreign key into them, so its
@@ -329,27 +333,32 @@ export const makeAuth = (config: AuthConfig): AuthInstance => {
          * invitation id and leaves the URL to the application, because only the application knows where its
          * accept page lives. `consoleOrigin` when the console is a separate origin, `baseURL` when it is not.
          *
-         * **The console has no `/accept-invitation` route yet**, so today this link 404s. Said plainly rather
-         * than left to be discovered: the server half is complete and testable, and the page is the next piece.
+         * The console's page for it is `/accept-invitation/$invitationId`.
+         *
+         * `roles` names this product's roles — see `Roles.ts` for why an unnamed role locks the invitee out. No `ac`:
+         * that option is for dynamic, database-stored roles, and these are static.
          */
-        sendEmail === undefined ? {} : {
-          sendInvitationEmail: async (
-            data: {
-              readonly id: string
-              readonly email: string
-              readonly inviter: { readonly user: { readonly name?: string | undefined; readonly email: string } }
-              readonly organization: { readonly name: string }
+        {
+          roles: organizationRoles,
+          ...(sendEmail === undefined ? {} : {
+            sendInvitationEmail: async (
+              data: {
+                readonly id: string
+                readonly email: string
+                readonly inviter: { readonly user: { readonly name?: string | undefined; readonly email: string } }
+                readonly organization: { readonly name: string }
+              }
+            ) => {
+              const origin = config.consoleOrigin ?? config.baseURL
+              const inviter = data.inviter.user.name ?? data.inviter.user.email
+              await sendEmail({
+                to: data.email,
+                subject: `${inviter} invited you to ${data.organization.name}`,
+                text: `${inviter} invited you to join ${data.organization.name}.\n\n` +
+                  `Open this link to accept:\n\n${origin}/accept-invitation/${data.id}`
+              })
             }
-          ) => {
-            const origin = config.consoleOrigin ?? config.baseURL
-            const inviter = data.inviter.user.name ?? data.inviter.user.email
-            await sendEmail({
-              to: data.email,
-              subject: `${inviter} invited you to ${data.organization.name}`,
-              text: `${inviter} invited you to join ${data.organization.name}.\n\n` +
-                `Open this link to accept:\n\n${origin}/accept-invitation/${data.id}`
-            })
-          }
+          })
         }
       ),
       /*

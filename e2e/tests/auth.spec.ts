@@ -139,3 +139,25 @@ test("with JavaScript off, the form cannot submit a password at all", async ({ b
 
   await context.close()
 })
+
+/*
+ * Creating an account and signing in move into the console WITHOUT reloading the page. They used to set
+ * `reloadDocument`, which worked and felt like a website; the router now re-reads the session instead
+ * (`useSessionChange`). A marker on `window` survives only a client-side navigation, so this is the check.
+ */
+test("creating an account moves into the console without reloading the page", async ({ page }) => {
+  await page.goto("/sign-up")
+  await expect(page.getByRole("button", { name: "Create account" })).toBeEnabled()
+  await page.evaluate(() => {
+    ;(window as unknown as { __noReload?: boolean }).__noReload = true
+  })
+  const email = `e2e-spa-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`
+  await page.getByLabel("Name").fill("Spa Person")
+  await page.getByLabel("Email").fill(email)
+  await page.getByLabel("Password").fill("e2e-only-password")
+  await page.getByRole("button", { name: "Create account" }).click()
+
+  await expect(page).toHaveURL("/")
+  await expect(page.getByText(email)).toBeVisible()
+  expect(await page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload)).toBe(true)
+})

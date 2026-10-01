@@ -16,9 +16,10 @@ import { FieldError, FieldGroup } from "@/components/ui/field"
 import { authClient } from "@/features/auth/api/auth-client"
 import { useHydrated } from "@/hooks/use-hydrated"
 import { useSchemaForm } from "@/hooks/use-schema-form"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
+import { useSessionChange } from "./api/use-session-change.ts"
 import { AuthCard, authLinkClass } from "./components/auth-card.tsx"
 import { SubmitButton } from "./components/submit-button.tsx"
 import { TextField } from "./components/text-field.tsx"
@@ -37,7 +38,7 @@ const FIELDS = [
 ] as const
 
 export function SignUpPage(props: { readonly next: string }) {
-  const navigate = useNavigate()
+  const enterSession = useSessionChange()
   const hydrated = useHydrated()
   const [rejected, setRejected] = useState<string | undefined>(undefined)
 
@@ -51,8 +52,8 @@ export function SignUpPage(props: { readonly next: string }) {
         setRejected(result.error.message ?? "That account could not be created.")
         return
       }
-      // Sign-up signs in. `reloadDocument` for the reason in `login-page.tsx`: the router context predates the cookie.
-      await navigate({ to: props.next, reloadDocument: true })
+      // Sign-up signs in, so the router re-reads the session — see `useSessionChange`.
+      await enterSession({ to: props.next })
     }
   })
 

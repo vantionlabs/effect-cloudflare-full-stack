@@ -3081,6 +3081,7 @@
             "type": "string",
             "enum": [
               "owner",
+              "admin",
               "reviewer",
               "viewer"
             ]

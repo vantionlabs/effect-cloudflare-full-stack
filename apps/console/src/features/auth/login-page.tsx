@@ -15,9 +15,10 @@ import { FieldError, FieldGroup } from "@/components/ui/field"
 import { authClient } from "@/features/auth/api/auth-client"
 import { useHydrated } from "@/hooks/use-hydrated"
 import { useSchemaForm } from "@/hooks/use-schema-form"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
+import { useSessionChange } from "./api/use-session-change.ts"
 import { AuthCard, authLinkClass } from "./components/auth-card.tsx"
 import { SubmitButton } from "./components/submit-button.tsx"
 import { TextField } from "./components/text-field.tsx"
@@ -39,7 +40,7 @@ const Credentials = Schema.Struct({
 })
 
 export function LoginPage(props: { readonly next: string }) {
-  const navigate = useNavigate()
+  const enterSession = useSessionChange()
   const [rejected, setRejected] = useState<string | undefined>(undefined)
   const hydrated = useHydrated()
 
@@ -65,12 +66,8 @@ export function LoginPage(props: { readonly next: string }) {
         return
       }
 
-      /*
-       * `reloadDocument`, not a soft navigation. The session cookie was set on THIS response and the router context
-       * was resolved before it existed, so a client navigation would re-run the guard against the stale Guest
-       * context and bounce straight back here.
-       */
-      await navigate({ to: props.next, reloadDocument: true })
+      // The session cookie was set on THIS response; see `useSessionChange` for why the router must re-read it.
+      await enterSession({ to: props.next })
     }
   })
 

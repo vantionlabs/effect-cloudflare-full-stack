@@ -12,9 +12,10 @@ import { FieldError, FieldGroup } from "@/components/ui/field"
 import { authClient } from "@/features/auth/api/auth-client"
 import { useHydrated } from "@/hooks/use-hydrated"
 import { useSchemaForm } from "@/hooks/use-schema-form"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
+import { useSessionChange } from "./api/use-session-change.ts"
 import { AuthCard, authLinkClass } from "./components/auth-card.tsx"
 import { SubmitButton } from "./components/submit-button.tsx"
 import { TextField } from "./components/text-field.tsx"
@@ -23,7 +24,7 @@ import { TextField } from "./components/text-field.tsx"
 const NewPassword = Schema.Struct({ password: Schema.String })
 
 export function ResetPasswordPage(props: { readonly token: string | undefined; readonly valid: boolean }) {
-  const navigate = useNavigate()
+  const leaveSession = useSessionChange()
   const hydrated = useHydrated()
   const [rejected, setRejected] = useState<string | undefined>(undefined)
 
@@ -38,7 +39,7 @@ export function ResetPasswordPage(props: { readonly token: string | undefined; r
         return
       }
       // The server revokes every session on reset (`revokeSessionsOnPasswordReset`), so this is always a sign-in.
-      await navigate({ to: "/login", search: { next: "/" }, reloadDocument: true })
+      await leaveSession({ to: "/login", search: { next: "/" } })
     }
   })
 

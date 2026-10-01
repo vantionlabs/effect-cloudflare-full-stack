@@ -15,6 +15,12 @@
      */
     ".agents/**",
     ".claude/skills/**",
+    // Impeccable's install for the other harnesses (Copilot, Codex) and its Claude Code agent definitions.
+    ".claude/agents/**",
+    ".github/skills/**",
+    ".github/agents/**",
+    ".github/hooks/**",
+    ".codex/**",
   ],
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreDependencies": [

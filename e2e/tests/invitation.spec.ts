@@ -21,7 +21,7 @@ test("an invitee with no account signs up from the link and lands in the inviter
   const email = inviteeEmail()
   const invite = await request.post("/api/auth/organization/invite-member", {
     headers: { "content-type": "application/json", origin },
-    data: { email, role: "member" }
+    data: { email, role: "reviewer" }
   })
   expect(invite.status(), `invite failed: ${await invite.text()}`).toBe(200)
   const invitation = (await invite.json()) as { readonly id: string; readonly organizationId: string }
@@ -51,6 +51,14 @@ test("an invitee with no account signs up from the link and lands in the inviter
 
   await expect(page).toHaveURL("/")
   await expect(page.getByText(email)).toBeVisible()
+  /*
+   * The invitee can READ their new organization's data, not merely see their own email. The email comes from
+   * better-auth's session; the data needs our identity, which decodes the member's role — and an invitation in a
+   * role the product does not know (better-auth's default `member`) signed people in and then 401'd every request.
+   */
+  const me = await page.request.get("/api/v1/me")
+  expect(me.status(), `/api/v1/me: ${await me.text()}`).toBe(200)
+  expect(((await me.json()) as { readonly role: string }).role).toBe("reviewer")
   const session = await page.request.get("/api/auth/get-session")
   const body = (await session.json()) as { readonly session: { readonly activeOrganizationId: string | null } }
   expect(body.session.activeOrganizationId).toBe(invitation.organizationId)
@@ -61,7 +69,7 @@ test("somebody signed in as a different person is told the invitation is not the
   await createAccount(request, origin)
   const invite = await request.post("/api/auth/organization/invite-member", {
     headers: { "content-type": "application/json", origin },
-    data: { email: inviteeEmail(), role: "member" }
+    data: { email: inviteeEmail(), role: "reviewer" }
   })
   const invitation = (await invite.json()) as { readonly id: string }
 
@@ -79,4 +87,13 @@ test("somebody signed in as a different person is told the invitation is not the
   // The refusal is in the server's HTML too, decided before the page was sent.
   expect(await (await page.request.get(`/accept-invitation/${invitation.id}`)).text()).toContain("role=\"alert\"")
   await expect(page.getByRole("button", { name: "Accept" })).toBeHidden()
+})
+
+test("an invitation in a role the product does not know is refused when it is made", async ({ request, baseURL }) => {
+  await createAccount(request, baseURL ?? "")
+  const invite = await request.post("/api/auth/organization/invite-member", {
+    headers: { "content-type": "application/json", origin: baseURL ?? "" },
+    data: { email: inviteeEmail(), role: "member" }
+  })
+  expect(invite.status()).toBe(400)
 })

@@ -41,13 +41,14 @@ describe("CurrentOrgFromUser", () => {
 })
 
 describe("Identity", () => {
-  it("accepts the three roles and nothing else", () => {
-    for (const role of ["owner", "reviewer", "viewer"]) {
+  it("accepts the four roles and nothing else", () => {
+    for (const role of ["owner", "admin", "reviewer", "viewer"]) {
       expect(Result.isSuccess(Schema.decodeUnknownResult(Identity)({ ...alice, role }))).toBe(true)
     }
-    // `admin` is the plausible wrong answer: a role that exists in better-auth's own vocabulary and
-    // not in ours. An open role set would let it through and authorise on a string nobody defined.
-    expect(Result.isSuccess(Schema.decodeUnknownResult(Identity)({ ...alice, role: "admin" }))).toBe(false)
+    // `member` is the plausible wrong answer: better-auth's own default role, and not ours. An open role set
+    // would let it through and authorise on a string nobody defined. (`admin` used to be this example; it is a
+    // real role now — owners and admins manage the team.)
+    expect(Result.isSuccess(Schema.decodeUnknownResult(Identity)({ ...alice, role: "member" }))).toBe(false)
   })
 })
 

@@ -19,7 +19,7 @@ export const OrgId = Schema.String.pipe(Schema.brand("OrgId"))
 export type OrgId = typeof OrgId.Type
 
 /** A member's role within one organization. Closed set: an unknown role must not be guessable. */
-export const MemberRole = Schema.Literals(["owner", "reviewer", "viewer"])
+export const MemberRole = Schema.Literals(["owner", "admin", "reviewer", "viewer"])
 export type MemberRole = typeof MemberRole.Type
 
 export class Identity extends Schema.Class<Identity>("Identity")({

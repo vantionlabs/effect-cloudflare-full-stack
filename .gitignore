@@ -28,3 +28,6 @@ apps/console/dist/
 
 # Per-project incremental state, one dir per package now that src and test are separate projects.
 .tsbuildinfo/
+
+# Impeccable's native engine (12 MB per platform, three copies): the launcher downloads it on first run.
+**/skills/impeccable/scripts/bin/

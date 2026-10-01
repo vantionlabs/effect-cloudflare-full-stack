@@ -15,7 +15,7 @@ export class MeV1 extends Schema.Class<MeV1>("MeV1")({
   email: Schema.String,
   /** The active organization. Every tenant-scoped query is attributed to this. */
   organization_id: Schema.String,
-  role: Schema.Literals(["owner", "reviewer", "viewer"])
+  role: Schema.Literals(["owner", "admin", "reviewer", "viewer"])
 }) {}
 
 /**

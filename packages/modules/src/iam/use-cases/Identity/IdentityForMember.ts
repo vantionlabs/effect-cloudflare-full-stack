@@ -14,7 +14,7 @@ import { Identity, type MemberRole, OrgId, UserId } from "@ea/domain/Identity"
 import { Effect, Result, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 
-const MemberRoleSchema = Schema.Literals(["owner", "reviewer", "viewer"])
+const MemberRoleSchema = Schema.Literals(["owner", "admin", "reviewer", "viewer"])
 
 export const IdentityForMember = (input: {
   readonly userId: string
