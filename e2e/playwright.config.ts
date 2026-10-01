@@ -47,26 +47,14 @@ export default defineConfig({
    */
   retries: 0,
   /*
-   * 90 s a test in CI, against Playwright's 30 s default — and the budget is for a COLD DEV SERVER, not for
-   * slow code.
+   * The default 30 s, deliberately — a raise was tried and was the wrong answer.
    *
-   * The suite runs against `vite dev`, which compiles each route the first time it is visited and then
-   * server-renders it in workerd. So the first visit to `/`, to `/chat` and to `/login` each pay a one-off
-   * cost that no later visit pays. Two separate specs hit the 30 s default in CI within an hour: the first
-   * `signIn` took 8.7 s against a 5 s expect default, and the chat spec — which opens TWO tabs on a route
-   * nothing had compiled yet — timed out with the Create button still `disabled`, meaning hydration had not
-   * finished.
-   *
-   * That second symptom is worth reading carefully rather than treating as slowness: `disabled={!hydrated}`
-   * exists so a click before hydration cannot be a silent no-op, and Playwright's actionability wait turns
-   * it into something a test waits ON. The gate working as designed is what surfaced here; the budget was
-   * simply smaller than a cold compile.
-   *
-   * Raised rather than papered over with `waitForTimeout`, which AGENTS.md forbids here — a fixed sleep is
-   * how the original hydration race got masked. Local runs keep the default, because a developer's dev
-   * server is usually warm and a 90 s ceiling would make a genuine hang feel like a slow test.
+   * Two specs timed out in CI and I raised two budgets, the second to 90 s. It failed again at 90 s with the
+   * Create button still `disabled`, which is far too long for any compile and should have been the tell: a
+   * budget cannot fix a page that never finishes hydrating. **The trace showed `[vite] connecting…` three
+   * times per page** — the dev server's dependency optimizer was re-running and forcing full reloads, so
+   * every reload restarted hydration. See the webServer note below for the fix and the numbers.
    */
-  ...(process.env.CI === undefined ? {} : { timeout: 90_000 }),
   reporter: process.env.CI !== undefined ? [["github"], ["list"]] : [["list"]],
   use: {
     baseURL,
@@ -101,7 +89,27 @@ export default defineConfig({
   ...(process.env.E2E_BASE_URL === undefined
     ? {
       webServer: {
-        command: "bun run --filter @ea/console dev",
+        /*
+         * CI runs the BUILT console; a developer runs the dev server.
+         *
+         * The suite asserts a topology — cookies, redirects, what the SSR payload contains, and the
+         * hydration gate — and none of it depends on vite. Running it against `vite dev` meant paying a dev
+         * server's costs to test production behaviour, and the dependency optimizer's full reloads made the
+         * hydration gate untestable: `disabled={!hydrated}` would flip, the page would reload, and the
+         * button would be disabled again.
+         *
+         * `vite preview` runs the built app in workerd WITH its auxiliary API worker, so it is the same
+         * one-origin topology, with no optimizer and no HMR. Measured on the same machine:
+         *
+         *     vite dev      8 passed in 48.6 s, and the chat spec timed out at 90 s in CI
+         *     vite preview  8 passed in  6.4 s, and the chat spec took 2.0 s
+         *
+         * Local keeps `dev` because that is what a developer is editing against, and a warm dev server does
+         * not reload-loop the way a cold one does.
+         */
+        command: process.env.CI === undefined
+          ? "bun run --filter @ea/console dev"
+          : "bun run --filter @ea/console preview:e2e",
         url: baseURL,
         // A cold start compiles the console and boots two workerd instances; 60s is not generous.
         timeout: 120_000,
