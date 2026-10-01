@@ -80,6 +80,7 @@ import { ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
 import { AssistantConversationsAgent } from "@ea/modules/policy/server/Assistant"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
+import { SendWeeklyReports } from "@ea/modules/reporting/use-cases/WeeklyReport"
 import { isTerminal } from "@ea/modules/shared/domain/Errors"
 import { EventId } from "@ea/modules/shared/domain/Event"
 import type { Retrieval } from "@ea/modules/shared/domain/Retrieval"
@@ -415,6 +416,9 @@ const AppLayer = (env: Env) =>
  */
 const memoMap = Layer.makeMemoMapUnsafe()
 
+/** Monday 06:00 UTC. Must equal the second cron in every environment's `triggers` in `wrangler.jsonc`. */
+const WEEKLY_REPORT_CRON = "0 6 * * MON"
+
 let webHandler: ReturnType<typeof makeHandler> | undefined
 
 const makeHandler = (env: Env) => HttpRouter.toWebHandler(AppLayer(env), { memoMap }).handler
@@ -631,6 +635,24 @@ export default {
     env: Env,
     _ctx: ExecutionContext
   ): Promise<void> {
+    /*
+     * The Monday report has its own trigger rather than riding the five-minute sweep: it is once a week, and a
+     * cross-tenant read every five minutes to discover that nothing is due would be the wrong trade. Dispatched by
+     * the trigger's expression, which must match `wrangler.jsonc` exactly in every environment.
+     */
+    if (controller.cron === WEEKLY_REPORT_CRON) {
+      await getQueueRuntime(env).runPromise(
+        withDatabase(Effect.gen(function*() {
+          const summary = yield* SendWeeklyReports(new Date())
+          // Logged including zeros, for the same reason as the sweeper below: silence looks like a dead cron.
+          yield* Effect.log(
+            `cron ${controller.cron}: weekly reports for ${summary.period.from}..${summary.period.to} — ` +
+              `${summary.sent} sent, ${summary.alreadySent} already sent, ${summary.failed} failed`
+          )
+        }))
+      )
+      return
+    }
     await getQueueRuntime(env).runPromise(
       /*
        * TWO jobs now, in one connection and in this order.

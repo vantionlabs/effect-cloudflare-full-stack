@@ -30,6 +30,7 @@ import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
+import { ReportDeliveryTable } from "@ea/modules/reporting/tables/ReportDelivery"
 import { Migrator } from "effect/sql"
 import { CorpusKnowledge } from "../Corpus/CorpusTable.ts"
 import { EventIndexType, EventTable } from "../Event/EventTable.ts"
@@ -125,7 +126,9 @@ export const migrations = {
   // `document.index`: uploads to a corpus collection are chunked and embedded, which nothing did before.
   "0026_event_index_type": EventIndexType,
   // `knowledge`: technical documentation, a corpus of its own that invoice decisions never search.
-  "0027_corpus_knowledge": CorpusKnowledge
+  "0027_corpus_knowledge": CorpusKnowledge,
+  // The weekly report's once-per-week claim.
+  "0028_report_deliveries": ReportDeliveryTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

@@ -288,7 +288,7 @@
    * simply never run there.
    */
   "triggers": {
-    "crons": ["*/5 * * * *"],
+    "crons": ["*/5 * * * *", "0 6 * * MON"],
   },
 
   "queues": {
@@ -401,7 +401,7 @@
       // ],
       "ai": { "binding": "AI" },
       "triggers": {
-        "crons": ["*/5 * * * *"],
+        "crons": ["*/5 * * * *", "0 6 * * MON"],
       },
       "queues": {
         "producers": [
@@ -505,7 +505,7 @@
       // ],
       "ai": { "binding": "AI" },
       "triggers": {
-        "crons": ["*/5 * * * *"],
+        "crons": ["*/5 * * * *", "0 6 * * MON"],
       },
       "queues": {
         "producers": [

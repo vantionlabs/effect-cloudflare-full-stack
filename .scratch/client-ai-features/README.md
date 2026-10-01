@@ -29,3 +29,11 @@ person approving it — the same rule the decide pipeline enforces with rails.
 - [x] A console Ask page (`/ask`): server-rendered through Effect Atom hydration, ask and upload over RPC.
 - [x] Citations that name the document and section (`pk23500.md · 2. Hydraulische druk`), taken from what
       retrieval returned rather than from the model's own labels.
+
+## #3 progress
+
+- [x] **Weekly figures by email** (`reporting` slice): every Monday 06:00 UTC, each organization active last week
+      gets documents received, decisions by outcome with their shares, the review backlog and model tokens, sent to
+      its owners and admins through the `Email` port, once per week (`report_deliveries` claim).
+- [ ] The client's OWN figures — work in progress, invoicing — through an integration port to his Laravel API.
+- [ ] Data on demand: the assistant answering questions over those figures, with the same grounding rules.

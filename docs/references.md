@@ -331,6 +331,15 @@ One thing the logs do NOT show: `request` and `response` are empty strings and `
 log storage of bodies is off. Worth knowing before planning to use gateway logs as an eval-run store — they
 give cost, tokens, latency and cache status, not the prompt.
 
+### Cron Triggers: in Cloudflare's dialect weekday `1` is SUNDAY — checked 2026-10-01
+
+From the Cron Triggers docs: _"Days of the week go from 1 = Sunday to 7 = Saturday, which is different on some
+other cron systems (where 0 = Sunday and 6 = Saturday)."_ Three-letter names are accepted, case-insensitively. So
+the weekly report's trigger is written `0 6 * * MON`, never `0 6 * * 1`, which here would fire on Sunday. Verified
+locally with `wrangler dev --test-scheduled` and `/cdn-cgi/handler/scheduled?cron=0+6+*+*+MON`: the handler
+dispatches on `controller.cron`, which arrives exactly as written in `wrangler.jsonc`. `triggers` is not
+inheritable, so the expression is repeated in every environment and `bindings:check` asserts each has crons.
+
 ### Workers AI through AI Gateway: a header on REST, a run option on the binding
 
 Checked 2026-09-30 against `/ai-gateway/usage/providers/workersai/`, `/ai-gateway/usage/rest-api/` and the
