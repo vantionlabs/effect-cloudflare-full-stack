@@ -19,7 +19,7 @@
     ],
     "catalog": {
       "@cloudflare/vite-plugin": "^1.62.1",
-      "@effect/ai-openai": "4.0.0-rc.118",
+      "@effect/ai-openai-compat": "4.0.0-rc.118",
       "@effect/atom-react": "4.0.0-rc.118",
       "@effect/sql-pg": "4.0.0-rc.118",
       "@tailwindcss/vite": "^4.3.3",

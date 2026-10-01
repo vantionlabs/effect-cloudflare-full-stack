@@ -1,5 +1,14 @@
 /**
- * A `LanguageModel` over any OpenAI-compatible endpoint, via `@effect/ai-openai`.
+ * A `LanguageModel` over any OpenAI-compatible endpoint, via `@effect/ai-openai-compat`.
+ *
+ * **`-compat`, not `@effect/ai-openai`, and the difference was a production outage nobody saw.** At rc.118
+ * `@effect/ai-openai` speaks only OpenAI's RESPONSES API (`POST /v1/responses`). Workers AI does not accept that
+ * shape: every call failed `invalid_prompt` — "required properties at '/' are 'messages'", and tool parameters
+ * missing `type,properties`. So `POST /api/v1/ask` and the assistant answered 500 to every question in every
+ * environment, and nothing caught it because ask had only ever been tested with scripted models. Found
+ * 2026-10-01 by asking a real question end to end. `@effect/ai-openai-compat` is the same team's client for the
+ * CHAT COMPLETIONS protocol (`POST /chat/completions`) that OpenAI-compatible providers actually implement, with
+ * the same `OpenAiClient.layer` / `OpenAiLanguageModel.layer` shape — so only the import moved.
  *
  * **This exists because tool calling should not be hand-rolled.** The sibling adapter
  * (`decision/server/Extraction/LanguageModelWorkersAi.ts`) is hand-written and correct for what it does —
@@ -35,10 +44,10 @@
  * control. Without it this is a direct, unmetered, uncached call — a real state, so the caller is expected to
  * say which it got rather than leave it implicit.
  */
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai"
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat"
 import { Config, Effect, Layer, type Redacted } from "effect"
 import type { LanguageModel } from "effect/ai"
-import { FetchHttpClient } from "effect/http"
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 
 export interface OpenAiCompatibleConfig {
   /** No trailing slash and no `/chat/completions`: the client appends the path. */
@@ -77,6 +86,40 @@ export const workersAiOpenAiConfig: Effect.Effect<OpenAiCompatibleConfig> = Effe
 }).pipe(Effect.orDie)
 
 /**
+ * Rewrites a chat request so Workers AI accepts it: an assistant message with `content: null` gets `""`.
+ *
+ * The OpenAI protocol sends `content: null` on an assistant turn that only calls tools, and Workers AI refuses it.
+ * Its error is actively misleading — "oneOf at '/' not met … Type mismatch of '/messages/0/content'", naming the
+ * FIRST message, not the assistant turn — and a first fix flattened content arrays on the strength of that line,
+ * which changed nothing. Bisected against Workers AI directly instead (2026-10-01): the same second-turn request
+ * returns 400 with `null` and 200, with tool calls, with `""`. The first turn of the loop has no such message,
+ * which is why the loop got exactly one model call before failing. Nothing else in the request is touched.
+ */
+export const nullContentToEmpty = (body: unknown): unknown => {
+  if (typeof body !== "object" || body === null || !("messages" in body) || !Array.isArray(body.messages)) {
+    return body
+  }
+  return {
+    ...body,
+    messages: body.messages.map((message: unknown) =>
+      typeof message === "object" && message !== null && "role" in message && message.role === "assistant" &&
+        "content" in message && message.content === null
+        ? { ...message, content: "" }
+        : message
+    )
+  }
+}
+
+/** Applies `nullContentToEmpty` to every JSON request body the client sends. */
+const workersAiCompatible = (client: HttpClient.HttpClient): HttpClient.HttpClient =>
+  HttpClient.mapRequest(client, (request) => {
+    const body = request.body
+    if (body._tag !== "Uint8Array" || !body.contentType.includes("json")) return request
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(body.body))
+    return HttpClientRequest.bodyText(request, JSON.stringify(nullContentToEmpty(parsed)), body.contentType)
+  })
+
+/**
  * The layer. `FetchHttpClient` because a Worker has `fetch` and nothing else — no Node http, no undici.
  */
 export const languageModelOpenAiCompatible = (
@@ -86,7 +129,8 @@ export const languageModelOpenAiCompatible = (
     Layer.provide(
       OpenAiClient.layer({
         apiUrl: config.apiUrl,
-        apiKey: config.apiKey
+        apiKey: config.apiKey,
+        transformClient: workersAiCompatible
       })
     ),
     Layer.provide(FetchHttpClient.layer)

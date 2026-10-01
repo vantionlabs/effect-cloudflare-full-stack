@@ -148,7 +148,7 @@
       "name": "@ea/ai-openai",
       "version": "0.0.0",
       "dependencies": {
-        "@effect/ai-openai": "catalog:",
+        "@effect/ai-openai-compat": "catalog:",
         "effect": "catalog:",
       },
     },
@@ -213,7 +213,7 @@
   },
   "catalog": {
     "@cloudflare/vite-plugin": "^1.62.1",
-    "@effect/ai-openai": "4.0.0-rc.118",
+    "@effect/ai-openai-compat": "4.0.0-rc.118",
     "@effect/atom-react": "4.0.0-rc.118",
     "@effect/sql-pg": "4.0.0-rc.118",
     "@tailwindcss/vite": "^4.3.3",
@@ -410,7 +410,7 @@
 
     "@ea/worker": ["@ea/worker@workspace:apps/worker"],
 
-    "@effect/ai-openai": ["@effect/ai-openai@4.0.0-rc.118", "", { "peerDependencies": { "effect": "^4.0.0-rc.118" } }, "sha512-VEhcR8L77hurJ5bHjxrrDe3KAIFZYf3xB1qwycbI5sfXrO6OdH6SMqqWQuOT71bBaUdGLbFc48Cmjl44XTozzg=="],
+    "@effect/ai-openai-compat": ["@effect/ai-openai-compat@4.0.0-rc.118", "", { "peerDependencies": { "effect": "^4.0.0-rc.118" } }, "sha512-VqjUIq1HDcluCx6Xoqg+nDY4UC2FQUnfihNitg0y3rj/gHOps70k1PCgyPzBXNNi6GWzfakjNp69d2PfTryyOA=="],
 
     "@effect/atom-react": ["@effect/atom-react@4.0.0-rc.118", "", { "peerDependencies": { "effect": "^4.0.0-rc.118", "react": ">=19.0.0 <20.0.0", "scheduler": ">=0.25.0 <0.28.0" } }, "sha512-H6XBWGOlKIe53yFHdzd9zJE+H1RDoMvqF5OyWBZetbaHJUYlSbZECvDzBw1545fSoHrgH2JmlWePFPsXOgGSqA=="],
 
