@@ -10,6 +10,7 @@
  * this slice may not import `policy`'s `AgentModel`, and does not need to.
  */
 import { DataAnswer, DataLookup, ungroundedFigures } from "@ea/modules/reporting/domain/DataAsk"
+import { answerLanguageRule } from "@ea/modules/shared/domain/Language"
 import { currentMonth } from "@ea/modules/shared/use-cases/Usage"
 import { Effect } from "effect"
 import { LanguageModel, Prompt } from "effect/ai"
@@ -25,7 +26,7 @@ const MAX_STEPS = 4
  * names this month's exact period and says the field names mean what they say, and the hedge applies only when no
  * returned field corresponds to the question.
  */
-const system = (today: string, thisMonth: { readonly from: string; readonly to: string }) =>
+const system = (today: string, thisMonth: { readonly from: string; readonly to: string }, question: string) =>
   `You answer questions about the organization's own business data for a manager. Today is ${today} (UTC).
 "This month" is the period from ${thisMonth.from} to ${thisMonth.to} (the end date is exclusive) — the tools'
 default period.
@@ -37,16 +38,19 @@ Rules:
 - Every number in your answer must be one the tools returned. Do NOT add, subtract, average or otherwise compute
   new numbers — the tools already give totals and percentages. An answer containing a computed figure is withheld.
 - Only if no returned field corresponds to what was asked, say so, and say what the tools do give.
-- For cash and planning questions use planning_figures, and say that it counts money coming IN only and on which
-  assumptions (payment terms, days to finish an open job) — both are in its result.
-- Answer in one or two sentences, in the language of the question, and mention the period.`
+- For cash and planning questions use planning_figures. It gives cash in, cash out (recorded expenses) and net;
+  the net is the change in cash from today, NOT a bank balance — never call it one. Say which assumptions it used
+  (default payment terms, days to finish an open job); they are in its result.
+- Answer in one or two sentences, in the language of the question, and mention the period.${
+    answerLanguageRule(question)
+  }`
 
 export const AskData = (question: string) =>
   Effect.gen(function*() {
     const now = new Date()
     const today = now.toISOString().slice(0, 10)
     let prompt = Prompt.make([
-      { role: "system", content: system(today, currentMonth(now)) },
+      { role: "system", content: system(today, currentMonth(now), question) },
       { role: "user", content: [{ type: "text", text: question }] }
     ])
     const data: Array<DataLookup> = []

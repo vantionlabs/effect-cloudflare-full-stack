@@ -162,7 +162,10 @@ const advanceJob = (
 
 export const CompleteJob = (jobId: string) => advanceJob(jobId, "open", "done")
 
-/** Invoices a FINISHED job: the invoice is issued today, due after the payment terms, for the job's value. */
+/**
+ * Invoices a FINISHED job: issued today, for the job's value, due after THIS customer's payment terms — matched by
+ * the quote's email — or the default terms when the customer has none.
+ */
 export const InvoiceJob = (jobId: string) =>
   Effect.gen(function*() {
     const ids = yield* Ids
@@ -172,7 +175,13 @@ export const InvoiceJob = (jobId: string) =>
         insert into invoices (id, organization_id, job_id, customer_name, amount_cents, issued_on, due_on, status)
         values (
           ${invoiceId}, ${orgId}, ${job.id}, ${job.customer_name}, ${job.value_cents},
-          (now() at time zone 'UTC')::date, (now() at time zone 'UTC')::date + ${PAYMENT_TERMS_DAYS}::integer, 'open'
+          (now() at time zone 'UTC')::date,
+          (now() at time zone 'UTC')::date + coalesce(
+            (select t.terms_days from customer_terms t join quotes q on lower(q.customer_email) = t.customer_email
+              where t.organization_id = ${orgId} and q.organization_id = ${orgId} and q.id = ${job.quote_id}),
+            ${PAYMENT_TERMS_DAYS}::integer
+          ),
+          'open'
         )
       `.pipe(Effect.asVoid))
   })

@@ -27,6 +27,7 @@ import { CurrentOrg } from "@ea/domain/Identity"
 import { AgentModel, Answered, type AskProgress, Searching } from "@ea/modules/policy/domain/Ask"
 import { UngroundedAnswer } from "@ea/modules/policy/domain/Errors"
 import type { AskableCollection } from "@ea/modules/shared/domain/Corpus"
+import { answerLanguageRule } from "@ea/modules/shared/domain/Language"
 import { PolicySearch } from "@ea/modules/shared/domain/Retrieval"
 import { containsVerbatim } from "@ea/modules/shared/domain/Verbatim"
 import { Effect, Queue, Schema, Stream } from "effect"
@@ -182,8 +183,8 @@ Rules:
 - Answer in the language the question was asked in.
 - If the tool reports retrieval_mode other than "hybrid", say that the search was degraded.`
 
-const systemFor = (collection: AskableCollection): string =>
-  collection === "knowledge" ? KNOWLEDGE_SYSTEM : POLICY_SYSTEM
+const systemFor = (collection: AskableCollection, question: string): string =>
+  (collection === "knowledge" ? KNOWLEDGE_SYSTEM : POLICY_SYSTEM) + answerLanguageRule(question)
 
 export interface AskResult {
   readonly answer: string
@@ -282,7 +283,7 @@ const runLoop = (
     const model = yield* AgentModel
 
     let prompt = Prompt.make([
-      { role: "system", content: systemFor(collection) },
+      { role: "system", content: systemFor(collection, question) },
       { role: "user", content: [{ type: "text", text: question }] }
     ])
 

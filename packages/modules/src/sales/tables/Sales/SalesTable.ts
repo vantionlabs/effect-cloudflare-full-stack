@@ -186,3 +186,24 @@ export const ChangeProposalUnique = Effect.gen(function*() {
       where status = 'pending'
   `
 })
+
+/**
+ * Payment terms per customer (migration 0033), keyed by the customer's EMAIL — the one stable identity a quote
+ * carries, since the name is free text. Stored lower-cased so two spellings of one address are one customer.
+ *
+ * A customer with no row has the default terms (`PAYMENT_TERMS_DAYS`). An invoice copies the terms into its due
+ * date when it is issued, so changing a customer's terms later never moves an invoice already sent.
+ */
+export const CustomerTermsTable = Effect.gen(function*() {
+  const sql = yield* SqlClient.SqlClient
+  yield* sql`
+    create table if not exists customer_terms (
+      organization_id  text not null,
+      customer_email   text not null check (customer_email = lower(customer_email)),
+      terms_days       integer not null check (terms_days between 0 and 365),
+      updated_by       text not null,
+      updated_at       timestamptz not null default now(),
+      primary key (organization_id, customer_email)
+    )
+  `
+})

@@ -30,8 +30,15 @@ import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
+import { ExpenseTable } from "@ea/modules/reporting/tables/Expense"
 import { ReportDeliveryTable } from "@ea/modules/reporting/tables/ReportDelivery"
-import { ChangeProposalTable, ChangeProposalUnique, SalesTable, WorkTable } from "@ea/modules/sales/tables/Sales"
+import {
+  ChangeProposalTable,
+  ChangeProposalUnique,
+  CustomerTermsTable,
+  SalesTable,
+  WorkTable
+} from "@ea/modules/sales/tables/Sales"
 import { Migrator } from "effect/sql"
 import { CorpusKnowledge } from "../Corpus/CorpusTable.ts"
 import { EventIndexType, EventTable } from "../Event/EventTable.ts"
@@ -137,7 +144,11 @@ export const migrations = {
   // After a quote is sent: accepted or declined, jobs (work in progress), invoices and payment.
   "0031_work": WorkTable,
   // One pending proposal per identical change, enforced by the database because tool calls run concurrently.
-  "0032_change_proposals_one_pending": ChangeProposalUnique
+  "0032_change_proposals_one_pending": ChangeProposalUnique,
+  // Payment terms per customer, keyed by email; invoices copy them into their due date.
+  "0033_customer_terms": CustomerTermsTable,
+  // Expected payments out, one-off or monthly, so the cash forecast shows net cash and not only inflows.
+  "0034_expenses": ExpenseTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

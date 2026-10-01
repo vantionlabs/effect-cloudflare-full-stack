@@ -14,6 +14,7 @@ import { ChangeIsStale } from "../Errors/ChangeIsStale.ts"
 import { ChangeNotFound } from "../Errors/ChangeNotFound.ts"
 import { ChangeNotPending } from "../Errors/ChangeNotPending.ts"
 import { InvalidProduct } from "../Errors/InvalidProduct.ts"
+import { InvalidTerms } from "../Errors/InvalidTerms.ts"
 import { InvoiceAlreadyPaid } from "../Errors/InvoiceAlreadyPaid.ts"
 import { InvoiceNotFound } from "../Errors/InvoiceNotFound.ts"
 import { JobNotFound } from "../Errors/JobNotFound.ts"
@@ -23,6 +24,7 @@ import { QuoteNotFound } from "../Errors/QuoteNotFound.ts"
 import { QuoteNotInState } from "../Errors/QuoteNotInState.ts"
 import { Product, Unit } from "../Product/Product.ts"
 import { Quote, QuoteStatus } from "../Quote/Quote.ts"
+import { CustomerTerms } from "../Work/Terms.ts"
 import { Invoice, Job } from "../Work/Work.ts"
 
 const QuoteRef = { quoteId: Schema.String }
@@ -111,5 +113,12 @@ export const SalesRpcs = RpcGroup.make(
     payload: { invoiceId: Schema.String },
     success: Invoice,
     error: Schema.Union([InvoiceNotFound, InvoiceAlreadyPaid])
+  }),
+  Rpc.make("Sales.customerTerms", { payload: {}, success: Schema.Array(CustomerTerms) }),
+  /** Sets one customer's payment terms in days, or clears them back to the default with `termsDays: null`. */
+  Rpc.make("Sales.setCustomerTerms", {
+    payload: { customerEmail: Schema.String, termsDays: Schema.NullOr(Schema.Int) },
+    success: Schema.Array(CustomerTerms),
+    error: InvalidTerms
   })
 ).middleware(AuthenticatedRpc)

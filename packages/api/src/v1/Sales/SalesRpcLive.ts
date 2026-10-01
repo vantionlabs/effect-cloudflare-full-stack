@@ -21,10 +21,12 @@ import { ApproveQuote, DiscardQuote, DraftQuote, ListQuotes, SendQuote } from "@
 import {
   CompleteJob,
   InvoiceJob,
+  ListCustomerTerms,
   ListInvoices,
   ListJobs,
   RecordPayment,
-  RespondToQuote
+  RespondToQuote,
+  SetCustomerTerms
 } from "@ea/modules/sales/use-cases/Work"
 import { Effect } from "effect"
 import { LanguageModel } from "effect/ai"
@@ -65,6 +67,10 @@ export const SalesRpcLive = SalesRpcs.toLayer(
     "Sales.completeJob": (payload: { readonly jobId: string }) => serveForTenant(CompleteJob(payload.jobId)),
     "Sales.invoiceJob": (payload: { readonly jobId: string }) => serveForTenant(InvoiceJob(payload.jobId)),
     "Sales.invoices": () => serveForTenant(ListInvoices),
-    "Sales.recordPayment": (payload: { readonly invoiceId: string }) => serveForTenant(RecordPayment(payload.invoiceId))
+    "Sales.recordPayment": (payload: { readonly invoiceId: string }) =>
+      serveForTenant(RecordPayment(payload.invoiceId)),
+    "Sales.customerTerms": () => serveForTenant(ListCustomerTerms),
+    "Sales.setCustomerTerms": (payload: { readonly customerEmail: string; readonly termsDays: number | null }) =>
+      serveForTenant(SetCustomerTerms(payload.customerEmail, payload.termsDays))
   })
 )

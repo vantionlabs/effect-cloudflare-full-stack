@@ -38,3 +38,26 @@ test("a cash-flow question uses the planning figures and is answered or withheld
   await expect(page.getByTestId("data-answer").or(page.getByText("No answer given"))).toBeVisible()
   await expect(page.getByText("could not be answered")).toBeHidden()
 })
+
+/*
+ * A Dutch question gets a Dutch answer. The prompt used to ask the model to answer "in the language of the question"
+ * and it answered in English anyway; the language is now detected in code and named in the prompt. Checked only
+ * when an answer is given — a withheld answer is the product's own text, not the model's.
+ */
+test("a question in Dutch is answered in Dutch", async ({ page, baseURL }) => {
+  test.setTimeout(120_000)
+  await createAccount(page.request, baseURL ?? "")
+  await page.goto("/insights")
+  const question = page.getByLabel("Question")
+  await expect(question).toBeEnabled()
+  await question.fill("Hoeveel offertes zijn er deze maand gemaakt, en hoeveel daarvan zijn verstuurd?")
+  await page.getByRole("button", { name: "Ask" }).click()
+  await expect(page.getByTestId("data-lookup").first()).toBeVisible({ timeout: 60_000 })
+  const answer = page.getByTestId("data-answer")
+  await expect(answer.or(page.getByText("No answer given"))).toBeVisible()
+  if (await answer.isVisible()) {
+    const text = (await answer.innerText()).toLowerCase()
+    expect(text).toMatch(/\b(de|het|een|zijn|er|deze|maand|offertes)\b/)
+    expect(text).not.toMatch(/\b(the|were|this month)\b/)
+  }
+})

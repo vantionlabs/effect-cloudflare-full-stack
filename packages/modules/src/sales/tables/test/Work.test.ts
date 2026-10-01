@@ -6,14 +6,15 @@
  */
 import { Db } from "@ea/database/Database"
 import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
-import { GetPlanning } from "@ea/modules/reporting/use-cases/Planning"
+import { AddExpense, GetPlanning, ListExpenses, StopExpense } from "@ea/modules/reporting/use-cases/Planning"
 import {
   CompleteJob,
   InvoiceJob,
   ListInvoices,
   ListJobs,
   RecordPayment,
-  RespondToQuote
+  RespondToQuote,
+  SetCustomerTerms
 } from "@ea/modules/sales/use-cases/Work"
 import { PAYMENT_TERMS_DAYS } from "@ea/modules/shared/domain/Money"
 import { IdsUuid } from "@ea/modules/shared/server/Ids"
@@ -66,11 +67,13 @@ beforeEach(async () => {
         yield* sql`delete from invoices where organization_id = ${ORG}`
         yield* sql`delete from jobs where organization_id = ${ORG}`
         yield* sql`delete from quotes where organization_id = ${ORG}`
+        yield* sql`delete from customer_terms where organization_id = ${ORG}`
+        yield* sql`delete from expenses where organization_id = ${ORG}`
         for (const [id, status] of [["wq_sent", "sent"], ["wq_other", "sent"], ["wq_draft", "draft"]]) {
           yield* sql`
-          insert into quotes (id, organization_id, status, customer_name, request, subtotal_cents, vat_total_cents,
-                              total_cents, created_by)
-          values (${id}, ${ORG}, ${status}, 'Piet Smit', 'r', 37_800, 7_938, 45_738, 'u')
+          insert into quotes (id, organization_id, status, customer_name, customer_email, request, subtotal_cents,
+                              vat_total_cents, total_cents, created_by)
+          values (${id}, ${ORG}, ${status}, 'Piet Smit', 'Piet@Smit.example', 'r', 37_800, 7_938, 45_738, 'u')
         `
         }
       })).pipe(Effect.provide(Admin)) as Effect.Effect<void, never, never>
@@ -129,5 +132,48 @@ describe("after the sale", () => {
   it("creates no job when the customer declines", async () => {
     expect((await ok(RespondToQuote("wq_other", false))).status).toBe("declined")
     expect(await ok(ListJobs)).toEqual([])
+  })
+
+  it("dates an invoice by the customer's own terms, matched by email whatever its case", async () => {
+    await ok(SetCustomerTerms("piet@smit.EXAMPLE", 14))
+    await ok(RespondToQuote("wq_sent", true))
+    const [job] = await ok(ListJobs)
+    // The forecast already uses the customer's terms for the job, before it is invoiced.
+    expect((await ok(GetPlanning)).assumptions.customersWithOwnTerms).toBe(1)
+    await ok(CompleteJob(job!.id))
+    await ok(InvoiceJob(job!.id))
+    const [invoice] = await ok(ListInvoices)
+    expect(invoice!.dueOn).toBe(plusDays(14))
+
+    // Clearing the terms affects the NEXT invoice, never this one.
+    await ok(SetCustomerTerms("piet@smit.example", null))
+    expect((await ok(ListInvoices))[0]!.dueOn).toBe(plusDays(14))
+  })
+
+  it("refuses terms that are not plausible", async () => {
+    expect(await tag(SetCustomerTerms("Piet Smit", 14))).toBe("InvalidTerms")
+    expect(await tag(SetCustomerTerms("piet@smit.example", 400))).toBe("InvalidTerms")
+    expect(await tag(SetCustomerTerms("piet@smit.example", -1))).toBe("InvalidTerms")
+  })
+
+  it("counts expenses as cash out until they are stopped", async () => {
+    const expenses = await ok(
+      AddExpense({ description: "Rent", amountCents: 150_000, startsOn: plusDays(3), repeat: "once" })
+    )
+    expect(expenses).toHaveLength(1)
+    const out = (await ok(GetPlanning)).weeks.reduce((sum, week) => sum + week.out, 0)
+    expect(out).toBe(150_000)
+
+    await ok(StopExpense(expenses[0]!.id))
+    expect(await ok(ListExpenses)).toHaveLength(0)
+    expect((await ok(GetPlanning)).weeks.reduce((sum, week) => sum + week.out, 0)).toBe(0)
+    expect(await tag(StopExpense(expenses[0]!.id))).toBe("ExpenseNotFound")
+  })
+
+  it("refuses an expense with no description, no amount or an impossible date", async () => {
+    const base = { description: "Rent", amountCents: 100, startsOn: plusDays(1), repeat: "once" as const }
+    expect(await tag(AddExpense({ ...base, description: "  " }))).toBe("InvalidExpense")
+    expect(await tag(AddExpense({ ...base, amountCents: 0 }))).toBe("InvalidExpense")
+    expect(await tag(AddExpense({ ...base, startsOn: "2026-02-30" }))).toBe("InvalidExpense")
   })
 })

@@ -51,8 +51,9 @@ export const ListQuotesTool = Tool.make("list_quotes", {
 
 export const PlanningFigures = Tool.make("planning_figures", {
   description: "Work in progress (open jobs; finished jobs not yet invoiced), open and overdue invoices, sent quotes " +
-    "not yet answered (pipeline), and the expected cash coming IN per week for the next 12 weeks, in euros. Inflows " +
-    "only — expenses are not recorded. States its assumptions (payment terms, days to finish an open job).",
+    "not yet answered (pipeline), and per week for the next 12 weeks the expected cash IN, cash OUT (recorded " +
+    "expenses) and NET, in euros. The running net is the change in cash from today, not a bank balance. States its " +
+    "assumptions (default payment terms, customers with their own terms, days to finish an open job).",
   /*
    * A real parameter, not an empty object. `Schema.Struct({})` compiled to a JSON schema with `anyOf`, which the
    * OpenAI-compatible client refuses ("Root JSON Schema must have type \"object\" and must not use \"anyOf\"") —
@@ -75,6 +76,10 @@ export const DataToolkit = Toolkit.make(ActivityFigures, QuoteFigures, ListQuote
 
 /** Euros as a two-decimal string from integer cents — a figure the model can quote exactly. */
 const euros = (cents: number): string => (cents / 100).toFixed(2)
+const total = (
+  weeks: ReadonlyArray<{ readonly total: number; readonly out: number; readonly net: number }>,
+  field: "total" | "out" | "net"
+): number => weeks.reduce((sum, week) => sum + week[field], 0)
 const share = (part: number, whole: number): number => whole === 0 ? 0 : Math.round((part / whole) * 100)
 
 /** An invalid or absent period becomes this month; the tool says which period it used, so the model can say it. */
@@ -140,7 +145,8 @@ export const dataToolkitFor = DataToolkit.toLayer(
           return {
             today: plan.today,
             assumptions: {
-              payment_terms_days: plan.assumptions.paymentTermsDays,
+              default_payment_terms_days: plan.assumptions.paymentTermsDays,
+              customers_with_their_own_terms: plan.assumptions.customersWithOwnTerms,
               open_job_assumed_finished_after_days: plan.assumptions.openJobDays
             },
             work_in_progress: {
@@ -150,15 +156,19 @@ export const dataToolkitFor = DataToolkit.toLayer(
             open_invoices: sum(plan.openInvoices),
             overdue_invoices: sum(plan.overdue),
             pipeline_sent_quotes: sum(plan.pipeline),
-            expected_cash_in_per_week: plan.weeks.map((week) => ({
+            per_week: plan.weeks.map((week) => ({
               week_starting: week.weekStart,
-              eur: euros(week.total)
+              cash_in_eur: euros(week.total),
+              cash_out_eur: euros(week.out),
+              net_eur: euros(week.net)
             })),
             horizon_weeks: horizon,
-            expected_cash_in_over_horizon_eur: euros(
-              plan.weeks.slice(0, horizon).reduce((s, week) => s + week.total, 0)
-            ),
-            expected_cash_in_next_12_weeks_eur: euros(plan.weeks.reduce((s, week) => s + week.total, 0)),
+            expected_cash_in_over_horizon_eur: euros(total(plan.weeks.slice(0, horizon), "total")),
+            expected_cash_out_over_horizon_eur: euros(total(plan.weeks.slice(0, horizon), "out")),
+            net_change_over_horizon_eur: euros(total(plan.weeks.slice(0, horizon), "net")),
+            expected_cash_in_next_12_weeks_eur: euros(total(plan.weeks, "total")),
+            expected_cash_out_next_12_weeks_eur: euros(total(plan.weeks, "out")),
+            net_change_next_12_weeks_eur: euros(total(plan.weeks, "net")),
             expected_later_eur: euros(plan.later)
           }
         }).pipe(Effect.provide(context), Effect.orDie),
