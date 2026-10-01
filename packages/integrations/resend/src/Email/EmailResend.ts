@@ -92,7 +92,8 @@ export const EmailResend = (config: ResendConfig): Layer.Layer<Email> =>
             to: message.to,
             subject: message.subject,
             text: message.text,
-            ...message.html === undefined ? {} : { html: message.html }
+            ...message.html === undefined ? {} : { html: message.html },
+            ...message.headers === undefined ? {} : { headers: { ...message.headers } }
           }),
         catch: (cause) => new EmailNotSent({ to: message.to, reason: describe(cause) })
       }).pipe(

@@ -9,6 +9,7 @@ export const PRODUCTS_KEY = "sales-products"
 export const QUOTES_KEY = "sales-quotes"
 export const CHANGES_KEY = "sales-changes"
 export const TERMS_KEY = "sales-terms"
+const INBOUND_KEY = "sales-inbound"
 
 export const productsAtom = Api.query("Sales.products", { includeInactive: true }, {
   serializationKey: "sales-products",
@@ -40,3 +41,9 @@ export const discardQuoteAtom = Api.mutation("Sales.discardQuote")
 export const sendQuoteAtom = Api.mutation("Sales.sendQuote")
 export const respondToQuoteAtom = Api.mutation("Sales.respondToQuote")
 export const setCustomerTermsAtom = Api.mutation("Sales.setCustomerTerms")
+
+/** The emails sent to the organization's quote-request address, refused ones included. */
+export const inboundMessagesAtom = Api.query("Sales.inboundMessages", {}, {
+  serializationKey: "sales-inbound",
+  reactivityKeys: [INBOUND_KEY]
+})

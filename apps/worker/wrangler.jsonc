@@ -72,6 +72,9 @@
    * shape, and a host that is not listed falls back to `BASE_URL` rather than being trusted.
    */
   "vars": {
+    // INBOUND_EMAIL_DOMAIN is deliberately unset: the account has no domain yet. To switch on email → draft quote,
+    // add a domain with Cloudflare Email Routing, route a catch-all (or `*@offerte.<domain>`) to this Worker, and set
+    // it here per environment. See docs/services.md and `platform/EmailHandler.ts`.
     "ENVIRONMENT": "production",
     "CLOUDFLARE_ACCOUNT_ID": "f4599b98c2430a831bcfc291d156a988",
     "CLOUDFLARE_AI_GATEWAY": "effect-ai-ai-production",

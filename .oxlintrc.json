@@ -29,6 +29,8 @@
     ".claude/skills/**",
     // Impeccable's install for the other harnesses (Copilot, Codex) and its Claude Code agent definitions.
     ".claude/agents/**",
+    // Agent worktrees (`git worktree`, created by Claude Code agents): another checkout of this repo, not code to lint.
+    ".claude/worktrees/**",
     ".github/skills/**",
     ".github/agents/**",
     ".github/hooks/**",

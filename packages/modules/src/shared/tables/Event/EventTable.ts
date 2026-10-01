@@ -126,3 +126,16 @@ export const EventIndexType = Effect.gen(function*() {
       check (type in ('document.decide', 'decision.execute', 'document.index'))
   `
 })
+
+/**
+ * Widens `events.type` for `quote.draft-from-email` (migration 0037): a customer's email waiting to be read into a
+ * draft quote. Dropped and re-added by its real name, like `EventIndexType`; expand-only.
+ */
+export const EventQuoteFromEmailType = Effect.gen(function*() {
+  const sql = yield* SqlClient.SqlClient
+  yield* sql`alter table events drop constraint if exists events_type_check`
+  yield* sql`
+    alter table events add constraint events_type_check
+      check (type in ('document.decide', 'decision.execute', 'document.index', 'quote.draft-from-email'))
+  `
+})

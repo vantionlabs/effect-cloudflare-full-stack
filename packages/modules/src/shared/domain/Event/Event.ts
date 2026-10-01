@@ -15,7 +15,12 @@ export type EventId = typeof EventId.Type
  * uploaded policy document was stored and NEVER indexed — only the eval harness and tests populated the corpus,
  * so a customer had no way to add to it through the product.
  */
-export const EventType = Schema.Literals(["document.decide", "decision.execute", "document.index"])
+export const EventType = Schema.Literals([
+  "document.decide",
+  "decision.execute",
+  "document.index",
+  "quote.draft-from-email"
+])
 export type EventType = typeof EventType.Type
 
 /**
@@ -45,3 +50,6 @@ export const executeEventKey = (decisionId: string, action: string) => `decision
 
 /** `document.index` — one per document. Re-indexing is idempotent anyway (chunks are replaced, not appended). */
 export const indexEventKey = (documentId: string) => `index:${documentId}`
+
+/** `quote.draft-from-email` — one per inbound message; the draft itself is unique per message too. */
+export const draftFromEmailEventKey = (inboundMessageId: string) => `quote-email:${inboundMessageId}`

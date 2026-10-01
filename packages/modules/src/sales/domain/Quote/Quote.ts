@@ -11,6 +11,7 @@
  */
 import { Cents, Milli, PerMille } from "@ea/modules/shared/domain/Money"
 import { Schema } from "effect"
+import { QuoteSource } from "../Inbound/Inbound.ts"
 import { ProductId, Unit, UNIT_LABEL } from "../Product/Product.ts"
 
 export const QuoteId = Schema.String.pipe(Schema.brand("QuoteId"))
@@ -45,7 +46,9 @@ export class Quote extends Schema.Class<Quote>("Quote")({
   flags: Schema.Array(Schema.String),
   createdAt: Schema.String,
   approvedBy: Schema.NullOr(Schema.String),
-  sentAt: Schema.NullOr(Schema.String)
+  sentAt: Schema.NullOr(Schema.String),
+  /** The email this draft was read from, or null when a person typed the request in. */
+  source: Schema.NullOr(QuoteSource)
 }) {}
 
 /**
@@ -65,7 +68,8 @@ export const renderQuoteEmail = (
     }`
   )
   return {
-    subject: `Offerte van ${organizationName}`,
+    // A reply to the customer's own email keeps its subject, so it lands in the same thread in their mail client.
+    subject: replySubject(quote.source?.subject ?? null) ?? `Offerte van ${organizationName}`,
     text: [
       quote.customerName === null ? "Goedendag," : `Beste ${quote.customerName},`,
       "",
@@ -81,4 +85,11 @@ export const renderQuoteEmail = (
       organizationName
     ].join("\n")
   }
+}
+
+/** `Re: <subject>`, without stacking a second `Re:`; null when there is no subject to reply to. */
+export const replySubject = (subject: string | null): string | null => {
+  if (subject === null || subject.trim() === "") return null
+  const trimmed = subject.trim()
+  return /^(re|antw|aw)\s*:/i.test(trimmed) ? trimmed : `Re: ${trimmed}`
 }

@@ -194,7 +194,7 @@ visible default so SSR content is never hidden waiting for JavaScript.
 
 ## What stays in `apps/worker`
 
-The app is an entrypoint. Eight files, and each one is there for a reason that survives the question "could this
+The app is an entrypoint. Nine files, and each one is there for a reason that survives the question "could this
 be a module?":
 
 | File                            | Why it cannot move                                                                                          |
@@ -204,6 +204,7 @@ be a module?":
 | `platform/CloudflareSocket.ts`  | imports `cloudflare:sockets`                                                                                |
 | `platform/HyperdriveConnect.ts` | builds the driver over that socket and the Hyperdrive binding                                               |
 | `platform/QueueHandler.ts`      | queue batch semantics — ack/retry per message, which is a platform contract                                 |
+| `platform/EmailHandler.ts`      | the `email()` entry: `setReject` (a bounce) is a platform contract; what a message means lives in `sales`   |
 | `platform/DispatchEvent.ts`     | wiring: names every slice's handler                                                                         |
 | `platform/WorkerPlatform.ts`    | the layer bundle                                                                                            |
 | `RoomDurableObject.ts`          | a `DurableObject` subclass must be exported from the entry and declared in `exports`                        |

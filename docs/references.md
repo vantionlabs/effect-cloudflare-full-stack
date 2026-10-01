@@ -682,6 +682,20 @@ message is _"Unable to fetch data. The request could not be resolved."_, so DNS,
 indistinguishable in our logs. Found when a test asserting on the real cause failed; `EmailResend.test.ts` now
 pins the measured behaviour.
 
+### Inbound email: `postal-mime@4.0.2` and the local email endpoint — checked 2026-10-01
+
+- **`postal-mime` 4.0.2 is MIT-0** (npm `license`), ESM with its own types, and parses a Worker's `message.raw`
+  (`ReadableStream<Uint8Array>`) directly via `PostalMime.parse(raw)`. `Email.messageId`, `from: { name, address }`,
+  `subject`, `text` and `html` are what we read. 2.7.6 is also in the tree, as a dependency of `agents` and `resend`.
+- **Local testing posts to `/cdn-cgi/local/email?from=…&to=…`** with a raw RFC 5322 body (Cloudflare's Email
+  Routing local-development docs; earlier changelog posts call it `/cdn-cgi/handler/email`). It needs a `Message-ID`.
+  Measured: Miniflare 5.20260926.1 sends it to the ENTRY worker — under the console's Vite plugin that is the console,
+  which has no `email()`, and an `MF-Route-Override` header did not get through the plugin. So the email e2e posts to
+  the API Worker run on its own (`wrangler dev`, :8787), which shares the compose Postgres.
+- **A refused message bounces.** `message.setReject(reason)` returns the reason to the sender (locally: a 400 with
+  "Worker rejected email with the following reason: …"). We use it for unknown addresses and oversized messages only;
+  auto-replies and over-limit mail are recorded as refused, not bounced, to avoid mail loops and backscatter.
+
 ### better-auth 1.7.6's email senders — read in `dist/`, 2026-10-01
 
 - **No `sendResetPassword` → `400 RESET_PASSWORD_DISABLED`** (`api/routes/password.mjs`), not a silent 200. An

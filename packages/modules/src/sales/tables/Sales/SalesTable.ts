@@ -207,3 +207,61 @@ export const CustomerTermsTable = Effect.gen(function*() {
     )
   `
 })
+
+/**
+ * A customer's email becomes a draft quote (migration 0036).
+ *
+ * - `inbound_addresses`: each organization's receiving address is `<token>@<INBOUND_EMAIL_DOMAIN>`. The token is the
+ *   only thing an email carries that names an organization, so it is random, unique, and rotatable: rotating
+ *   disables the old one (kept, for the record) and at most one is active per organization.
+ * - `inbound_messages`: every message that reached a known address, INCLUDING the refused ones (an auto-reply, the
+ *   51st in an hour) — a refusal that leaves no row is a lost customer request nobody can see. `(organization_id,
+ *   message_id)` is unique, which is what makes a redelivered or re-sent message a no-op.
+ * - `quotes.request_source` / `inbound_message_id`: where a draft came from, and one draft per message at most —
+ *   the partial unique index is what makes a redelivered queue event unable to draft twice.
+ */
+export const InboundEmailTable = Effect.gen(function*() {
+  const sql = yield* SqlClient.SqlClient
+  yield* sql`
+    create table if not exists inbound_addresses (
+      token            text primary key,
+      organization_id  text not null,
+      created_at       timestamptz not null default now(),
+      disabled_at      timestamptz
+    )
+  `
+  yield* sql`
+    create unique index if not exists inbound_addresses_one_active_idx
+      on inbound_addresses (organization_id) where disabled_at is null
+  `
+  yield* sql`
+    create table if not exists inbound_messages (
+      id               text primary key,
+      organization_id  text not null,
+      message_id       text not null,
+      from_address     text not null,
+      from_name        text,
+      subject          text,
+      body_text        text not null,
+      truncated        boolean not null default false,
+      received_at      timestamptz not null default now(),
+      status           text not null check (status in ('received', 'drafted', 'failed', 'rejected')),
+      quote_id         text,
+      reason           text,
+      unique (organization_id, message_id)
+    )
+  `
+  yield* sql`
+    create index if not exists inbound_messages_recent_idx on inbound_messages (organization_id, received_at desc)
+  `
+  yield* sql`alter table quotes add column if not exists request_source text not null default 'manual'`
+  yield* sql`alter table quotes drop constraint if exists quotes_request_source_check`
+  yield* sql`
+    alter table quotes add constraint quotes_request_source_check check (request_source in ('manual', 'email'))
+  `
+  yield* sql`alter table quotes add column if not exists inbound_message_id text`
+  yield* sql`
+    create unique index if not exists quotes_one_per_inbound_message_idx
+      on quotes (organization_id, inbound_message_id) where inbound_message_id is not null
+  `
+})

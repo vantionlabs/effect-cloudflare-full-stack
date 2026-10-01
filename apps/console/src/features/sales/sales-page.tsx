@@ -14,6 +14,7 @@ import { Page, PageHeader, PageSection, Panel } from "@/components/layout/page"
 import { PAYMENT_TERMS_DAYS } from "@ea/modules/shared/domain/Money"
 import { useState } from "react"
 import { CustomerTerms } from "./components/customer-terms.tsx"
+import { InboundInbox } from "./components/inbound-inbox.tsx"
 import { PriceListChanges } from "./components/price-list-changes.tsx"
 import { ProductForm } from "./components/product-form.tsx"
 import { ProductTable } from "./components/product-table.tsx"
@@ -41,6 +42,14 @@ export function SalesPage() {
 
       <PageSection id="quotes" title="Offertes">
         <QuoteList onFailure={setNote} />
+      </PageSection>
+
+      <PageSection
+        id="inbound"
+        title="Binnengekomen e-mails"
+        description="Wat klanten naar je offerte-adres sturen, wordt automatisch een concept. Geweigerde berichten blijven hier zichtbaar."
+      >
+        <InboundInbox />
       </PageSection>
 
       <PageSection

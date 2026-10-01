@@ -6,7 +6,7 @@
  * quote emailed twice, or one marked sent when the email never left.
  */
 import { Db } from "@ea/database/Database"
-import { CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
+import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
 import { UpsertProduct } from "@ea/modules/sales/use-cases/Product"
 import { ApproveQuote, DraftQuote, GetQuote, SendQuote } from "@ea/modules/sales/use-cases/Quote"
 import { Email, type EmailMessage } from "@ea/modules/shared/domain/Email"
@@ -81,6 +81,8 @@ const run = <A, E>(
   Effect.runPromise(
     Effect.exit(effect).pipe(
       Effect.provideService(CurrentUser, as(options.orgId ?? ORG)),
+      // As the API edge does: the tenant comes from the session (`serveForTenant`).
+      Effect.provideService(CurrentOrg, options.orgId ?? ORG),
       Effect.provide(
         Layer.mergeAll(Db.layer, IdsUuid, scriptedReader, options.email ?? capture().layer).pipe(
           Layer.provideMerge(Admin)

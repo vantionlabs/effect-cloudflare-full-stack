@@ -1,6 +1,6 @@
 # More Beautiful UI components, with real data only
 
-Status: claimed
+Status: resolved
 Type: task
 
 Not yet used, and where each earns its place:
@@ -14,3 +14,9 @@ Not yet used, and where each earns its place:
 - RecordsTable (resize/sort only) → the price list.
 - ApprovalCard → stepper for multi-step flows if one appears; weak fit today.
   Rule as always: strip demo data and timers, mark LOCAL CHANGE.
+
+## Answer
+
+Done in 2fea0dace: ⌘K palette (SearchList), AllocationCard (planning, usage), ChatComposer + StreamingText (Ask),
+DataTable sorting. Declined, with reasons in the commit: TaskRows (hides actions, implies live activity), PromptBar
+(everything beyond the text box is fake for us), RecordsTable (fixed CRM shape; sortable DataTable instead).

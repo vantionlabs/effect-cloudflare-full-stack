@@ -9,6 +9,7 @@ import { useEffect, useState } from "react"
 const SECTIONS = [
   { id: "team", label: "Team" },
   { id: "organisatie", label: "Organisatie" },
+  { id: "offerte-email", label: "Offerte-e-mail" },
   { id: "api-sleutels", label: "API-sleutels" }
 ] as const
 

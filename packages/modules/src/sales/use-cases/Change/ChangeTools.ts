@@ -9,7 +9,7 @@
  * instruction is what every value is checked against, so the model cannot substitute its own.
  */
 import { Db } from "@ea/database/Database"
-import { CurrentUser } from "@ea/domain/Identity"
+import { type CurrentOrg, CurrentUser } from "@ea/domain/Identity"
 import { Ids } from "@ea/domain/Ids"
 import { checkRequested, fieldsOf, sameFields } from "@ea/modules/sales/domain/Change"
 import { Unit } from "@ea/modules/sales/domain/Product"
@@ -60,7 +60,8 @@ export const ChangeToolkit = Toolkit.make(ProposeProductChange, ProposeNewProduc
 export const changeToolkitFor = (instruction: string) =>
   ChangeToolkit.toLayer(
     Effect.gen(function*() {
-      const context = yield* Effect.context<Db | SqlClient.SqlClient | CurrentUser | Ids>()
+      // `CurrentOrg` too: the price list is read tenant-scoped (`ListProducts`), and handlers must need nothing.
+      const context = yield* Effect.context<Db | SqlClient.SqlClient | CurrentUser | CurrentOrg | Ids>()
       const db = yield* Db
       const ids = yield* Ids
       // Who asked — recorded on every proposal, so an applied change can always be traced to a person.

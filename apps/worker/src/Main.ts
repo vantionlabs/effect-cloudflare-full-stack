@@ -85,6 +85,7 @@ import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
 import { weeklyCatchUpDue } from "@ea/modules/reporting/domain/WeeklyReport"
 import { SendWeeklyReports } from "@ea/modules/reporting/use-cases/WeeklyReport"
+import { parseInboundEmail } from "@ea/modules/sales/server/Inbound"
 import { isTerminal } from "@ea/modules/shared/domain/Errors"
 import { EventId } from "@ea/modules/shared/domain/Event"
 import type { Retrieval } from "@ea/modules/shared/domain/Retrieval"
@@ -115,6 +116,7 @@ import {
 import { AuthenticatedLive } from "./platform/AuthenticatedLive.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
 import { cachedDocumentTextFor, dispatchEvent } from "./platform/DispatchEvent.ts"
+import { handleInboundEmail, type InboundEmailMessage } from "./platform/EmailHandler.ts"
 import { ConnectHyperdrive, ReactivityLive } from "./platform/HyperdriveConnect.ts"
 import { consumeBatch, type QueueBatchLike } from "./platform/QueueHandler.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
@@ -620,6 +622,15 @@ export default {
     _ctx: ExecutionContext
   ): Promise<void> {
     await getQueueRuntime(env).runPromise(consumeBatch(batch, dispatchEvent(env.DECIDE)))
+  },
+
+  /**
+   * An email routed here by Cloudflare Email Routing — a customer's request becoming a draft quote. See
+   * `platform/EmailHandler.ts`. Same runtime and one connection, like the queue: the work is a token lookup, one
+   * insert and one emitted event; the model call happens later, in the queue consumer.
+   */
+  async email(message: InboundEmailMessage, env: Env, _ctx: ExecutionContext): Promise<void> {
+    await getQueueRuntime(env).runPromise(withDatabase(handleInboundEmail(parseInboundEmail)(message)))
   },
 
   /**

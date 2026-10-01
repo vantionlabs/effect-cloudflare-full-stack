@@ -21,29 +21,30 @@ Status column, and the distinction matters more than it looks:
 
 ## 1. The inventory
 
-| Service                   | Role                                                         | Where                  | Native? | Status                                               |
-| ------------------------- | ------------------------------------------------------------ | ---------------------- | ------- | ---------------------------------------------------- |
-| **Workers**               | the whole product: API, RPC, queue consumer, cron            | Cloudflare             | ✅      | in use                                               |
-| **Workers Static Assets** | the reviewer console, served from the same Worker            | Cloudflare             | ✅      | in use                                               |
-| **R2**                    | source documents (`DOCUMENTS`)                               | Cloudflare             | ✅      | in use                                               |
-| **Queues** + DLQ          | the event engine (`EVENTS`)                                  | Cloudflare             | ✅      | in use                                               |
-| **Workers AI**            | embeddings (`@cf/baai/bge-m3`) and the LLM (`llama-3.3-70b`) | Cloudflare             | ✅      | in use                                               |
-| **Hyperdrive** ×2         | pooling + TLS to Postgres, one cached / one not              | Cloudflare             | ✅      | in use                                               |
-| **Workers Observability** | `observability.enabled` — logs and traces in the dashboard   | Cloudflare             | ✅      | on, but nothing is instrumented (§6)                 |
-| **Workers KV**            | better-auth session cache                                    | Cloudflare             | ✅      | **planned** — was declared-unwired, now removed (§3) |
-| **Durable Objects**       | exact per-API-key quota                                      | Cloudflare             | ✅      | planned                                              |
-| **Rate Limiting binding** | coarse flood protection                                      | Cloudflare             | ✅      | planned                                              |
-| **AI Gateway**            | caching, retries, cost/limit control in front of the model   | Cloudflare             | ✅      | in use, verified by execution (§7)                   |
-| **Analytics Engine**      | custom metrics at SQL                                        | Cloudflare             | ✅      | planned (§6)                                         |
-| **PlanetScale Postgres**  | relational + pgvector + Dutch FTS                            | **external**           | ❌      | in use (§4.1)                                        |
-| **Postgres in Docker**    | the test database                                            | **local only**         | ❌      | in use (§4.2, ADR-0015)                              |
-| **OpenRouter / Mistral**  | non-Workers-AI model profiles                                | **external**           | ❌      | planned (§4.3)                                       |
-| **Vectorize**             | vector store                                                 | Cloudflare             | ✅      | **rejected** (ADR-0004)                              |
-| **D1**                    | relational store                                             | Cloudflare             | ✅      | **rejected** (ADR-0002)                              |
-| **Cloudflare Pages**      | frontend hosting                                             | Cloudflare             | ✅      | **superseded** by Static Assets (§2)                 |
-| **Redis**                 | broker, cache, locks, rate limits                            | external               | ❌      | **rejected** — split four ways, all native           |
-| **better-auth**           | auth + organizations                                         | library, our Postgres  | n/a     | in use                                               |
-| **Pulumi**                | IaC                                                          | external control plane | ❌      | in use — no state or traffic, see §4.4               |
+| Service                   | Role                                                         | Where                  | Native? | Status                                                                                                                 |
+| ------------------------- | ------------------------------------------------------------ | ---------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Workers**               | the whole product: API, RPC, queue consumer, cron            | Cloudflare             | ✅      | in use                                                                                                                 |
+| **Workers Static Assets** | the reviewer console, served from the same Worker            | Cloudflare             | ✅      | in use                                                                                                                 |
+| **R2**                    | source documents (`DOCUMENTS`)                               | Cloudflare             | ✅      | in use                                                                                                                 |
+| **Queues** + DLQ          | the event engine (`EVENTS`)                                  | Cloudflare             | ✅      | in use                                                                                                                 |
+| **Workers AI**            | embeddings (`@cf/baai/bge-m3`) and the LLM (`llama-3.3-70b`) | Cloudflare             | ✅      | in use                                                                                                                 |
+| **Hyperdrive** ×2         | pooling + TLS to Postgres, one cached / one not              | Cloudflare             | ✅      | in use                                                                                                                 |
+| **Workers Observability** | `observability.enabled` — logs and traces in the dashboard   | Cloudflare             | ✅      | on, but nothing is instrumented (§6)                                                                                   |
+| **Workers KV**            | better-auth session cache                                    | Cloudflare             | ✅      | **planned** — was declared-unwired, now removed (§3)                                                                   |
+| **Durable Objects**       | exact per-API-key quota                                      | Cloudflare             | ✅      | planned                                                                                                                |
+| **Rate Limiting binding** | coarse flood protection                                      | Cloudflare             | ✅      | planned                                                                                                                |
+| **AI Gateway**            | caching, retries, cost/limit control in front of the model   | Cloudflare             | ✅      | in use, verified by execution (§7)                                                                                     |
+| **Email Routing**         | customers' emails → draft quotes (the Worker's `email()`)    | Cloudflare             | ✅      | built, **not switched on**: needs a domain on the account, a catch-all route to the Worker, and `INBOUND_EMAIL_DOMAIN` |
+| **Analytics Engine**      | custom metrics at SQL                                        | Cloudflare             | ✅      | planned (§6)                                                                                                           |
+| **PlanetScale Postgres**  | relational + pgvector + Dutch FTS                            | **external**           | ❌      | in use (§4.1)                                                                                                          |
+| **Postgres in Docker**    | the test database                                            | **local only**         | ❌      | in use (§4.2, ADR-0015)                                                                                                |
+| **OpenRouter / Mistral**  | non-Workers-AI model profiles                                | **external**           | ❌      | planned (§4.3)                                                                                                         |
+| **Vectorize**             | vector store                                                 | Cloudflare             | ✅      | **rejected** (ADR-0004)                                                                                                |
+| **D1**                    | relational store                                             | Cloudflare             | ✅      | **rejected** (ADR-0002)                                                                                                |
+| **Cloudflare Pages**      | frontend hosting                                             | Cloudflare             | ✅      | **superseded** by Static Assets (§2)                                                                                   |
+| **Redis**                 | broker, cache, locks, rate limits                            | external               | ❌      | **rejected** — split four ways, all native                                                                             |
+| **better-auth**           | auth + organizations                                         | library, our Postgres  | n/a     | in use                                                                                                                 |
+| **Pulumi**                | IaC                                                          | external control plane | ❌      | in use — no state or traffic, see §4.4                                                                                 |
 
 Five bindings today, asserted consistent across environments by `bun run bindings:check`:
 `HYPERDRIVE`, `DOCUMENTS`, `EVENTS` (+ consumer), `AI`. Plus `assets`, which is **inheritable** and so

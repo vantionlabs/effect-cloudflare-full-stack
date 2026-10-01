@@ -11,6 +11,8 @@ import { dehydrateAtoms } from "@/rpc/dehydrate"
 import { createServerFn } from "@tanstack/react-start"
 
 export const loadSalesPage = createServerFn({ method: "GET" }).handler(async () => {
-  const { productsAtom, quotesAtom, changesAtom, customerTermsAtom } = await import("./sales-atoms.ts")
-  return dehydrateAtoms([productsAtom, quotesAtom, changesAtom, customerTermsAtom])
+  const { productsAtom, quotesAtom, changesAtom, customerTermsAtom, inboundMessagesAtom } = await import(
+    "./sales-atoms.ts"
+  )
+  return dehydrateAtoms([productsAtom, quotesAtom, changesAtom, customerTermsAtom, inboundMessagesAtom])
 })

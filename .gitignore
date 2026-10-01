@@ -31,3 +31,6 @@ apps/console/dist/
 
 # Impeccable's native engine (12 MB per platform, three copies): the launcher downloads it on first run.
 **/skills/impeccable/scripts/bin/
+
+# Agent worktrees: separate checkouts of this repo (git worktree), never content of it.
+.claude/worktrees/

@@ -112,7 +112,20 @@ export const SendQuote = (quoteId: string) =>
         if (quote!.customerEmail === null) return yield* new QuoteHasNoRecipient({ quoteId })
         const [org] = yield* sql<{ name: string }>`select name from organization where id = ${orgId}`
         const message = renderQuoteEmail(org?.name ?? "Our company", quote!)
-        yield* email.send({ to: quote!.customerEmail, subject: message.subject, text: message.text })
+        // A reply to the customer's own email carries its Message-ID, so it threads in their mail client.
+        const replyTo = quote!.source === null ? [] : yield* sql<{ message_id: string }>`
+          select message_id from inbound_messages
+           where organization_id = ${orgId} and id = ${quote!.source.inboundMessageId}
+        `
+        const threadId = replyTo[0]?.message_id
+        yield* email.send({
+          to: quote!.customerEmail,
+          subject: message.subject,
+          text: message.text,
+          ...(threadId === undefined || threadId.startsWith("<generated-")
+            ? {}
+            : { headers: { "In-Reply-To": threadId, References: threadId } })
+        })
         return quote!
       })
     )

@@ -15,6 +15,7 @@ import {
   ProposeChanges,
   RejectChange
 } from "@ea/modules/sales/use-cases/Change"
+import { GetInboundAddress, ListInboundMessages, RotateInboundAddress } from "@ea/modules/sales/use-cases/Inbound"
 import type { UpsertProductInput } from "@ea/modules/sales/use-cases/Product"
 import { ListProducts, UpsertProduct } from "@ea/modules/sales/use-cases/Product"
 import { ApproveQuote, DiscardQuote, DraftQuote, ListQuotes, SendQuote } from "@ea/modules/sales/use-cases/Quote"
@@ -28,9 +29,18 @@ import {
   RespondToQuote,
   SetCustomerTerms
 } from "@ea/modules/sales/use-cases/Work"
-import { Effect } from "effect"
+import { Config, Effect, Option } from "effect"
 import { LanguageModel } from "effect/ai"
 import { serveForTenant } from "../Serve.ts"
+
+/**
+ * The deployment's receiving domain, if Email Routing is configured for one. Optional configuration, so an absent
+ * value is `null`, never a failure: addresses still exist and can be tested before a domain is set up.
+ */
+const inboundDomain = Effect.map(
+  Effect.orDie(Config.option(Config.String("INBOUND_EMAIL_DOMAIN"))),
+  (domain) => Option.getOrNull(domain)
+)
 
 export const SalesRpcLive = SalesRpcs.toLayer(
   Effect.succeed({
@@ -69,6 +79,10 @@ export const SalesRpcLive = SalesRpcs.toLayer(
     "Sales.invoices": () => serveForTenant(ListInvoices),
     "Sales.recordPayment": (payload: { readonly invoiceId: string }) =>
       serveForTenant(RecordPayment(payload.invoiceId)),
+    "Sales.inboundAddress": () => Effect.flatMap(inboundDomain, (domain) => serveForTenant(GetInboundAddress(domain))),
+    "Sales.rotateInboundAddress": () =>
+      Effect.flatMap(inboundDomain, (domain) => serveForTenant(RotateInboundAddress(domain))),
+    "Sales.inboundMessages": () => serveForTenant(ListInboundMessages),
     "Sales.customerTerms": () => serveForTenant(ListCustomerTerms),
     "Sales.setCustomerTerms": (payload: { readonly customerEmail: string; readonly termsDays: number | null }) =>
       serveForTenant(SetCustomerTerms(payload.customerEmail, payload.termsDays))
