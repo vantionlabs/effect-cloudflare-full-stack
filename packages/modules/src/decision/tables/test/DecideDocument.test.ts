@@ -292,6 +292,15 @@ describe("the decide pipeline", () => {
     // Recorded, not merely checked: a decision made on degraded retrieval is a different decision.
     expect(stored[0]!.retrieval_mode).toBe("hybrid")
     expect(stored[0]!.citations).toBe(1)
+
+    // The model that decided, as the adapter reported it — not the literal 'scripted' every row used to carry.
+    const [row] = await asAdmin(
+      Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql<{ model: string }>`select model from decisions where decide_key = ${decideKey(DOCUMENT, VERTICAL)}`
+      )
+    )
+    expect(row!.model).toBe("counting-model")
   })
 
   it("costs nothing to run a second time, because the decision already exists", async () => {

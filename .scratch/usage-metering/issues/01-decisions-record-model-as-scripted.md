@@ -1,6 +1,6 @@
 # Every decision row says `model = 'scripted'`
 
-Status: needs-triage
+Status: done 2026-10-01 — the Decide step returns `{ proposal, model }`; settle writes the model, or `unreported` for a pre-change memo
 
 `settleDecision` inserts `decisions.model` as the literal `'scripted'` (`DecideSteps.ts`), whichever model
 actually decided. Found while metering: the adapter now reports its model id as `response-metadata`, and

@@ -46,7 +46,7 @@ export const DecideDocument = (payload: DecidePayloadValue) =>
 
     const extraction = yield* extractStep(payload)
     const retrieval = yield* retrieveStep(extraction.retrievalQuery)
-    const proposal = yield* decideStep({ fields: extraction.fields, chunks: retrieval.chunks })
+    const { model, proposal } = yield* decideStep({ fields: extraction.fields, chunks: retrieval.chunks })
 
-    return yield* settleDecision({ payload, extraction, retrieval, proposal, startedAt })
+    return yield* settleDecision({ payload, extraction, retrieval, proposal, model, startedAt })
   })

@@ -57,13 +57,13 @@ import { withDatabase } from "@ea/database/Database"
  * millisecond rather than the hundreds a runtime compile would.
  */
 import { CurrentOrg, OrgId } from "@ea/domain/Identity"
-import type { ProposedDecision } from "@ea/modules/decision/domain/Decision"
 import { TelemetryNoop } from "@ea/modules/decision/domain/Telemetry"
 import { DryRunAdapter } from "@ea/modules/decision/server/Execution"
 import { LanguageModelWorkersAiBinding, WORKERS_AI_MODEL } from "@ea/modules/decision/server/Extraction"
 import { TelemetryAnalytics } from "@ea/modules/decision/server/Telemetry"
 import {
   decideStep,
+  decideStepOutput,
   existingDecision,
   type ExtractOutputValue,
   extractStep,
@@ -551,7 +551,8 @@ const decideWork = (env: Env, orgId: string): DecideWork => {
         payload: params,
         extraction: extraction as unknown as ExtractOutputValue,
         retrieval: retrieval as unknown as Retrieval,
-        proposal: proposal as unknown as ProposedDecision,
+        // Either memoised shape — see `decideStepOutput` for why an in-flight instance can still hand over the old one.
+        ...decideStepOutput(proposal),
         startedAt
       })),
     /*

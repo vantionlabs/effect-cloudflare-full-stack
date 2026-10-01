@@ -113,6 +113,32 @@ export const retrieveStep = (query: string) => Effect.flatMap(PolicySearch, (pol
  * Found by running the eval against the corpus with its distractors, where the model was being asked to
  * choose between two contradictory Artikel 3s on no information.
  */
+/**
+ * What the Decide step returns: the proposal AND the model that made it.
+ *
+ * The model used to be lost here — the step returned only the proposal, and `settleDecision` wrote the literal
+ * `'scripted'` into every decision, so an auditor would have been told the test double decided everything. The
+ * adapter reports its model as `response-metadata`; this carries it the one step further it needs to go.
+ */
+export interface DecideStepOutput {
+  readonly proposal: ProposedDecision
+  /** Null when the model did not report one (the scripted model in tests). */
+  readonly model: string | null
+}
+
+/**
+ * Reads a memoised Decide result in EITHER shape.
+ *
+ * A Workflow step's result is stored, and an instance that finished `Decide` before this change replays the
+ * OLD shape — the bare proposal — into the new `Settle`. Rejecting it would fail those instances; guessing a
+ * model would falsify their record. So the old shape reads as "model not recorded". The two are told apart by
+ * the `proposal` key, which `ProposedDecision` does not have.
+ */
+export const decideStepOutput = (value: unknown): DecideStepOutput =>
+  typeof value === "object" && value !== null && "proposal" in value
+    ? value as DecideStepOutput
+    : { proposal: value as ProposedDecision, model: null }
+
 export const decideStep = (options: {
   readonly fields: unknown
   readonly chunks: Retrieval["chunks"]
@@ -132,7 +158,7 @@ export const decideStep = (options: {
         objectName: "ProposedDecision"
       }).pipe(Effect.tap((response) => recordModelUsage(modelUsageOf(response))))
     ),
-    (response) => response.value
+    (response): DecideStepOutput => ({ proposal: response.value, model: modelUsageOf(response)?.model ?? null })
   )
 
 /**
@@ -201,6 +227,8 @@ export const settleDecision = (options: {
   readonly extraction: ExtractOutputValue
   readonly retrieval: Retrieval
   readonly proposal: ProposedDecision
+  /** The model that made the proposal, or null when it did not say — recorded as `unreported`, never guessed. */
+  readonly model: string | null
   readonly startedAt: number
 }) =>
   Effect.gen(function*() {
@@ -306,7 +334,7 @@ export const settleDecision = (options: {
             ${decisionId}, ${orgId}, ${payload.documentId}, ${payload.vertical},
             ${decideKey(payload.documentId, payload.vertical)}, ${railed.outcome}, ${status},
             ${railed.rationale}, ${textArray(sql, railed.railsFired)}, ${railed.retrievalMode},
-            ${extraction.checksPassed}, 'scripted'
+            ${extraction.checksPassed}, ${options.model ?? "unreported"}
           )
           on conflict (organization_id, decide_key) do nothing
           returning id
