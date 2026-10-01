@@ -46,6 +46,27 @@ export default defineConfig({
    * suite is best placed to find into a green run with a note nobody reads.
    */
   retries: 0,
+  /*
+   * 90 s a test in CI, against Playwright's 30 s default — and the budget is for a COLD DEV SERVER, not for
+   * slow code.
+   *
+   * The suite runs against `vite dev`, which compiles each route the first time it is visited and then
+   * server-renders it in workerd. So the first visit to `/`, to `/chat` and to `/login` each pay a one-off
+   * cost that no later visit pays. Two separate specs hit the 30 s default in CI within an hour: the first
+   * `signIn` took 8.7 s against a 5 s expect default, and the chat spec — which opens TWO tabs on a route
+   * nothing had compiled yet — timed out with the Create button still `disabled`, meaning hydration had not
+   * finished.
+   *
+   * That second symptom is worth reading carefully rather than treating as slowness: `disabled={!hydrated}`
+   * exists so a click before hydration cannot be a silent no-op, and Playwright's actionability wait turns
+   * it into something a test waits ON. The gate working as designed is what surfaced here; the budget was
+   * simply smaller than a cold compile.
+   *
+   * Raised rather than papered over with `waitForTimeout`, which AGENTS.md forbids here — a fixed sleep is
+   * how the original hydration race got masked. Local runs keep the default, because a developer's dev
+   * server is usually warm and a 90 s ceiling would make a genuine hang feel like a slow test.
+   */
+  ...(process.env.CI === undefined ? {} : { timeout: 90_000 }),
   reporter: process.env.CI !== undefined ? [["github"], ["list"]] : [["list"]],
   use: {
     baseURL,
