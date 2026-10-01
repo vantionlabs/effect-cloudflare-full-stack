@@ -39,6 +39,14 @@ test("an invitee with no account signs up from the link and lands in the inviter
 
   await expect(page).toHaveURL(`/accept-invitation/${invitation.id}`)
   await expect(page.getByText("invited you to")).toBeVisible()
+  /*
+   * SERVER-rendered, not fetched after hydration: the raw HTML for this URL — no JavaScript run — already names
+   * the inviter. The first version loaded it in a `useEffect`, and this assertion is what would catch a return to
+   * that, because the HTML would then say "Loading invitation…".
+   */
+  const html = await (await page.request.get(`/accept-invitation/${invitation.id}`)).text()
+  expect(html).toContain("invited you to")
+  expect(html).not.toContain("Loading invitation")
   await page.getByRole("button", { name: "Accept" }).click()
 
   await expect(page).toHaveURL("/")
@@ -68,5 +76,7 @@ test("somebody signed in as a different person is told the invitation is not the
 
   await page.goto(`/accept-invitation/${invitation.id}`)
   await expect(page.getByRole("alert")).toBeVisible()
+  // The refusal is in the server's HTML too, decided before the page was sent.
+  expect(await (await page.request.get(`/accept-invitation/${invitation.id}`)).text()).toContain("role=\"alert\"")
   await expect(page.getByRole("button", { name: "Accept" })).toBeHidden()
 })

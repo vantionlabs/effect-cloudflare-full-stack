@@ -5,14 +5,15 @@
  * is signed in on this device and clicks a reset link from their inbox would then be bounced away silently with
  * the token still unused. Resetting only needs the token, so the page does not care who is signed in.
  *
- * better-auth's own endpoint validates the token first and then redirects here with either `?token=…` or
- * `?error=INVALID_TOKEN`. Both are read from the URL; neither is trusted further than that — the token is checked
- * again server-side when it is spent.
+ * The token is checked ON THE SERVER before the page renders (`auth/reset-token.ts`), not trusted from the URL:
+ * otherwise `?token=anything` got a working-looking form that failed only after a new password was typed. The
+ * check does not spend the token; submitting does, and better-auth checks it again then.
  *
  * Hydration gating and `method="post"` for the same reasons as `login.tsx`. The second reason matters more here:
  * a GET submission would put the NEW password in the URL.
  */
 import { authClient } from "@/auth/auth-client"
+import { checkResetToken } from "@/auth/reset-token"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -31,11 +32,17 @@ export const Route = createFileRoute("/reset-password")({
     ...typeof search["token"] === "string" ? { token: search["token"] } : {},
     ...typeof search["error"] === "string" ? { error: search["error"] } : {}
   }),
+  loaderDeps: ({ search }) => ({ token: search.token, error: search.error }),
+  loader: async ({ deps }) =>
+    deps.token === undefined || deps.error !== undefined
+      ? { valid: false }
+      : await checkResetToken({ data: { token: deps.token } }),
   component: ResetPasswordPage
 })
 
 function ResetPasswordPage() {
-  const { token, error } = Route.useSearch()
+  const { token } = Route.useSearch()
+  const { valid } = Route.useLoaderData()
   const navigate = useNavigate()
   const hydrated = useHydrated()
   const [rejected, setRejected] = useState<string | undefined>(undefined)
@@ -55,8 +62,6 @@ function ResetPasswordPage() {
     }
   })
 
-  const unusable = token === undefined || error !== undefined
-
   return (
     <main className="mx-auto flex min-h-full max-w-sm flex-col justify-center px-4">
       <Card>
@@ -65,7 +70,7 @@ function ResetPasswordPage() {
           <CardDescription>The link in your email is valid for one hour.</CardDescription>
         </CardHeader>
         <CardContent>
-          {unusable
+          {!valid
             ? (
               <p className="text-sm" role="alert">
                 This reset link is invalid or has expired.{" "}
