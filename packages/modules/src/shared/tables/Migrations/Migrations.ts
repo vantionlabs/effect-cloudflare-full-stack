@@ -31,6 +31,7 @@ import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
 import { Migrator } from "effect/sql"
+import { CorpusKnowledge } from "../Corpus/CorpusTable.ts"
 import { EventIndexType, EventTable } from "../Event/EventTable.ts"
 import { TenancyTable } from "../Tenancy/TenancyTable.ts"
 import { UsageTable } from "../Usage/UsageTable.ts"
@@ -122,7 +123,9 @@ export const migrations = {
   // Usage metering: one row per metered consumption, written in the transaction of the work it counts.
   "0025_usage": UsageTable,
   // `document.index`: uploads to a corpus collection are chunked and embedded, which nothing did before.
-  "0026_event_index_type": EventIndexType
+  "0026_event_index_type": EventIndexType,
+  // `knowledge`: technical documentation, a corpus of its own that invoice decisions never search.
+  "0027_corpus_knowledge": CorpusKnowledge
 }
 
 export const loader = Migrator.fromRecord(migrations)

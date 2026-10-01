@@ -15,5 +15,15 @@
  */
 import { Schema } from "effect"
 
-export const Collection = Schema.Literals(["policy", "transactional"])
+/**
+ * `knowledge` is technical documentation — manuals, schematics, service bulletins — for answering questions, as
+ * a workshop's mechanics need. It is its OWN collection rather than more `policy`, for the same reason
+ * transactional is: the decide pipeline justifies decisions against `policy` only, and a manual's "replace the
+ * seal every 500 hours" must never be retrievable as an approval rule. Invoice decisions never search it.
+ */
+export const Collection = Schema.Literals(["policy", "transactional", "knowledge"])
 export type Collection = typeof Collection.Type
+
+/** What can be ASKED. Not `transactional`: an invoice is decided, never cited as an authority. */
+export const AskableCollection = Schema.Literals(["policy", "knowledge"])
+export type AskableCollection = typeof AskableCollection.Type

@@ -11,6 +11,7 @@
  */
 import { AuthenticatedRpc } from "@ea/domain/Identity"
 import { UngroundedAnswer } from "@ea/modules/policy/domain/Errors"
+import { AskableCollection } from "@ea/modules/shared/domain/Corpus"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { AskAnswer } from "./AskAnswer.ts"
@@ -20,7 +21,9 @@ export const AskRpcs = RpcGroup.make(
   Rpc.make("Ask.question", {
     payload: {
       /** Capped in the handler, not trusted from here — a long question is a long paid prompt. */
-      question: Schema.String
+      question: Schema.String,
+      /** Which corpus. Omitted means `policy`. */
+      collection: Schema.optional(AskableCollection)
     },
     success: AskAnswer,
     /*
@@ -39,7 +42,7 @@ export const AskRpcs = RpcGroup.make(
    * arrives once, whole, and verified. See `AskProgress.ts`.
    */
   Rpc.make("Ask.stream", {
-    payload: { question: Schema.String },
+    payload: { question: Schema.String, collection: Schema.optional(AskableCollection) },
     success: AskProgress,
     error: UngroundedAnswer,
     stream: true

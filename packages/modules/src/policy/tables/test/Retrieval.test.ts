@@ -85,7 +85,7 @@ Spoedopdrachten mogen door één manager worden goedgekeurd tot EUR 1.000.
 `
 
 /** Seeds a document row per org so the chunk foreign key holds, then indexes the corpus. */
-const seed = async (orgId: OrgId, documentId: string, collection: "policy" | "transactional") => {
+const seed = async (orgId: OrgId, documentId: string, collection: "policy" | "transactional" | "knowledge") => {
   await Effect.runPromise(
     Effect.flatMap(SqlClient.SqlClient, (sql) =>
       sql`
@@ -184,6 +184,21 @@ describe("retrieval", () => {
     // inside the function, so a caller cannot forget it.
     const result = await run(ORG_A, RetrievePolicy({ query: "goedkeuring facturen" }))
     expect(result.chunks.every((chunk) => chunk.document_id !== "retrieval_doc_txn")).toBe(true)
+  })
+
+  it("keeps knowledge and policy apart in both directions", async () => {
+    /*
+     * The same text indexed as `knowledge`: identical content means a leak would look like a plausible hit, so
+     * this asserts on document ids. A manual must never be retrievable as an approval rule, and a mechanic's
+     * question must never be answered from procurement policy.
+     */
+    await seed(ORG_A, "retrieval_doc_knowledge", "knowledge")
+    const asPolicy = await run(ORG_A, RetrievePolicy({ query: "goedkeuring facturen" }))
+    expect(asPolicy.chunks.every((chunk) => chunk.document_id !== "retrieval_doc_knowledge")).toBe(true)
+
+    const asKnowledge = await run(ORG_A, RetrievePolicy({ query: "goedkeuring facturen", collection: "knowledge" }))
+    expect(asKnowledge.chunks.length).toBeGreaterThan(0)
+    expect(asKnowledge.chunks.every((chunk) => chunk.document_id === "retrieval_doc_knowledge")).toBe(true)
   })
 
   it("never returns another organization's policy", async () => {

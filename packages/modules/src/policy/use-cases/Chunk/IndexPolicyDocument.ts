@@ -21,6 +21,7 @@ import { EMBEDDING_DIMENSIONS } from "@ea/modules/policy/domain/Chunk"
 import { Chunker, embeddableText } from "@ea/modules/policy/domain/Chunk"
 import { EmbeddingProfile } from "@ea/modules/policy/domain/Embedding"
 import { EmbeddingWidthMismatch } from "@ea/modules/policy/domain/Errors"
+import type { Collection } from "@ea/modules/shared/domain/Corpus"
 import { Effect } from "effect"
 import { EmbeddingModel } from "effect/ai"
 
@@ -28,7 +29,7 @@ export interface IndexPolicyDocumentInput {
   readonly documentId: string
   readonly title: string
   readonly text: string
-  readonly collection: "policy" | "transactional"
+  readonly collection: Collection
 }
 
 export interface IndexPolicyDocumentResult {

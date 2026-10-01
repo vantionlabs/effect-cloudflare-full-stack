@@ -6,6 +6,7 @@
  * would put user text into every access log in front of the Worker.
  */
 import { Authenticated } from "@ea/domain/Identity"
+import { AskableCollection } from "@ea/modules/shared/domain/Corpus"
 import { pickFields, wire, wireFrom } from "@ea/modules/shared/domain/Wire"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
@@ -39,7 +40,11 @@ export class UngroundedAnswerV1 extends Schema.Error<UngroundedAnswerV1>(
 export const AskGroup = HttpApiGroup.make("ask")
   .add(
     HttpApiEndpoint.post("question", "/ask", {
-      payload: wire({ question: Schema.String }),
+      payload: wire({
+        question: Schema.String,
+        /** Which corpus to ask. Omitted means `policy`, so existing callers are unchanged. */
+        collection: Schema.optional(AskableCollection)
+      }),
       success: AskAnswerV1,
       error: UngroundedAnswerV1
     })

@@ -7,7 +7,7 @@
  */
 import { CurrentOrg, OrgId } from "@ea/domain/Identity"
 import { AgentModel, AskProgress } from "@ea/modules/policy/domain/Ask"
-import { AskCorpus, AskCorpusStream, AskToolkit, AskToolkitLive } from "@ea/modules/policy/use-cases/Ask"
+import { AskCorpus, AskCorpusStream, AskToolkit, askToolkitFor, AskToolkitLive } from "@ea/modules/policy/use-cases/Ask"
 import { PolicySearch, type Retrieval } from "@ea/modules/shared/domain/Retrieval"
 import { Effect, Layer, Schema, Stream } from "effect"
 import { LanguageModel } from "effect/ai"
@@ -428,5 +428,69 @@ describe("the progress stream", () => {
     // And the two that do exist still decode, so the assertion above is not passing for the wrong reason.
     expect(Schema.decodeSync(AskProgress)({ _tag: "Searching", query: "x", retrieval_mode: null }))
       .toBeDefined()
+  })
+})
+
+describe("asking the technical documentation", () => {
+  /*
+   * The collection is decided at the EDGE and closed over by the toolkit, exactly like the tenant: the model picks
+   * query text and nothing else. These pin that a `knowledge` question searches `knowledge` — not the policy
+   * corpus invoice decisions are justified against — and that it is asked under the mechanics' rules.
+   */
+  const askKnowledge = () => {
+    const searched: Array<string | undefined> = []
+    const prompts: Array<string> = []
+    const search = Layer.succeed(PolicySearch)({
+      search: (input) =>
+        Effect.sync(() => {
+          searched.push(input.collection)
+          return { mode: "hybrid", chunks: [] } as unknown as Retrieval
+        })
+    })
+    let call = 0
+    const model = Layer.effect(AgentModel)(
+      LanguageModel.make({
+        generateText: (options) =>
+          Effect.sync(() => {
+            call++
+            prompts.push(JSON.stringify(options.prompt))
+            if (call === 1) {
+              return [{ type: "tool-call" as const, id: "c1", name: "search_policy", params: { query: "werkdruk" } }]
+            }
+            if (call === 2) return [{ type: "text" as const, text: "De documentatie noemt geen werkdruk." }]
+            return [{
+              type: "text" as const,
+              text: JSON.stringify({ citations: [], answer: "De documentatie noemt geen werkdruk." })
+            }]
+          }),
+        streamText: () => Stream.die(new Error("not used"))
+      })
+    )
+    const result = Effect.runPromise(
+      AskCorpus("Wat is de maximale werkdruk?", "knowledge").pipe(
+        Effect.provide(
+          askToolkitFor("knowledge").pipe(
+            Layer.provideMerge(Layer.mergeAll(model, search, Layer.succeed(CurrentOrg)(ORG)))
+          )
+        ),
+        // A refusal or provider error would be a test failure, not a value this test inspects.
+        Effect.orDie
+      )
+    )
+    return { result, searched, prompts }
+  }
+
+  it("searches the knowledge collection, never the policy corpus", async () => {
+    const { result, searched } = askKnowledge()
+    await result
+    expect(searched).toEqual(["knowledge"])
+  })
+
+  it("is asked under the mechanics' rules, including never stating an unquoted value", async () => {
+    const { result, prompts } = askKnowledge()
+    await result
+    expect(prompts[0]).toContain("mechanics in a workshop")
+    expect(prompts[0]).toContain("NEVER state a value")
+    expect(prompts[0]).not.toContain("procurement policy")
   })
 })

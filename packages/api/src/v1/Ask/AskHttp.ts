@@ -15,7 +15,7 @@
  * being written once.
  */
 import { UngroundedAnswerV1 } from "@ea/modules/policy/domain/Ask"
-import { AskCorpus, AskToolkitLive } from "@ea/modules/policy/use-cases/Ask"
+import { AskCorpus, askToolkitFor } from "@ea/modules/policy/use-cases/Ask"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
 import { Effect, Layer } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
@@ -30,8 +30,9 @@ export const AskHttp = HttpApiBuilder.group(
   (handlers) =>
     handlers.handle("question", ({ payload }) =>
       serveForTenant(
-        AskCorpus(payload.question.slice(0, MAX_QUESTION_LENGTH)).pipe(
-          Effect.provide(AskToolkitLive.pipe(Layer.provideMerge(PolicySearchLive)))
+        AskCorpus(payload.question.slice(0, MAX_QUESTION_LENGTH), payload.collection ?? "policy").pipe(
+          // The toolkit for the SAME collection as the prompt: the two must agree, and only the edge knows it.
+          Effect.provide(askToolkitFor(payload.collection ?? "policy").pipe(Layer.provideMerge(PolicySearchLive)))
         )
       ).pipe(
         /*

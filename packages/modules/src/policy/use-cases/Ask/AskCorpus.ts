@@ -26,6 +26,7 @@
 import { CurrentOrg } from "@ea/domain/Identity"
 import { AgentModel, Answered, type AskProgress, Searching } from "@ea/modules/policy/domain/Ask"
 import { UngroundedAnswer } from "@ea/modules/policy/domain/Errors"
+import type { AskableCollection } from "@ea/modules/shared/domain/Corpus"
 import { PolicySearch } from "@ea/modules/shared/domain/Retrieval"
 import { containsVerbatim } from "@ea/modules/shared/domain/Verbatim"
 import { Effect, Queue, Schema, Stream } from "effect"
@@ -113,29 +114,37 @@ export const AskToolkit = Toolkit.make(SearchPolicy)
  * able to influence *whose* corpus is searched. With the organization closed over at build time, a prompt
  * injection can ask for anything and still only ever read one tenant's policy.
  */
-export const AskToolkitLive = AskToolkit.toLayer(
-  Effect.gen(function*() {
-    const policy = yield* PolicySearch
-    const orgId = yield* CurrentOrg
-    return {
-      search_policy: ({ query }: { readonly query: string }) =>
-        Effect.map(
-          Effect.provideService(policy.search({ query, limit: SEARCH_LIMIT }), CurrentOrg, orgId),
-          (retrieval) => ({
-            clauses: retrieval.chunks.map((chunk) => ({
-              chunk_id: chunk.chunk_id,
-              clause_ref: chunk.clause_ref,
-              heading: chunk.heading,
-              content: chunk.content
-            })),
-            retrieval_mode: retrieval.mode
-          })
-        )
-    }
-  })
-)
+export const askToolkitFor = (collection: AskableCollection) =>
+  AskToolkit.toLayer(
+    Effect.gen(function*() {
+      const policy = yield* PolicySearch
+      const orgId = yield* CurrentOrg
+      return {
+        /*
+         * The collection is closed over here, with the tenant, for the same reason: the model chooses the query
+         * text and nothing else. It cannot widen a mechanics' question into the policy corpus, or the reverse.
+         */
+        search_policy: ({ query }: { readonly query: string }) =>
+          Effect.map(
+            Effect.provideService(policy.search({ query, limit: SEARCH_LIMIT, collection }), CurrentOrg, orgId),
+            (retrieval) => ({
+              clauses: retrieval.chunks.map((chunk) => ({
+                chunk_id: chunk.chunk_id,
+                clause_ref: chunk.clause_ref,
+                heading: chunk.heading,
+                content: chunk.content
+              })),
+              retrieval_mode: retrieval.mode
+            })
+          )
+      }
+    })
+  )
 
-const SYSTEM = `You answer questions about an organisation's procurement policy for a human reviewer.
+/** The policy corpus's toolkit — what every caller used before collections were askable, and still the default. */
+export const AskToolkitLive = askToolkitFor("policy")
+
+const POLICY_SYSTEM = `You answer questions about an organisation's procurement policy for a human reviewer.
 
 Rules:
 - Search before you answer. Use the search_policy tool, and search again with different words if the first
@@ -147,6 +156,31 @@ Rules:
 - If the corpus does not settle the question, say so and say what is missing. That is a correct answer.
 - If the tool reports retrieval_mode other than "hybrid", say that the search was degraded, because the
   answer may be missing clauses that a full search would have found.`
+
+/**
+ * For mechanics asking the workshop's technical documentation.
+ *
+ * The rule that matters most is the fourth: a VALUE — pressure, torque, voltage, interval, part number — that is
+ * not in a returned section must never be stated. The citation check below already refuses an answer whose quotes
+ * were not retrieved; this tells the model not to produce the unquoted number in the first place, because a
+ * guessed setting on a hydraulic system is a safety failure, not a wrong answer.
+ */
+const KNOWLEDGE_SYSTEM = `You answer questions from mechanics in a workshop, using the organisation's technical
+documentation: manuals, schematics and service bulletins.
+
+Rules:
+- Search before you answer. Use the search_policy tool — it searches the technical documentation — and search
+  again with different words, or the part or machine name, if the first results do not settle the question.
+- Answer ONLY from sections the tool returned. General engineering knowledge is not the authority here.
+- ALWAYS name the sections you relied on, by their heading or reference, and quote the part you relied on.
+- NEVER state a value — a pressure, torque, voltage, interval, dimension or part number — unless it appears in
+  a returned section, quoted. If the documentation does not give it, say so plainly. A guessed number is dangerous.
+- If the documentation does not settle the question, say what is missing and who would know.
+- Answer in the language the question was asked in.
+- If the tool reports retrieval_mode other than "hybrid", say that the search was degraded.`
+
+const systemFor = (collection: AskableCollection): string =>
+  collection === "knowledge" ? KNOWLEDGE_SYSTEM : POLICY_SYSTEM
 
 export interface AskResult {
   readonly answer: string
@@ -207,7 +241,11 @@ const ungroundedCitations = (
  * Extracted so that `AskCorpus` and `AskCorpusStream` are one implementation rather than two that agree today.
  * The hook is the only difference between them: one discards it, the other offers a frame to a queue.
  */
-const runLoop = (question: string, onSearch: (query: string, mode: string | null) => void) =>
+const runLoop = (
+  question: string,
+  onSearch: (query: string, mode: string | null) => void,
+  collection: AskableCollection
+) =>
   Effect.gen(function*() {
     /*
      * The agent's model, not the decide pipeline's — see `AgentModel.ts` for why they are separate tags.
@@ -217,7 +255,7 @@ const runLoop = (question: string, onSearch: (query: string, mode: string | null
     const model = yield* AgentModel
 
     let prompt = Prompt.make([
-      { role: "system", content: SYSTEM },
+      { role: "system", content: systemFor(collection) },
       { role: "user", content: [{ type: "text", text: question }] }
     ])
 
@@ -326,7 +364,9 @@ const runLoop = (question: string, onSearch: (query: string, mode: string | null
 type LoopRequirements = ReturnType<typeof runLoop> extends Effect.Effect<infer _A, infer _E, infer R> ? R : never
 
 /** Runs the loop and returns the verified answer. What a non-streaming caller wants. */
-export const AskCorpus = (question: string) => runLoop(question, () => {})
+/** `collection` picks the corpus AND the system prompt; the toolkit provided must be `askToolkitFor` the same one. */
+export const AskCorpus = (question: string, collection: AskableCollection = "policy") =>
+  runLoop(question, () => {}, collection)
 
 /**
  * The same loop, reporting each search as it happens.
@@ -342,12 +382,12 @@ export const AskCorpus = (question: string) => runLoop(question, () => {})
  * That makes issue 06's "a streamed answer" narrower than it sounds, and the narrowing is the finding: grounding
  * and token-streaming the same text are mutually exclusive, and grounding is the one this product sells.
  */
-export const AskCorpusStream = (question: string) =>
+export const AskCorpusStream = (question: string, collection: AskableCollection = "policy") =>
   Stream.callback<AskProgress, UngroundedAnswer | AiError.AiError, LoopRequirements>((queue) =>
     Effect.gen(function*() {
       const result = yield* runLoop(question, (query, mode) => {
         Queue.offerUnsafe(queue, new Searching({ query, retrieval_mode: mode }))
-      })
+      }, collection)
       Queue.offerUnsafe(
         queue,
         new Answered({

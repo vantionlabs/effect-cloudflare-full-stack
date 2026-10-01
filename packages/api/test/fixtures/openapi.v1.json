@@ -98,7 +98,8 @@
                   "type": "string",
                   "enum": [
                     "policy",
-                    "transactional"
+                    "transactional",
+                    "knowledge"
                   ]
                 },
                 {
@@ -170,7 +171,8 @@
                             "type": "string",
                             "enum": [
                               "policy",
-                              "transactional"
+                              "transactional",
+                              "knowledge"
                             ]
                           },
                           "source": {
@@ -285,7 +287,8 @@
               "type": "string",
               "enum": [
                 "policy",
-                "transactional"
+                "transactional",
+                "knowledge"
               ]
             },
             "required": true
@@ -2548,6 +2551,20 @@
                 "properties": {
                   "question": {
                     "type": "string"
+                  },
+                  "collection": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "policy",
+                          "knowledge"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [

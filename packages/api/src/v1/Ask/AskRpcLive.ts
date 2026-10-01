@@ -14,8 +14,9 @@
  * everybody — the worst possible version of this bug, because it would work correctly in a single-tenant test.
  */
 import { AskRpcs } from "@ea/modules/policy/domain/Ask"
-import { AskCorpus, AskCorpusStream, AskToolkitLive } from "@ea/modules/policy/use-cases/Ask"
+import { AskCorpus, AskCorpusStream, askToolkitFor } from "@ea/modules/policy/use-cases/Ask"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
+import type { AskableCollection } from "@ea/modules/shared/domain/Corpus"
 import { Effect, Layer, Stream } from "effect"
 import { serveForTenant, serveStreamForTenant } from "../Serve.ts"
 
@@ -30,16 +31,16 @@ const MAX_QUESTION_LENGTH = 2000
 
 export const AskRpcLive = AskRpcs.toLayer(
   Effect.succeed({
-    "Ask.question": (payload: { readonly question: string }) =>
+    "Ask.question": (payload: { readonly question: string; readonly collection?: AskableCollection | undefined }) =>
       serveForTenant(
-        AskCorpus(payload.question.slice(0, MAX_QUESTION_LENGTH)).pipe(
+        AskCorpus(payload.question.slice(0, MAX_QUESTION_LENGTH), payload.collection ?? "policy").pipe(
           /*
            * One provide. `AskToolkitLive` requires `PolicySearch`, so this is `provideMerge` rather
            * than `Layer.mergeAll`: merge would leave that requirement unsatisfied. Chaining two
            * provides built `PolicySearchLive` against its own memo map, which the Effect language
            * service flags as `multipleEffectProvide`.
            */
-          Effect.provide(AskToolkitLive.pipe(Layer.provideMerge(PolicySearchLive)))
+          Effect.provide(askToolkitFor(payload.collection ?? "policy").pipe(Layer.provideMerge(PolicySearchLive)))
         )
       ).pipe(
         /*
@@ -65,7 +66,7 @@ export const AskRpcLive = AskRpcs.toLayer(
      * unsatisfied at pull time — and the tenant capture that makes the toolkit safe would be outside the
      * stream's scope.
      */
-    "Ask.stream": (payload: { readonly question: string }) =>
+    "Ask.stream": (payload: { readonly question: string; readonly collection?: AskableCollection | undefined }) =>
       /*
        * The toolkit is provided INSIDE and the tenant OUTSIDE, which is the same nesting the non-streaming
        * handler uses and is not interchangeable: `PolicySearchLive` needs a `SqlClient` and the tenant, so
@@ -73,7 +74,7 @@ export const AskRpcLive = AskRpcs.toLayer(
        * exactly what the composition root's per-request door reported.
        */
       serveStreamForTenant(
-        AskCorpusStream(payload.question.slice(0, MAX_QUESTION_LENGTH)).pipe(
+        AskCorpusStream(payload.question.slice(0, MAX_QUESTION_LENGTH), payload.collection ?? "policy").pipe(
           // `Stream.die`, not `Effect.die`: a stream's catch must return a stream. Same intent as the
           // non-streaming handler — the provider's failure becomes a defect, the refusal stays in the channel.
           Stream.catchTag("AiError", (error) => Stream.die(error)),
@@ -83,7 +84,7 @@ export const AskRpcLive = AskRpcs.toLayer(
            * handlers unsatisfied at pull time — and the tenant capture that makes the toolkit safe would sit
            * outside the stream's scope.
            */
-          Stream.provide(AskToolkitLive.pipe(Layer.provideMerge(PolicySearchLive)))
+          Stream.provide(askToolkitFor(payload.collection ?? "policy").pipe(Layer.provideMerge(PolicySearchLive)))
         )
       )
   })
