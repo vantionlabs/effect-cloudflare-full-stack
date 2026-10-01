@@ -36,7 +36,7 @@ export const PostMessage = (input: {
      * hiding: everything in it stays readable, but the conversation is over. Refused as a typed error because a
      * caller can act on it — un-archive, or post somewhere else.
      */
-    if (room.archivedAt !== null) return yield* Effect.fail(new RoomArchived({ roomId: room.id }))
+    if (room.archivedAt !== null) return yield* new RoomArchived({ roomId: room.id })
 
     const id = yield* ids.next
     const rows = yield* db.scoped((sql, orgId) =>

@@ -426,7 +426,7 @@ describe("the progress stream", () => {
     expect(() => Schema.decodeUnknownSync(AskProgress)({ _tag: "Token", text: "Nee" })).toThrow()
     expect(() => Schema.decodeUnknownSync(AskProgress)({ _tag: "Chunk", text: "Nee" })).toThrow()
     // And the two that do exist still decode, so the assertion above is not passing for the wrong reason.
-    expect(Schema.decodeUnknownSync(AskProgress)({ _tag: "Searching", query: "x", retrieval_mode: null }))
+    expect(Schema.decodeSync(AskProgress)({ _tag: "Searching", query: "x", retrieval_mode: null }))
       .toBeDefined()
   })
 })

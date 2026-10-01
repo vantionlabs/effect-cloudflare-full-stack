@@ -282,9 +282,9 @@ export interface WorkersAiChatConfig {
 
 /** Reads the credentials. Never defaulted: a missing token must fail, not fall back to a stub. */
 export const workersAiChatConfig: Effect.Effect<WorkersAiChatConfig> = Effect.gen(function*() {
-  const accountId = yield* Effect.orDie(Config.String("CLOUDFLARE_ACCOUNT_ID"))
-  const token = yield* Effect.orDie(Config.Redacted("CLOUDFLARE_AI_TOKEN"))
-  const model = yield* Effect.orDie(Config.String("EVAL_MODEL").pipe(Config.withDefault(WORKERS_AI_MODEL)))
+  const accountId = yield* Config.String("CLOUDFLARE_ACCOUNT_ID")
+  const token = yield* Config.Redacted("CLOUDFLARE_AI_TOKEN")
+  const model = yield* Config.String("EVAL_MODEL").pipe(Config.withDefault(WORKERS_AI_MODEL))
   /*
    * OPTIONAL, and absent means "call the account endpoint directly".
    *
@@ -293,11 +293,9 @@ export const workersAiChatConfig: Effect.Effect<WorkersAiChatConfig> = Effect.ge
    * existed would be worse than one that runs unmetered. Whether a gateway is in use is printed by the
    * eval harness, so an unmetered run cannot be mistaken for a metered one.
    */
-  const gateway = yield* Effect.orDie(
-    Config.String("CLOUDFLARE_AI_GATEWAY").pipe(Config.withDefault(""))
-  )
+  const gateway = yield* Config.String("CLOUDFLARE_AI_GATEWAY").pipe(Config.withDefault(""))
   return { accountId, token, model, gateway: gateway === "" ? undefined : gateway }
-})
+}).pipe(Effect.orDie)
 
 /**
  * Where the OpenAI-compatible chat endpoint lives, with or without a gateway.

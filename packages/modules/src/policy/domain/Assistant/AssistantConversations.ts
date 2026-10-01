@@ -59,6 +59,12 @@ export interface AssistantConversationsService {
   ) => Effect.Effect<typeof AssistantConversation.Encoded, ConversationUnavailable, CurrentOrg>
 }
 
+/**
+ * Every method requires `CurrentOrg`, deliberately: the Durable Object name is composed from the tenant, so a
+ * handler that forgot the tenant must not compile (ADR-0025).
+ *
+ * @effect-expect-leaking CurrentOrg
+ */
 export class AssistantConversations extends Context.Service<AssistantConversations, AssistantConversationsService>()(
   "policy/AssistantConversations"
 ) {}

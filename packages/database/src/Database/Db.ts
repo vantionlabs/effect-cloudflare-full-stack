@@ -91,13 +91,16 @@ const withOrg = <A, E>(
 ) =>
   Effect.gen(function*() {
     const sql = yield* SqlClient.SqlClient
-    return yield* sql.withTransaction(
-      Effect.gen(function*() {
-        return yield* f(sql, orgId)
-      })
-    )
+    return yield* sql.withTransaction(f(sql, orgId))
   })
 
+/**
+ * Every method requires `SqlClient` from its caller, and that is the design rather than a leak: the client is a
+ * per-request Hyperdrive socket that `withDatabase` supplies, while `Db` itself is built once per isolate. Resolving
+ * it at layer construction would pin one request's socket into every later request.
+ *
+ * @effect-expect-leaking SqlClient
+ */
 export class Db extends Context.Service<Db, DbService>()("tables/Db") {
   /**
    * The live seam. Kept a static on the tag so `Db.layer` is the only way to construct one —

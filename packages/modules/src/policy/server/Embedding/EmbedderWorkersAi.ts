@@ -98,8 +98,8 @@ export interface WorkersAiRestConfig {
  * back to the deterministic embedder, because that would report a lexical number as a semantic one.
  */
 export const workersAiRestConfig: Effect.Effect<WorkersAiRestConfig> = Effect.gen(function*() {
-  const accountId = yield* Effect.orDie(Config.String("CLOUDFLARE_ACCOUNT_ID"))
-  const token = yield* Effect.orDie(Config.Redacted("CLOUDFLARE_AI_TOKEN"))
+  const accountId = yield* Config.String("CLOUDFLARE_ACCOUNT_ID")
+  const token = yield* Config.Redacted("CLOUDFLARE_AI_TOKEN")
   /*
    * OPTIONAL, read from the same variable as the chat adapter so one setting moves both.
    *
@@ -108,11 +108,9 @@ export const workersAiRestConfig: Effect.Effect<WorkersAiRestConfig> = Effect.ge
    * that runs unmetered. Cloudflare also accepts the literal id `default`, which creates a gateway on the
    * first authenticated request — so "no gateway exists yet" is not a reason to leave this unset.
    */
-  const gateway = yield* Effect.orDie(
-    Config.String("CLOUDFLARE_AI_GATEWAY").pipe(Config.withDefault(""))
-  )
+  const gateway = yield* Config.String("CLOUDFLARE_AI_GATEWAY").pipe(Config.withDefault(""))
   return { accountId, token, gateway: gateway === "" ? undefined : gateway }
-})
+}).pipe(Effect.orDie)
 
 /**
  * The REST headers, with the gateway when one is configured.
@@ -176,7 +174,7 @@ export const EmbedderWorkersAiRest: Layer.Layer<
                 )
             )
             if (!decoded.success) {
-              return yield* Effect.fail(fail(`Workers AI reported failure: ${JSON.stringify(decoded.errors)}`))
+              return yield* fail(`Workers AI reported failure: ${JSON.stringify(decoded.errors)}`)
             }
 
             return {

@@ -65,20 +65,16 @@ export const workersAiApiUrl = (options: {
 
 /** Reads Workers AI credentials and builds the base URL. Never defaulted: a missing token must fail. */
 export const workersAiOpenAiConfig: Effect.Effect<OpenAiCompatibleConfig> = Effect.gen(function*() {
-  const accountId = yield* Effect.orDie(Config.String("CLOUDFLARE_ACCOUNT_ID"))
-  const apiKey = yield* Effect.orDie(Config.Redacted("CLOUDFLARE_AI_TOKEN"))
-  const gateway = yield* Effect.orDie(
-    Config.String("CLOUDFLARE_AI_GATEWAY").pipe(Config.withDefault(""))
-  )
-  const model = yield* Effect.orDie(
-    Config.String("AGENT_MODEL").pipe(Config.withDefault("@cf/meta/llama-3.3-70b-instruct-fp8-fast"))
-  )
+  const accountId = yield* Config.String("CLOUDFLARE_ACCOUNT_ID")
+  const apiKey = yield* Config.Redacted("CLOUDFLARE_AI_TOKEN")
+  const gateway = yield* Config.String("CLOUDFLARE_AI_GATEWAY").pipe(Config.withDefault(""))
+  const model = yield* Config.String("AGENT_MODEL").pipe(Config.withDefault("@cf/meta/llama-3.3-70b-instruct-fp8-fast"))
   return {
     apiUrl: workersAiApiUrl({ accountId, gateway: gateway === "" ? undefined : gateway }),
     apiKey,
     model
   }
-})
+}).pipe(Effect.orDie)
 
 /**
  * The layer. `FetchHttpClient` because a Worker has `fetch` and nothing else — no Node http, no undici.

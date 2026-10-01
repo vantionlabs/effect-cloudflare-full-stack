@@ -40,7 +40,7 @@ export const ToggleReaction = (input: {
         select id from messages where organization_id = ${orgId} and id = ${input.messageId}
       `
     )
-    if (found[0] === undefined) return yield* Effect.fail(new MessageNotFound({ messageId: input.messageId }))
+    if (found[0] === undefined) return yield* new MessageNotFound({ messageId: input.messageId })
 
     /*
      * Asked to remove it: delete unconditionally and report absence. Idempotent — deleting a row that is not

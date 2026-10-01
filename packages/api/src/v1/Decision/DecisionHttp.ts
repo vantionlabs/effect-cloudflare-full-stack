@@ -7,7 +7,7 @@
 import { DecisionNotFoundV1, DecisionNotPendingV1 } from "@ea/modules/decision/domain/Decision"
 import { ApproveDecision, GetDecision, ListQueue, RejectDecision } from "@ea/modules/decision/use-cases/Decision"
 import { clampPageSize } from "@ea/modules/shared/domain/Page"
-import { Effect } from "effect"
+import { Effect, Predicate } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { ApiV1 } from "../ApiV1.ts"
 import { keyset2, page } from "../Page.ts"
@@ -39,11 +39,11 @@ const settle = <E, R>(
      * The race is harmless: if it settles between the read and the write, the answer is 409, which is correct.
      */
     const existing = yield* serveForTenant(GetDecision({ decisionId }))
-    if (existing === null) return yield* Effect.fail(new DecisionNotFoundV1({ decision_id: decisionId }))
+    if (existing === null) return yield* new DecisionNotFoundV1({ decision_id: decisionId })
 
     const outcome = yield* serveForTenant(review)
     return outcome._tag === "NotPending"
-      ? yield* Effect.fail(new DecisionNotPendingV1({ decision_id: decisionId }))
+      ? yield* new DecisionNotPendingV1({ decision_id: decisionId })
       : { decisionId, result }
   })
 
@@ -68,17 +68,15 @@ export const DecisionHttp = HttpApiBuilder.group(
           return page(items, limit, (item) => [item.decidedAt, item.decisionId])
         }))
       .handle("get", ({ params }) =>
-        Effect.flatMap(
+        Effect.filterOrFail(
           serveForTenant(GetDecision({ decisionId: params.decisionId })),
-          (detail) =>
-            /*
-             * `GetDecision` answers null for "not in your organization" AND for "does not exist", and the edge
-             * keeps them indistinguishable. Telling them apart would make the endpoint an oracle for whether an
-             * id exists in somebody else's account.
-             */
-            detail === null
-              ? Effect.fail(new DecisionNotFoundV1({ decision_id: params.decisionId }))
-              : Effect.succeed(detail)
+          /*
+           * `GetDecision` answers null for "not in your organization" AND for "does not exist", and the edge
+           * keeps them indistinguishable. Telling them apart would make the endpoint an oracle for whether an
+           * id exists in somebody else's account.
+           */
+          Predicate.isNotNull,
+          () => new DecisionNotFoundV1({ decision_id: params.decisionId })
         ))
       /*
        * Both actions call the SAME use case the console does, which is the point: `ApproveDecision` holds the

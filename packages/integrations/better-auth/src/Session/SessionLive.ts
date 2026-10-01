@@ -137,7 +137,7 @@ export const SessionRpcLive = Layer.effect(AuthenticatedRpc)(
   Effect.map(authSettings, (config) => (rpcEffect, options) =>
     Effect.gen(function*() {
       const identity = yield* resolveIdentity(config, new Headers(options.headers as Record<string, string>))
-      if (identity === null) return yield* Effect.fail(new Unauthenticated())
+      if (identity === null) return yield* new Unauthenticated()
       return yield* Effect.provideService(rpcEffect, CurrentUser, identity)
     }))
 )

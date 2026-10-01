@@ -192,7 +192,7 @@ export const anydocParse = (wasmModule: unknown): DocumentParserService["parse"]
           catch: () => unsupported
         })
 
-        if (format === undefined) return yield* Effect.fail(unsupported)
+        if (format === undefined) return yield* unsupported
 
         const text = yield* Effect.try({
           try: () => toMarkdownBytes(bytes, format),
@@ -206,7 +206,7 @@ export const anydocParse = (wasmModule: unknown): DocumentParserService["parse"]
          * one that actually matters is worse and used to pass: a PDF with a BAD text layer returns
          * plausible-looking nonsense, which would reach extraction and be decided on. See `looksUnreadable`.
          */
-        if (looksUnreadable(text, input.filename, input.contentType)) return yield* Effect.fail(unsupported)
+        if (looksUnreadable(text, input.filename, input.contentType)) return yield* unsupported
 
         // `pageCount` stays null: `toMarkdownBytes` returns text only, and inventing a count from the
         // markdown would be a guess recorded as a fact.

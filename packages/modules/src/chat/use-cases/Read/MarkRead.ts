@@ -32,7 +32,7 @@ export const MarkRead = (input: {
     const rooms = yield* db.scoped((sql, orgId) =>
       sql<{ id: string }>`select id from rooms where organization_id = ${orgId} and id = ${input.roomId}`
     )
-    if (rooms[0] === undefined) return yield* Effect.fail(new RoomNotFound({ roomId: input.roomId }))
+    if (rooms[0] === undefined) return yield* new RoomNotFound({ roomId: input.roomId })
 
     const rows = yield* db.scoped((sql, orgId) =>
       sql<{ last_read_message_id: string }>`

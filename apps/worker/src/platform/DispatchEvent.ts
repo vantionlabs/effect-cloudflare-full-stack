@@ -37,11 +37,13 @@ import {
 } from "@ea/modules/decision/domain/Errors"
 import { ExecuteDecision } from "@ea/modules/decision/use-cases/Execution"
 import { Blobs, DocumentParser } from "@ea/modules/intake/domain/Document"
+import type { UnsupportedDocument } from "@ea/modules/intake/domain/Errors"
 import { ANYDOC_PARSER_VERSION, type MistralOcrConfig, ocrParserVersion } from "@ea/modules/intake/server/Document"
-import { readThrough } from "@ea/modules/shared/domain/Cache"
+import { type Cache, readThrough } from "@ea/modules/shared/domain/Cache"
 import type { QueueMessage } from "@ea/modules/shared/domain/Event"
 import { ConsumeEvent, type EventRow } from "@ea/modules/shared/use-cases/Event"
 import { Effect, Schema } from "effect"
+import type { SqlClient, SqlError } from "effect/sql"
 
 /**
  * The payload shapes, decoded rather than trusted.
@@ -113,11 +115,11 @@ const documentTextFor = (documentId: string) =>
       `
     )
     const row = rows[0]
-    if (row === undefined) return yield* Effect.fail(new DocumentRowMissing({ documentId }))
+    if (row === undefined) return yield* new DocumentRowMissing({ documentId })
 
     const bytes = yield* blobs.get(row.r2_key)
     if (bytes === null) {
-      return yield* Effect.fail(new DocumentBlobMissing({ documentId, r2Key: row.r2_key }))
+      return yield* new DocumentBlobMissing({ documentId, r2Key: row.r2_key })
     }
 
     const parsed = yield* parser.parse({
@@ -171,8 +173,18 @@ const DOCUMENT_TEXT_TTL_SECONDS = 3600
  *
  * The step memo covers a retry within one instance; this covers two different events naming one document,
  * which the memo cannot see. Both are needed, and they key on the same parser version.
+ *
+ * The return type is written out because it is EXPORTED: inferred, it named `UnsupportedDocument` by a path
+ * through `node_modules`, and declaration emit refused it (`TS2883`).
  */
-export const cachedDocumentTextFor = (documentId: string, ocr: MistralOcrConfig | undefined) =>
+export const cachedDocumentTextFor = (
+  documentId: string,
+  ocr: MistralOcrConfig | undefined
+): Effect.Effect<
+  string,
+  DocumentBlobMissing | DocumentRowMissing | SqlError.SqlError | UnsupportedDocument,
+  Blobs | Cache | CurrentOrg | Db | DocumentParser | SqlClient.SqlClient
+> =>
   readThrough({
     key: documentTextKey(documentId, ocr),
     ttlSeconds: DOCUMENT_TEXT_TTL_SECONDS,
@@ -238,7 +250,7 @@ const workFor = (startDecide: DecideBinding) => (row: EventRow) =>
         return
       }
       default:
-        return yield* Effect.fail(new UnknownEventType({ type: row.type }))
+        return yield* new UnknownEventType({ type: row.type })
     }
   })
 

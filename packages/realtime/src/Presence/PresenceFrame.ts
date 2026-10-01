@@ -27,15 +27,15 @@ export class Viewer extends Schema.Class<Viewer>("Viewer")({
  * each message is handled with no in-memory context from the last one. That rules out Effect's WebSocket RPC, which
  * keeps a protocol session per connection (ADR-0020).
  */
-export class Viewing extends Schema.TaggedClass<Viewing>("Viewing")("Viewing", {
+export class Viewing extends Schema.TaggedClass<Viewing>()("Viewing", {
   viewing: Schema.NullOr(Schema.String)
 }) {}
 
-export class Welcome extends Schema.TaggedClass<Welcome>("Welcome")("Welcome", {
+export class Welcome extends Schema.TaggedClass<Welcome>()("Welcome", {
   viewers: Schema.Array(Viewer)
 }) {}
 
-export class Presence extends Schema.TaggedClass<Presence>("Presence")("Presence", {
+export class Presence extends Schema.TaggedClass<Presence>()("Presence", {
   viewers: Schema.Array(Viewer)
 }) {}
 

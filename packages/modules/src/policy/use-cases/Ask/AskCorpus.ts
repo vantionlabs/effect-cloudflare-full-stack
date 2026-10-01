@@ -292,7 +292,7 @@ const runLoop = (question: string, onSearch: (query: string, mode: string | null
 
         const answer = structured.value as GroundedAnswer
         const reasons = ungroundedCitations(answer.citations, served)
-        if (reasons.length > 0) return yield* Effect.fail(new UngroundedAnswer({ reasons }))
+        if (reasons.length > 0) return yield* new UngroundedAnswer({ reasons })
 
         return {
           answer: answer.answer,

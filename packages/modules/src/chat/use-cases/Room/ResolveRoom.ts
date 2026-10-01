@@ -14,7 +14,7 @@ import { Db } from "@ea/database/Database"
 import { Ids } from "@ea/domain/Ids"
 import { RoomNotFound } from "@ea/modules/chat/domain/Errors"
 import { Room, type RoomId, type RoomRef } from "@ea/modules/chat/domain/Room"
-import { Effect } from "effect"
+import { Effect, Predicate } from "effect"
 
 interface RoomRow {
   readonly id: string
@@ -76,7 +76,7 @@ export const ResolveRoom = (ref: RoomRef, options: { readonly create: boolean })
      * A room addressed BY ID that does not exist is a refusal, never a creation. An id is something the caller
      * got from us; inventing a room for an unknown one would turn a typo into a new room.
      */
-    if (ref._tag === "RoomById") return yield* Effect.fail(new RoomNotFound({ roomId: ref.roomId }))
+    if (ref._tag === "RoomById") return yield* new RoomNotFound({ roomId: ref.roomId })
     if (!options.create) return null
 
     const id = yield* ids.next
@@ -130,7 +130,8 @@ export const ResolveRoom = (ref: RoomRef, options: { readonly create: boolean })
  * `missingEffectContext`. Inference is also what the use cases next door do.
  */
 export const ResolveRoomOrFail = (ref: RoomRef) =>
-  Effect.flatMap(
+  Effect.filterOrFail(
     ResolveRoom(ref, { create: true }),
-    (room) => room === null ? Effect.fail(new RoomNotFound({ roomId: "unresolved" })) : Effect.succeed(room)
+    Predicate.isNotNull,
+    () => new RoomNotFound({ roomId: "unresolved" })
   )

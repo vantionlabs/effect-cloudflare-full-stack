@@ -47,13 +47,11 @@ export const IndexPolicyDocument = (input: IndexPolicyDocumentInput) =>
 
     // (2): refuse before writing, not on the first insert.
     if (profile.dimensions !== EMBEDDING_DIMENSIONS) {
-      return yield* Effect.fail(
-        new EmbeddingWidthMismatch({
-          modelId: profile.modelId,
-          expected: EMBEDDING_DIMENSIONS,
-          actual: profile.dimensions
-        })
-      )
+      return yield* new EmbeddingWidthMismatch({
+        modelId: profile.modelId,
+        expected: EMBEDDING_DIMENSIONS,
+        actual: profile.dimensions
+      })
     }
 
     const chunks = yield* chunker.chunk(input.text, { title: input.title })

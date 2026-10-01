@@ -90,12 +90,10 @@ const call = (
         Effect.tryPromise(() => response.text()),
         () => ""
       )
-      return yield* Effect.fail(
-        new ConversationUnavailable({
-          conversationId: id,
-          reason: `the agent answered ${response.status}: ${body}`
-        })
-      )
+      return yield* new ConversationUnavailable({
+        conversationId: id,
+        reason: `the agent answered ${response.status}: ${body}`
+      })
     }
 
     const body = yield* Effect.tryPromise({
@@ -105,12 +103,10 @@ const call = (
 
     const conversation = decode(body)
     if (conversation._tag === "Failure") {
-      return yield* Effect.fail(
-        new ConversationUnavailable({
-          conversationId: id,
-          reason: `the agent answered something that is not a conversation: ${conversation.failure.message}`
-        })
-      )
+      return yield* new ConversationUnavailable({
+        conversationId: id,
+        reason: `the agent answered something that is not a conversation: ${conversation.failure.message}`
+      })
     }
     return conversation.success
   })

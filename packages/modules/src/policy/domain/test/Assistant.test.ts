@@ -76,6 +76,6 @@ describe("the turn schema", () => {
 
 describe("the conversation schema", () => {
   it("accepts the empty conversation the agent starts from", () => {
-    expect(Schema.decodeUnknownResult(AssistantConversation)(emptyConversation)._tag).toBe("Success")
+    expect(Schema.decodeResult(AssistantConversation)(emptyConversation)._tag).toBe("Success")
   })
 })

@@ -44,11 +44,11 @@ const stubFetch = (respond: () => Response): Array<Call> => {
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })
 
-const send = (message: EmailMessage) =>
+const send = (input: EmailMessage) =>
   Effect.runPromise(
     Effect.gen(function*() {
       const email = yield* Email
-      return yield* Effect.result(email.send(message))
+      return yield* Effect.result(email.send(input))
     }).pipe(Effect.provide(EmailResend(config)))
   )
 

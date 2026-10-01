@@ -24,6 +24,8 @@ const keyset = (
   cursor: string | undefined,
   arity: number
 ): Effect.Effect<ReadonlyArray<string> | undefined, HttpApiError.BadRequest> => {
+  // `Effect.void` is `Effect<void>`, and `void` is not assignable to the declared `ReadonlyArray<string> | undefined`.
+  // @effect-diagnostics-next-line effectSucceedWithVoid:off
   if (cursor === undefined) return Effect.succeed(undefined)
   const decoded = decodeCursor(cursor)
   if (!Result.isSuccess(decoded) || decoded.success.length !== arity) {

@@ -35,9 +35,9 @@ export const DeleteMessage = (input: { readonly messageId: MessageId }) =>
     )
 
     const existing = found[0]
-    if (existing === undefined) return yield* Effect.fail(new MessageNotFound({ messageId: input.messageId }))
+    if (existing === undefined) return yield* new MessageNotFound({ messageId: input.messageId })
     if (existing.author_user_id !== identity.userId) {
-      return yield* Effect.fail(new NotMessageAuthor({ messageId: input.messageId }))
+      return yield* new NotMessageAuthor({ messageId: input.messageId })
     }
     // Already gone. Nothing to do, and nothing to complain about.
     if (existing.deleted_at !== null) return { messageId: input.messageId }

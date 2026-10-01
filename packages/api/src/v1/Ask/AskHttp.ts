@@ -38,7 +38,9 @@ export const AskHttp = HttpApiBuilder.group(
          * The provider's failure dies; the REFUSAL does not. `orDie` would have discarded both — the mistake
          * `Serve.ts` records making on the intake path, where a typed 415 became a crash.
          */
-        Effect.catchTag("AiError", Effect.die),
-        Effect.catchTag("UngroundedAnswer", (error) => Effect.fail(new UngroundedAnswerV1({ reasons: error.reasons })))
+        Effect.catchTags({
+          AiError: Effect.die,
+          UngroundedAnswer: (error) => Effect.fail(new UngroundedAnswerV1({ reasons: error.reasons }))
+        })
       ))
 )

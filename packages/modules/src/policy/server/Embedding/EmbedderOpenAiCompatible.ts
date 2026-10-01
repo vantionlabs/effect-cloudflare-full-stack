@@ -44,15 +44,11 @@ export interface EmbedderConfig {
  * problem that nothing in the system would report.
  */
 export const embedderConfig: Effect.Effect<EmbedderConfig> = Effect.gen(function*() {
-  const baseUrl = yield* Effect.orDie(
-    Config.String("EMBEDDING_BASE_URL").pipe(Config.withDefault("https://api.mistral.ai/v1"))
-  )
-  const modelId = yield* Effect.orDie(
-    Config.String("EMBEDDING_MODEL").pipe(Config.withDefault("mistral-embed"))
-  )
-  const apiKey = yield* Effect.orDie(Config.Redacted("EMBEDDING_API_KEY"))
+  const baseUrl = yield* Config.String("EMBEDDING_BASE_URL").pipe(Config.withDefault("https://api.mistral.ai/v1"))
+  const modelId = yield* Config.String("EMBEDDING_MODEL").pipe(Config.withDefault("mistral-embed"))
+  const apiKey = yield* Config.Redacted("EMBEDDING_API_KEY")
   return { baseUrl, apiKey, modelId }
-})
+}).pipe(Effect.orDie)
 
 export const EmbedderOpenAiCompatible: Layer.Layer<
   EmbeddingModel.EmbeddingModel | EmbeddingProfile,

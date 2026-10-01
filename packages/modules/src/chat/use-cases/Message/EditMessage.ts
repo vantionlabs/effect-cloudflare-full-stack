@@ -37,9 +37,9 @@ export const EditMessage = (input: {
     )
 
     const existing = found[0]
-    if (existing === undefined) return yield* Effect.fail(new MessageNotFound({ messageId: input.messageId }))
+    if (existing === undefined) return yield* new MessageNotFound({ messageId: input.messageId })
     if (existing.author_user_id !== identity.userId) {
-      return yield* Effect.fail(new NotMessageAuthor({ messageId: input.messageId }))
+      return yield* new NotMessageAuthor({ messageId: input.messageId })
     }
     /*
      * A deleted message cannot be edited back into existence. Reported as "not found", because from the
@@ -47,7 +47,7 @@ export const EditMessage = (input: {
      * had removed, which is the opposite of what deleting promised.
      */
     if (existing.deleted_at !== null) {
-      return yield* Effect.fail(new MessageNotFound({ messageId: input.messageId }))
+      return yield* new MessageNotFound({ messageId: input.messageId })
     }
 
     const updated = yield* db.scoped((sql, orgId) =>

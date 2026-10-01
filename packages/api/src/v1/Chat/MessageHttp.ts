@@ -39,19 +39,21 @@ export const MessageHttp = HttpApiBuilder.group(
         ))
       .handle("edit", ({ params, payload }) =>
         serve(EditMessage({ messageId: MessageId.make(params.messageId), body: payload.body })).pipe(
-          Effect.catchTag("MessageNotFound", () =>
-            Effect.fail(new MessageNotFoundV1({ message_id: params.messageId }))),
-          // 403 rather than 404: the caller can already read this message, so learning that somebody else
-          // wrote it reveals nothing. See NotMessageAuthorV1.
-          Effect.catchTag("NotMessageAuthor", () =>
-            Effect.fail(new NotMessageAuthorV1({ message_id: params.messageId })))
+          Effect.catchTags({
+            MessageNotFound: () =>
+              Effect.fail(new MessageNotFoundV1({ message_id: params.messageId })),
+            // 403 rather than 404: the caller can already read this message, so learning that somebody else
+            // wrote it reveals nothing. See NotMessageAuthorV1.
+            NotMessageAuthor: () => Effect.fail(new NotMessageAuthorV1({ message_id: params.messageId }))
+          })
         ))
       .handle("delete", ({ params }) =>
         serve(DeleteMessage({ messageId: MessageId.make(params.messageId) })).pipe(
-          Effect.catchTag("MessageNotFound", () =>
-            Effect.fail(new MessageNotFoundV1({ message_id: params.messageId }))),
-          Effect.catchTag("NotMessageAuthor", () =>
-            Effect.fail(new NotMessageAuthorV1({ message_id: params.messageId })))
+          Effect.catchTags({
+            MessageNotFound: () =>
+              Effect.fail(new MessageNotFoundV1({ message_id: params.messageId })),
+            NotMessageAuthor: () => Effect.fail(new NotMessageAuthorV1({ message_id: params.messageId }))
+          })
         ))
       /*
        * `desired` is passed on both, which is what makes these idempotent: a retried PUT leaves the reaction

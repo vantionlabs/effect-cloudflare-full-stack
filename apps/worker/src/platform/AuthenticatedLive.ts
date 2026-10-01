@@ -78,12 +78,12 @@ export const AuthenticatedLive = Layer.effect(Authenticated)(
                 () => null
               )
 
-            if (identity === null) return yield* Effect.fail(new HttpApiError.Unauthorized())
+            if (identity === null) return yield* new HttpApiError.Unauthorized()
             return yield* Effect.provideService(httpEffect, CurrentUser, identity)
           }
 
           const bySession = yield* resolver.fromHeaders(headers)
-          if (bySession === null) return yield* Effect.fail(new HttpApiError.Unauthorized())
+          if (bySession === null) return yield* new HttpApiError.Unauthorized()
           return yield* Effect.provideService(httpEffect, CurrentUser, bySession)
         })
     })

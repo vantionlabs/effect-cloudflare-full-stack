@@ -15,7 +15,7 @@ import { Schema } from "effect"
  * two would disagree the first time a broadcast raced a write. `reason` exists so the console can be
  * specific in the UI — "approved by someone else" reads better than "something changed".
  */
-export class QueueChanged extends Schema.TaggedClass<QueueChanged>("QueueChanged")("QueueChanged", {
+export class QueueChanged extends Schema.TaggedClass<QueueChanged>()("QueueChanged", {
   reason: Schema.Literals(["decided", "approved", "rejected", "ingested"]),
   /** Who caused it, so a client can ignore its own echo rather than refetching for nothing. */
   byUserId: Schema.NullOr(UserId)

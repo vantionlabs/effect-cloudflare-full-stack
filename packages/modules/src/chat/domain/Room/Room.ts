@@ -96,11 +96,11 @@ export class Room extends Schema.Class<Room>("Room")({
  * decision and wants its thread, and a decision's room may not exist yet — it is created on the first message.
  * `ForDecision` lets `Message.list` and `Message.post` resolve or create it in the same call that uses it.
  */
-export class RoomById extends Schema.TaggedClass<RoomById>("RoomById")("RoomById", {
+export class RoomById extends Schema.TaggedClass<RoomById>()("RoomById", {
   roomId: RoomId
 }) {}
 
-export class RoomForDecision extends Schema.TaggedClass<RoomForDecision>("RoomForDecision")("RoomForDecision", {
+export class RoomForDecision extends Schema.TaggedClass<RoomForDecision>()("RoomForDecision", {
   decisionId: Schema.String
 }) {}
 

@@ -37,7 +37,7 @@ describe("wireFrom", () => {
   })
 
   it("decodes from snake_case, so the same schema types a generated client", () => {
-    const decoded = Schema.decodeUnknownSync(Wire)({
+    const decoded = Schema.decodeSync(Wire)({
       decision_id: "d1",
       document_id: "doc1",
       rails_fired: [],

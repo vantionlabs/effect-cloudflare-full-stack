@@ -382,18 +382,16 @@ describe("the auto-approve branch", () => {
   /** Arms a rule whose bounds this fixture invoice actually fits. */
   const arm = (overrides: Partial<{ max: number; requirePo: boolean; minDays: number }> = {}) =>
     asAdmin(Effect.flatMap(SqlClient.SqlClient, (sql) =>
-      Effect.gen(function*() {
-        yield* sql`
-          insert into rules (
-            id, organization_id, vertical, armed, max_amount_minor, currency, require_po,
-            approved_suppliers, min_payment_days, description, created_by
-          ) values (
-            ${`rule_${crypto.randomUUID()}`}, ${ORG}, ${VERTICAL}, true,
-            ${overrides.max ?? 200_000}, 'EUR', ${overrides.requirePo ?? false},
-            '{}'::text[], ${overrides.minDays ?? 0}, 'test rule', 'u1'
-          )
-        `
-      })))
+      sql`
+        insert into rules (
+          id, organization_id, vertical, armed, max_amount_minor, currency, require_po,
+          approved_suppliers, min_payment_days, description, created_by
+        ) values (
+          ${`rule_${crypto.randomUUID()}`}, ${ORG}, ${VERTICAL}, true,
+          ${overrides.max ?? 200_000}, 'EUR', ${overrides.requirePo ?? false},
+          '{}'::text[], ${overrides.minDays ?? 0}, 'test rule', 'u1'
+        )
+      `))
 
   it("auto-approves when every bound holds, and emits exactly one execute event", async () => {
     await arm()

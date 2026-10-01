@@ -173,11 +173,11 @@ const runOcr = (
       catch: () => unsupported
     })
 
-    if (!response.ok) return yield* Effect.fail(unsupported)
+    if (!response.ok) return yield* unsupported
 
     const body = yield* Effect.tryPromise({ try: () => response.json() as Promise<unknown>, catch: () => unsupported })
     const decoded = Schema.decodeUnknownResult(OcrResponse)(body)
-    if (decoded._tag === "Failure") return yield* Effect.fail(unsupported)
+    if (decoded._tag === "Failure") return yield* unsupported
 
     /*
      * Pages joined in index order with a form feed between them.
@@ -189,7 +189,7 @@ const runOcr = (
      */
     const ordered = [...decoded.success.pages].sort((left, right) => left.index - right.index)
     const text = ordered.map((page) => page.markdown).join("\f")
-    if (text.trim().length === 0) return yield* Effect.fail(unsupported)
+    if (text.trim().length === 0) return yield* unsupported
 
     return new ParsedDocument({ text, pageCount: ordered.length })
   })

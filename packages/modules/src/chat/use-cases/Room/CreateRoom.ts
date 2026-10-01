@@ -23,9 +23,10 @@ export const CreateRoom = (input: {
 
     const name = input.name.trim()
     if (name === "" || name.length > MAX_ROOM_NAME_LENGTH) {
-      return yield* Effect.fail(
-        new RoomNameInvalid({ name: input.name, reason: `a name must be 1 to ${MAX_ROOM_NAME_LENGTH} characters` })
-      )
+      return yield* new RoomNameInvalid({
+        name: input.name,
+        reason: `a name must be 1 to ${MAX_ROOM_NAME_LENGTH} characters`
+      })
     }
 
     const slug = slugify(name)
@@ -34,9 +35,7 @@ export const CreateRoom = (input: {
        * Refused rather than given a generated handle. A name of only emoji or punctuation slugifies to nothing,
        * and a channel nobody can address is a worse outcome than being told to pick a different name.
        */
-      return yield* Effect.fail(
-        new RoomNameInvalid({ name: input.name, reason: "a name must contain letters or numbers" })
-      )
+      return yield* new RoomNameInvalid({ name: input.name, reason: "a name must contain letters or numbers" })
     }
 
     const id = yield* ids.next
@@ -58,7 +57,7 @@ export const CreateRoom = (input: {
      * typed refusal rather than a suffix: "#billing" and "#billing-2" are two places people post the same
      * thing, and inventing the second one chooses a confusing outcome on the user's behalf.
      */
-    if (rows[0] === undefined) return yield* Effect.fail(new RoomSlugTaken({ slug }))
+    if (rows[0] === undefined) return yield* new RoomSlugTaken({ slug })
 
     const created = yield* db.scoped((sql, orgId) =>
       sql<never>`select ${sql.literal(ROOM_COLUMNS)} from rooms where organization_id = ${orgId} and id = ${id}`

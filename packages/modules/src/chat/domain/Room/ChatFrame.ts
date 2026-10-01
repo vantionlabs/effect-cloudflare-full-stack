@@ -26,7 +26,7 @@ import { RoomId } from "./Room.ts"
  * of every member receiving frames for threads they are not reading. Revisit when a single organization's
  * message rate makes that wasteful, or when a thread needs to be visible to fewer people than the tenant.
  */
-export class MessagePosted extends Schema.TaggedClass<MessagePosted>("MessagePosted")("MessagePosted", {
+export class MessagePosted extends Schema.TaggedClass<MessagePosted>()("MessagePosted", {
   message: Message
 }) {}
 
@@ -44,7 +44,7 @@ export class MessagePosted extends Schema.TaggedClass<MessagePosted>("MessagePos
  * room's fields change over its life, so a carried room could be stale, while a posted message never changes. A
  * short list re-read on demand cannot disagree with itself.
  */
-export class RoomsChanged extends Schema.TaggedClass<RoomsChanged>("RoomsChanged")("RoomsChanged", {}) {}
+export class RoomsChanged extends Schema.TaggedClass<RoomsChanged>()("RoomsChanged", {}) {}
 
 /**
  * A message in this room changed — edited or deleted.
@@ -57,7 +57,7 @@ export class RoomsChanged extends Schema.TaggedClass<RoomsChanged>("RoomsChanged
  * `messageId` is included for a future targeted update; the client invalidates the room today, which is correct
  * and one round trip.
  */
-export class MessageChanged extends Schema.TaggedClass<MessageChanged>("MessageChanged")("MessageChanged", {
+export class MessageChanged extends Schema.TaggedClass<MessageChanged>()("MessageChanged", {
   roomId: RoomId,
   messageId: Schema.String
 }) {}

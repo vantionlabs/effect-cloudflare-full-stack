@@ -33,11 +33,10 @@ export const RoomHttp = HttpApiBuilder.group(
           // The domain errors become wire errors HERE, at the boundary, so the use case never learns what a
           // frozen v1 shape looks like. Both are worth telling a caller apart: one is a name it can fix, the
           // other is a handle somebody else already holds.
-          Effect.catchTag(
-            "RoomNameInvalid",
-            (error) => Effect.fail(new RoomNameInvalidV1({ name: error.name, reason: error.reason }))
-          ),
-          Effect.catchTag("RoomSlugTaken", (error) => Effect.fail(new RoomSlugTakenV1({ slug: error.slug })))
+          Effect.catchTags({
+            RoomNameInvalid: (error) => Effect.fail(new RoomNameInvalidV1({ name: error.name, reason: error.reason })),
+            RoomSlugTaken: (error) => Effect.fail(new RoomSlugTakenV1({ slug: error.slug }))
+          })
         ))
       .handle("setArchived", ({ params, payload }) =>
         serve(ArchiveRoom({ roomId: RoomId.make(params.roomId), archived: payload.archived })).pipe(

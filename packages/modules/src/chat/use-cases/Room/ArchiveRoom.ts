@@ -47,5 +47,5 @@ export const ArchiveRoom = (input: {
      * decision thread has no archive state — it exists exactly as long as its decision is discussed — and
      * saying so separately would tell a caller which ids are threads.
      */
-    return row === undefined ? yield* Effect.fail(new RoomNotFound({ roomId: input.roomId })) : toRoom(row)
+    return row === undefined ? yield* new RoomNotFound({ roomId: input.roomId }) : toRoom(row)
   })

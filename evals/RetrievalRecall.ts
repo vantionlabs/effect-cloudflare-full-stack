@@ -119,7 +119,7 @@ const Embedder = hasWorkersAi ? EmbedderWorkersAiRest : EmbedderDeterministic
  * than in the reporting code, which runs too late to stop a bad number being printed.
  */
 const profile = await Effect.runPromise(
-  Effect.flatMap(EmbeddingProfile, (value) => Effect.succeed(value)).pipe(
+  Effect.map(EmbeddingProfile, (value) => value).pipe(
     Effect.provide(Embedder)
   ) as Effect.Effect<typeof EmbeddingProfile["Service"], unknown, never>
 )
