@@ -80,17 +80,34 @@ jobs:
             --var VERSION:"${{ github.event.workflow_run.head_sha || github.sha }}"
 
       - name: Build the console
+        # The environment is chosen HERE, not at deploy time — see the deploy step below for why.
+        env:
+          CLOUDFLARE_ENV: staging
         run: bun run --filter @ea/console build
 
       # A WORKER now, not a Pages project: the console runs TanStack Start and server-renders, which
-      # static assets cannot do. `--env staging` names it `effect-ai-console-staging`, and its own service
+      # static assets cannot do. The build names it `effect-ai-console-staging`, and its own service
       # binding points at `effect-ai-staging` so staging's console talks to staging's API.
+      # `CLOUDFLARE_ENV` on the BUILD, and no `--env` on the deploy. The first staging deploy proved why.
+      #
+      # `@cloudflare/vite-plugin` emits its own wrangler config plus a `.wrangler/deploy/config.json`
+      # redirect, so `wrangler deploy` follows the redirect — it logs "Using redirected Wrangler
+      # configuration" — and the GENERATED config is already flattened for whatever environment the build
+      # chose. `--env staging` then has no environment block to find, so it is silently a no-op:
+      #
+      #   built with no env      name: effect-ai-console          services: API -> effect-ai
+      #   built CLOUDFLARE_ENV=staging   name: effect-ai-console-staging  services: API -> effect-ai-staging
+      #
+      # The first form is what the first staging deploy shipped: the PRODUCTION name, bound to the
+      # PRODUCTION API. `wrangler.jsonc` warns about exactly that — "staging's console must reach STAGING's
+      # API, and inheriting would silently point it at production" — and the build defeated the warning by
+      # flattening the config before wrangler saw the flag.
       - name: Deploy the console (staging)
         working-directory: apps/console
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bunx wrangler deploy --env staging
+        run: bunx wrangler deploy
 
       # Through the Pages origin, not the Worker's own hostname: that is the path a browser takes,
       # and it is the only one that exercises the service-binding proxy.

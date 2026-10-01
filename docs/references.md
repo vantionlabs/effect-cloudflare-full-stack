@@ -668,3 +668,27 @@ everything that depends on it.
 | AI Gateway routing            | a gateway existing on the account           | the adapters stop being unmetered; `cf-aig-gateway-id` becomes verified by execution rather than by assertion |
 | Effect RC churn in Alchemy    | a clean dependency audit                    | ADR-0007's reason for Pulumi expires                                                                          |
 | PlanetScale region            | a region near the user                      | ADR-0015's arithmetic changes                                                                                 |
+
+### `@cloudflare/vite-plugin` flattens the wrangler environment at BUILD time, not deploy time
+
+Found 2026-10-01 by the first real staging deploy, which shipped the console under the **production** name
+bound to the **production** API.
+
+The plugin emits its own wrangler config plus a `.wrangler/deploy/config.json` redirect, so
+`wrangler deploy` follows the redirect — it says so, `Using redirected Wrangler configuration` — and the
+generated config is **already flattened** for whichever environment the BUILD selected. It contains no `env`
+blocks at all, so a `--env staging` flag at deploy time has nothing to resolve and is **silently a no-op**.
+
+| build                               | generated `name`            | generated `services`       |
+| ----------------------------------- | --------------------------- | -------------------------- |
+| `vite build`                        | `effect-ai-console`         | `API -> effect-ai`         |
+| `CLOUDFLARE_ENV=staging vite build` | `effect-ai-console-staging` | `API -> effect-ai-staging` |
+
+So the environment is chosen with `CLOUDFLARE_ENV` on the build, and the deploy takes no `--env`.
+
+**Why this is worth a row rather than a comment.** `apps/console/wrangler.jsonc` already warns, on the
+binding itself, that "staging's console must reach STAGING's API, and inheriting would silently point it at
+production". The warning was right and the mechanism defeated it: the flattening happens before wrangler sees
+the flag, so the config that was reviewed is not the config that deployed. A no-op flag that looks like it
+worked is the worst shape this class of bug has — `wrangler deploy --env staging` exits 0 and prints a
+success.
