@@ -57,6 +57,19 @@ const report = () =>
     >
   )
 
+/**
+ * How far back a "stuck" fixture is dated: ten years, not thirty minutes.
+ *
+ * The report reads ACROSS tenants, oldest first, capped at `MAX_PER_TICK` — so whether our row appears depends
+ * on how many older stuck rows OTHER suites have left in the shared database. Membership assertions fixed the
+ * count problem and not this one: with 67 abandoned `processing` events from 50 other orgs, a fixture dated 30
+ * minutes ago sorted past the cap and the test failed with `expected [ …(50) ] to include 'v_1'`.
+ *
+ * Dating ours older than anything a real run produces puts it on the first page whatever else is there, which
+ * is the property the test needs. Cleaning up other suites' rows would also work, today, until one forgot.
+ */
+const ANCIENT = 60 * 24 * 365 * 10
+
 const DOCUMENT = "stuck_doc"
 
 /**
@@ -144,7 +157,7 @@ beforeEach(async () => {
 describe("what counts as stuck", () => {
   it("reports a pending execution older than the grace period", async () => {
     await seedDecision("dec_e_old")
-    await seedStuckExecution("e_old", 30)
+    await seedStuckExecution("e_old", ANCIENT)
     /*
      * Membership, not a count. The read is cross-tenant BY DESIGN — "which tenants have stuck work" is the
      * question — so a count is a property of the whole database, including whatever other suites are doing
@@ -167,7 +180,7 @@ describe("what counts as stuck", () => {
 
   it("reports an event whose Workflow instance never came back", async () => {
     // The state the queue flip created: `processing`, an instance id, and nothing that will ever finish it.
-    await seedStuckEvent("v_wf", 30, "event-v_wf")
+    await seedStuckEvent("v_wf", ANCIENT, "event-v_wf")
     const found = (await report()).events.find((row) => row.id === "v_wf")
     expect(found).toBeDefined()
     // The id is the point of reporting it: an operator runs `wrangler workflows instances describe` on it.
@@ -176,7 +189,7 @@ describe("what counts as stuck", () => {
 
   it("reports an event stuck with no instance at all", async () => {
     // The inline path — `decision.execute` — dying between the status write and the ack.
-    await seedStuckEvent("v_inline", 30, null)
+    await seedStuckEvent("v_inline", ANCIENT, null)
     const found = (await report()).events.find((row) => row.id === "v_inline")
     expect(found).toBeDefined()
     expect(found!.workflowInstanceId).toBeNull()
@@ -190,8 +203,8 @@ describe("the restraint, which is the design", () => {
      * pass every count above — so the counts are not the test. These statuses are.
      */
     await seedDecision("dec_e_1")
-    await seedStuckExecution("e_1", 30)
-    await seedStuckEvent("v_1", 30, "event-v_1")
+    await seedStuckExecution("e_1", ANCIENT)
+    await seedStuckEvent("v_1", ANCIENT, "event-v_1")
 
     const before = { executions: await statusesOf("executions"), events: await statusesOf("events") }
     const summary = await report()
