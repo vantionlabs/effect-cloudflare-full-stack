@@ -5,6 +5,7 @@
 // error means `rg --files packages/modules/shared/domain/Errors` is that vocabulary, and adding one is a new
 // file in a diff rather than a line inside an existing list.
 export * from "./DocumentNotFound.ts"
+export * from "./EmailNotSent.ts"
 export * from "./EventNotFound.ts"
 export * from "./RailsRefused.ts"
 export * from "./Terminal.ts"

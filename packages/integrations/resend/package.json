@@ -1,5 +1,5 @@
 {
-  "name": "@ea/better-auth",
+  "name": "@ea/resend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,14 +9,8 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@better-auth/api-key": "1.7.6",
-    "@ea/domain": "workspace:*",
     "@ea/modules": "workspace:*",
-    "better-auth": "1.7.6",
     "effect": "catalog:",
-    "pg": "^8.23.0"
-  },
-  "devDependencies": {
-    "@types/pg": "^8.23.1"
+    "resend": "6.31.0"
   }
 }

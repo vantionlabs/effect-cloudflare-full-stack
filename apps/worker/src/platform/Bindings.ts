@@ -179,6 +179,20 @@ export interface Env {
   readonly MISTRAL_API_KEY?: string | undefined
   /** The pinned OCR model, e.g. a dated `mistral-ocr-<yymm>`. Never `mistral-ocr-latest`. */
   readonly MISTRAL_OCR_MODEL?: string | undefined
+  /**
+   * Transactional email through Resend. Absent means the console stub, which logs every message — links
+   * included — and sends nothing. That is the right default for a laptop and CI, and a WARN on every send makes
+   * it visible if a real deployment is ever missing the key.
+   *
+   * **Both or neither**, for the same reason as Mistral's pair: `EMAIL_FROM` must be on a domain verified in
+   * Resend, and a wrong one is accepted by the API and dropped downstream, so it has no safe default.
+   *
+   * A SECRET, not a var: `wrangler secret put RESEND_API_KEY`. `EMAIL_FROM` is not secret and may live in
+   * `wrangler.jsonc` per environment once a sending domain is verified.
+   */
+  readonly RESEND_API_KEY?: string | undefined
+  /** e.g. `Effect AI <noreply@mail.example.com>`. The domain must be verified in the Resend account. */
+  readonly EMAIL_FROM?: string | undefined
   readonly VERSION?: string | undefined
 }
 

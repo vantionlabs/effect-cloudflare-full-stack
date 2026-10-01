@@ -81,12 +81,14 @@ import { isTerminal } from "@ea/modules/shared/domain/Errors"
 import { EventId } from "@ea/modules/shared/domain/Event"
 import type { Retrieval } from "@ea/modules/shared/domain/Retrieval"
 import { CacheKv } from "@ea/modules/shared/server/Cache"
+import { EmailConsole } from "@ea/modules/shared/server/Email"
 import { EventQueue, QueueBus } from "@ea/modules/shared/server/Event"
 import { IdsUuid } from "@ea/modules/shared/server/Ids"
 import { TelemetryOtlp } from "@ea/modules/shared/server/Telemetry"
 import { describeFailure, markEventDone, markEventFailed } from "@ea/modules/shared/use-cases/Event"
 import { SweepEnqueueGap } from "@ea/modules/shared/use-cases/Event"
 import { RealtimeUpgrade, RoomsLive } from "@ea/realtime/Server"
+import { EmailResend, resendConfig } from "@ea/resend/Email"
 import anydocWasm from "@firecrawl/anydoc-wasm/anydoc_wasm_bg.wasm"
 import { NonRetryableError } from "cloudflare:workflows"
 import type { Result } from "effect"
@@ -169,6 +171,22 @@ const ServicesLayer = (env: Env) =>
      * so it is logged at startup rather than left implicit.
      */
     CacheKv(env.CACHE),
+    /*
+     * Email: Resend when it is configured, the console stub when it is not.
+     *
+     * **Keyed on the presence of a key, not on an environment name.** `env.dev` and staging would both be
+     * "not production", and both are places a real invitation may legitimately need to arrive; a laptop and
+     * CI are places no key exists. The configuration is therefore the signal, and it is the only one that
+     * cannot be wrong by being out of date.
+     *
+     * The stub is loud (`EmailConsole` logs the whole body, links included) because its job is to make the
+     * auth flows clickable with no vendor account — the same argument as the scripted language model. It is
+     * also why a production deployment missing `RESEND_API_KEY` is visible rather than silent: every send
+     * logs a warning saying NOT SENT.
+     */
+    Layer.unwrap(
+      Effect.map(resendConfig, (config) => config === undefined ? EmailConsole : EmailResend(config))
+    ),
     /*
      * The execution adapter. Missing until the pipeline first ran, and the compiler said so the moment the
      * cast came off `dispatchEvent` — so `decision.execute` would have dead-lettered every message exactly

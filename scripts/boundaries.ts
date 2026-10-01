@@ -241,7 +241,7 @@ const rules: ReadonlyArray<Rule> = [
       !p.includes("/test/"),
     forbidden: [
       {
-        pattern: /^@ea\/(better-auth|ai-openai)(\/|$)/,
+        pattern: /^@ea\/(better-auth|ai-openai|resend)(\/|$)/,
         because: "an integration package owns a vendor SDK, and only the composition root may choose a vendor. " +
           "Importing one here would bind this code to it and drag the SDK back into the graph — which is what " +
           "these packages were created to prevent (ADR-0021). Depend on the PORT instead; `@ea/domain` holds the " +

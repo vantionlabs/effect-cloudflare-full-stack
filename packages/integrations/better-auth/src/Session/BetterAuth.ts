@@ -17,9 +17,22 @@
  * simultaneous outgoing connections — worth tracking if a request ever needs more.
  */
 import { apiKey } from "@better-auth/api-key"
-import { betterAuth } from "better-auth"
+import { betterAuth, type BetterAuthOptions } from "better-auth"
 import { organization } from "better-auth/plugins"
 import { Client, Pool } from "pg"
+
+/**
+ * One transactional message, as better-auth's side of the `Email` port.
+ *
+ * A plain callback and a plain shape rather than the `Email` service itself, because better-auth's hooks are
+ * `async` functions and this file is also the input to `@better-auth/cli generate` — it should stay readable as
+ * configuration. `SessionHttp.ts` is where the port is bridged onto it.
+ */
+export interface AuthEmail {
+  readonly to: string
+  readonly subject: string
+  readonly text: string
+}
 
 export interface AuthConfig {
   readonly connectionString: string
@@ -47,6 +60,41 @@ export interface AuthConfig {
   readonly consoleOrigin?: string | undefined
   /** `.example.com`, when console and API are sibling subdomains. Undefined means a host-only cookie. */
   readonly cookieDomain?: string | undefined
+  /**
+   * Delivers one message, or **undefined for no email capability at all**.
+   *
+   * Undefined is not a degraded mode — it removes the three senders below, so better-auth never offers a flow
+   * it cannot complete. That is why it is a callback rather than a flag: a sender that silently discarded the
+   * message would leave `forgetPassword` answering 200 with nothing ever arriving, which is indistinguishable
+   * from a provider outage and takes a support ticket to notice.
+   *
+   * It must not reject. `SessionHttp.ts` logs and swallows an `EmailNotSent`: better-auth swallows a rejected
+   * sender on most paths but not on `/send-verification-email`, where it becomes a 500 — see that file.
+   */
+  readonly sendEmail?: ((message: AuthEmail) => Promise<void>) | undefined
+}
+
+/**
+ * The part of a better-auth instance this repo uses, written out rather than inferred.
+ *
+ * **Why this exists: `TS2883`.** Passing any options to `organization()` — here, `sendInvitationEmail` — made
+ * `makeAuth`'s inferred type reference zod's `$strip` and better-auth's internal `SchemaCheck`, which bun's
+ * isolated install leaves unnameable from this package, so declaration emit failed. Bisected, not guessed:
+ * the email and reset senders are innocent, and widening the options to `OrganizationOptions` did not help.
+ *
+ * Results are `unknown` on purpose. Every caller already narrows to a structural type at the call site
+ * (`SessionStore.ts`), so the inferred plugin types were never load-bearing — and naming only what is used is
+ * the same discipline as `BetterAuthService`, one level down.
+ */
+export interface AuthInstance {
+  readonly handler: (request: Request) => Promise<Response>
+  /** Read by `acquireAuth` to close the pool, and by `scripts/auth-schema.ts` to derive the tables. */
+  readonly options: BetterAuthOptions
+  readonly api: {
+    readonly getSession: (input: { readonly headers: Headers }) => Promise<unknown>
+    readonly getActiveMemberRole: (input: { readonly headers: Headers }) => Promise<unknown>
+    readonly verifyApiKey: (input: { readonly body: { readonly key: string } }) => Promise<unknown>
+  }
 }
 
 /**
@@ -57,8 +105,11 @@ export interface AuthConfig {
  * Worker, so `max: 1` here is not the bottleneck it would be on a long-lived server — and a
  * larger pool would only consume more of the six-connection budget.
  */
-export const makeAuth = (config: AuthConfig) => {
+export const makeAuth = (config: AuthConfig): AuthInstance => {
   const pool = new Pool({ connectionString: config.connectionString, max: 1 })
+
+  // Bound once so the three senders below read as configuration rather than as repeated lookups.
+  const sendEmail = config.sendEmail
 
   /**
    * Gives a user a personal organisation and returns its id. Idempotent, and **order-independent**.
@@ -163,7 +214,52 @@ export const makeAuth = (config: AuthConfig) => {
       },
     secret: config.secret,
 
-    emailAndPassword: { enabled: true },
+    emailAndPassword: {
+      enabled: true,
+      /*
+       * **Without this, password reset does not exist** — better-auth 1.7.6 answers `400 RESET_PASSWORD_DISABLED`
+       * (read in `dist/api/routes/password.mjs`, not assumed; an earlier draft of this comment claimed it
+       * answered 200 and silently did nothing, which was wrong). So the user-visible gain from defining the
+       * senders now is a working reset flow, with the console stub printing the link until Resend is configured.
+       *
+       * The sender is awaited, not backgrounded: `runInBackgroundOrAwait` only backgrounds when
+       * `advanced.backgroundTasks` is configured, and on Workers a background promise without `waitUntil` can
+       * be dropped when the response returns. A slow provider therefore adds latency to the request instead.
+       *
+       * The `url` is better-auth's own — it points at ITS endpoint, which validates the token and then
+       * redirects to the console. Constructing one here would duplicate token handling it already does.
+       */
+      ...sendEmail === undefined ? {} : {
+        sendResetPassword: async ({ url, user }: { readonly url: string; readonly user: { readonly email: string } }) =>
+          sendEmail({
+            to: user.email,
+            subject: "Reset your password",
+            text: `Open this link to choose a new password:\n\n${url}\n\n` +
+              `If you did not ask for this, nothing has changed and you can ignore this message.`
+          })
+      }
+    },
+
+    /*
+     * Verification is configured but **not required**, and the distinction is load-bearing.
+     *
+     * `requireEmailVerification` would make the console unusable the moment the console stub is the adapter —
+     * sign-up would succeed and sign-in would refuse until a link nobody can click is clicked. So the endpoint
+     * exists and can be driven deliberately, and `sendOnSignUp` stays off until there is a verified sending
+     * domain and a console page to land on.
+     */
+    ...sendEmail === undefined ? {} : {
+      emailVerification: {
+        sendVerificationEmail: async (
+          { url, user }: { readonly url: string; readonly user: { readonly email: string } }
+        ) =>
+          sendEmail({
+            to: user.email,
+            subject: "Confirm your email address",
+            text: `Open this link to confirm your email address:\n\n${url}`
+          })
+      }
+    },
 
     /*
      * Cross-origin, only when it actually is.
@@ -221,7 +317,35 @@ export const makeAuth = (config: AuthConfig) => {
       // Organizations are the tenant boundary. better-auth owns `organization`, `member` and
       // `invitation`; our tables carry `organization_id` with no foreign key into them, so its
       // schema upgrades never become our migration problem.
-      organization(),
+      organization(
+        /*
+         * An invitation is the one message whose link this file has to build: the plugin hands over the
+         * invitation id and leaves the URL to the application, because only the application knows where its
+         * accept page lives. `consoleOrigin` when the console is a separate origin, `baseURL` when it is not.
+         *
+         * **The console has no `/accept-invitation` route yet**, so today this link 404s. Said plainly rather
+         * than left to be discovered: the server half is complete and testable, and the page is the next piece.
+         */
+        sendEmail === undefined ? {} : {
+          sendInvitationEmail: async (
+            data: {
+              readonly id: string
+              readonly email: string
+              readonly inviter: { readonly user: { readonly name?: string | undefined; readonly email: string } }
+              readonly organization: { readonly name: string }
+            }
+          ) => {
+            const origin = config.consoleOrigin ?? config.baseURL
+            const inviter = data.inviter.user.name ?? data.inviter.user.email
+            await sendEmail({
+              to: data.email,
+              subject: `${inviter} invited you to ${data.organization.name}`,
+              text: `${inviter} invited you to join ${data.organization.name}.\n\n` +
+                `Open this link to accept:\n\n${origin}/accept-invitation/${data.id}`
+            })
+          }
+        }
+      ),
       /*
        * API keys, and the plugin owns all of it: generation, hashing, the display prefix, expiry, per-key rate
        * limiting, quotas and scopes. This replaced a hand-rolled `api_keys` table — which was a mistake, and the

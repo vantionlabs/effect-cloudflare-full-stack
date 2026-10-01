@@ -650,6 +650,44 @@ PlanetScale (us-east-5.pg.psdb.cloud)     118 – 126 ms     median ~120 ms
 600×, and it is distance, not the provider. With 722 transactions per test-suite run, that is 14 seconds
 against roughly four minutes. ADR-0015.
 
+## Email
+
+### `resend@6.31.0` bundles for Workers, and swallows transport errors — verified 2026-10-01
+
+**Checked by reading the published bundle and by building, not from the docs.** `dist/index.mjs` is `fetch`-based
+and imports no node builtins. Its static imports are `postal-mime` and `standardwebhooks`; the latter's own deps
+are `@stablelib/base64` and `fast-sha256` — pure JS, no `node:crypto`. `@react-email/render` is a **peer**,
+reached only through `await import(...)` inside a try/catch on the React-element path.
+
+Both bundlers tolerate that import, differently:
+
+- `wrangler deploy --dry-run` (esbuild) leaves `await import("@react-email/render")` in place, unresolved.
+- the console's vite build (rolldown) emits a 0.25 kB `render_resend-*.js` chunk marked
+  `__vite-optional-peer-dep`, which throws if loaded.
+
+Neither runs unless a message carries a React element, and nothing here sends one. No React enters the Worker,
+and `bundle:check` confirmed the browser bundle has no Resend.
+
+**The SDK catches transport failures itself.** A rejected `fetch` comes back as a resolved `{ error }` whose
+message is _"Unable to fetch data. The request could not be resolved."_, so DNS, timeout and TLS failures are
+indistinguishable in our logs. Found when a test asserting on the real cause failed; `EmailResend.test.ts` now
+pins the measured behaviour.
+
+### better-auth 1.7.6's email senders — read in `dist/`, 2026-10-01
+
+- **No `sendResetPassword` → `400 RESET_PASSWORD_DISABLED`** (`api/routes/password.mjs`), not a silent 200. An
+  earlier draft of the code comment claimed the latter.
+- **Senders are awaited, not backgrounded**, unless `advanced.backgroundTasks.handler` is set
+  (`context/create-context.mjs`, `runInBackgroundOrAwait`). So a slow provider adds request latency, and on
+  Workers nothing is left dangling without `waitUntil`.
+- **Rejection handling is inconsistent.** `runInBackgroundOrAwait` catches and logs through better-auth's
+  logger, and it wraps reset, sign-up/sign-in verification and both invitation sends. The explicit
+  `/send-verification-email` endpoint awaits the sender bare (`api/routes/email-verification.mjs:32`), so a
+  throw there is a 500. `SessionHttp.ts` swallows in our own sender for that reason.
+- **The organization plugin builds no invitation URL.** `sendInvitationEmail` gets the invitation id, and the
+  application chooses the accept page. Reset and verification URLs are better-auth's own endpoints, which
+  redirect to `callbackURL`.
+
 ---
 
 ## How to keep this file honest
