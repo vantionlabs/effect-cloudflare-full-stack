@@ -57,8 +57,9 @@ Pinned to a tag rather than `main` on purpose. Tip-of-main would show APIs the i
 have, and an agent reading source that disagrees with the lockfile is worse off than one reading nothing —
 it would be confidently wrong instead of uncertain.
 
-**It costs 49 MB and 2575 files** (54 MB and 4311 at rc.118; the stable tag dropped the RC's `.changeset/pre` notes). That is the trade: a slower clone and a larger checkout, for a local
-copy of the answers.
+**It costs 49 MB and 2575 files** (54 MB and 4311 at rc.118; the stable tag dropped the RC's
+`.changeset/pre` notes). That is the trade: a slower clone and a larger checkout, for a local copy of the
+answers.
 
 ## Filename conventions
 
