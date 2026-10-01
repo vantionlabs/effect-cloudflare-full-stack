@@ -44,6 +44,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # `env.dev` is never deployed by CI — it is the REMOTE target for `wrangler dev --remote --env dev` (AGENTS.md) —
+  # but its database still has to match the code, or a remote session hits a schema from three migrations ago.
+  # So it is migrated whenever staging is, in its own GitHub environment with its own `DATABASE_URL`.
+  dev-schema:
+    if: >-
+      github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' ||
+      github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      # The schema BEFORE the code, every deploy. Expand first: a migration must work with the code that is
+      # still running until the next step replaces it, which holds because every migration here is additive and
+      # `if not exists`. `db:migrate` then reads back `effect_sql_migrations` and FAILS unless the database holds
+      # every migration this build's manifest names — staging and production sat at 15 of 25 behind green deploys
+      # because nothing compared the two (.scratch/deploy-migrations/issues/01).
+      #
+      # `DATABASE_URL` is this GitHub environment's own secret: the Neon project's DIRECT (non-pooler)
+      # connection string. Absent is a failure, never a skip — a deploy that silently skips migrating is the bug.
+      - name: Migrate the database (dev)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL is not set for the 'dev' environment. Add the Neon project's direct connection string as an environment secret. Refusing to deploy code ahead of its schema."
+            exit 1
+          fi
+          bun run db:migrate
+
   staging:
     # Every green main lands here. Nothing else does.
     if: >-
@@ -68,6 +103,24 @@ jobs:
       # The API first, always. The console's `functions/api/[[path]].ts` reaches the Worker over a
       # service binding, so shipping the console against an older API is the one ordering that can
       # serve a broken app; the reverse merely serves an older console against a newer API.
+      # The schema BEFORE the code, every deploy. Expand first: a migration must work with the code that is
+      # still running until the next step replaces it, which holds because every migration here is additive and
+      # `if not exists`. `db:migrate` then reads back `effect_sql_migrations` and FAILS unless the database holds
+      # every migration this build's manifest names — staging and production sat at 15 of 25 behind green deploys
+      # because nothing compared the two (.scratch/deploy-migrations/issues/01).
+      #
+      # `DATABASE_URL` is this GitHub environment's own secret: the Neon project's DIRECT (non-pooler)
+      # connection string. Absent is a failure, never a skip — a deploy that silently skips migrating is the bug.
+      - name: Migrate the database (staging)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL is not set for the 'staging' environment. Add the Neon project's direct connection string as an environment secret. Refusing to deploy code ahead of its schema."
+            exit 1
+          fi
+          bun run db:migrate
+
       - name: Deploy the Worker (staging)
         working-directory: apps/worker
         env:
@@ -131,6 +184,24 @@ jobs:
         with:
           node-version: 22
       - run: bun install --frozen-lockfile
+
+      # The schema BEFORE the code, every deploy. Expand first: a migration must work with the code that is
+      # still running until the next step replaces it, which holds because every migration here is additive and
+      # `if not exists`. `db:migrate` then reads back `effect_sql_migrations` and FAILS unless the database holds
+      # every migration this build's manifest names — staging and production sat at 15 of 25 behind green deploys
+      # because nothing compared the two (.scratch/deploy-migrations/issues/01).
+      #
+      # `DATABASE_URL` is this GitHub environment's own secret: the Neon project's DIRECT (non-pooler)
+      # connection string. Absent is a failure, never a skip — a deploy that silently skips migrating is the bug.
+      - name: Migrate the database (production)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL is not set for the 'production' environment. Add the Neon project's direct connection string as an environment secret. Refusing to deploy code ahead of its schema."
+            exit 1
+          fi
+          bun run db:migrate
 
       - name: Deploy the Worker (production)
         working-directory: apps/worker

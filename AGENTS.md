@@ -276,6 +276,18 @@ That check found a real leak on its first run: the `Db` seam and the migration m
 `create table` statement in the repo**. The lesson generalises — a barrel is transitive, so a folder that holds
 both a seam and something heavy exports the heavy thing to everyone who wants the seam.
 
+**Deploys migrate the database before the code, and a migration must therefore be EXPAND-ONLY.**
+`deploy.yml` runs `bun run db:migrate` against each environment's own `DATABASE_URL` secret (the Neon project's
+direct connection string) before deploying its Worker — `dev` and `staging` on every green `main`, `production` on
+dispatch. For the minutes between the two steps the OLD code runs against the NEW schema, so a migration may add
+tables, columns, indexes and functions, but may not drop, rename or tighten anything the running code uses. A
+removal is two deploys: stop using it, then drop it. Every migration so far is additive and `if not exists`.
+
+`db:migrate` also refuses to report success unless `effect_sql_migrations` holds every migration in the build's
+manifest, and in CI it never falls back to `apps/worker/.env`. Both exist because staging and production sat at
+**15 of 25** behind green deploys — the smoke test calls `/health`, which touches none of the missing tables, so
+API keys, chat and the Workflow handoff were broken in production with nothing red anywhere.
+
 **`bun run db:migrate` and `bun run test` target DIFFERENT databases by default.** `migrate` prefers
 `DATABASE_URL`, which `apps/worker/.env` sets to the **dev Neon** project; the test suites read the `PG*`
 variables and hit the **compose container**. So "I applied the migration" and "the tests see the new column"

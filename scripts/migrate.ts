@@ -15,7 +15,7 @@
  * Run `bun run db:verify` first against an unfamiliar database. Verifying the platform assumptions
  * takes a second; discovering a missing `dutch` configuration from a half-applied migration does not.
  */
-import { migrate } from "@ea/modules/shared/tables/Migrations"
+import { migrate, migrations } from "@ea/modules/shared/tables/Migrations"
 import { PgClient } from "@effect/sql-pg"
 import { Effect, Redacted } from "effect"
 import { SqlClient } from "effect/sql"
@@ -33,7 +33,12 @@ const loadWorkerEnv = () => {
     process.env[key] = match[2]!.replace(/^["']|["']$/g, "")
   }
 }
-loadWorkerEnv()
+/*
+ * In CI the target is NEVER inferred. A deploy job that fell back to `apps/worker/.env` — or to anything but the
+ * environment's own secret — could migrate the wrong database and report success, so a missing `DATABASE_URL`
+ * there is fatal. Locally the `.env` fallback stays, because that is the convenience it exists for.
+ */
+if (process.env["CI"] === undefined) loadWorkerEnv()
 
 const url = process.env["DATABASE_URL"] ??
   process.env["CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"]
@@ -95,6 +100,26 @@ const program = Effect.gen(function*() {
   console.log(`pgvector         : ${vector?.v ?? "NOT INSTALLED"}`)
   console.log(`retrieve_policy  : ${fn!.n} definition(s)${fn!.n > 1 ? "  ← an overload, which is a bug" : ""}`)
   console.log(`tsv generated col: ${tsv!.present ? "yes" : "NO"}`)
+
+  /*
+   * The gate. Whatever ran, the database must now hold EVERY migration this code's manifest names — read back
+   * from the record table, not inferred from `applied`, which is empty both when nothing was due and when the
+   * loader silently found nothing. Staging and production sat at 15 of 25 for days behind green deploys,
+   * because nothing compared the two. This makes the deploy fail instead.
+   */
+  const expected = Object.keys(migrations).length
+  const [recorded] = yield* sql<{ n: number; latest: number | null }>`
+    select count(*)::int as n, max(migration_id)::int as latest from effect_sql_migrations
+  `
+  console.log(`migrations       : ${recorded!.n} recorded, ${expected} in this build`)
+  if (recorded!.n !== expected || recorded!.latest !== expected) {
+    return yield* Effect.die(
+      new Error(
+        `schema is out of step with the code: ${recorded!.n} migrations recorded (latest ` +
+          `${recorded!.latest ?? "none"}), the manifest has ${expected}. Refusing to report success.`
+      )
+    )
+  }
 })
 
 await Effect.runPromise(
