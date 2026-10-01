@@ -33,8 +33,8 @@ Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/
 
 ## The Effect source is vendored at `repos/effect`
 
-`git subtree`, pinned to the tag this repo runs — `effect@4.0.0-rc.118`, the same version as the `catalog:`
-entry. Added because v4 RC documentation is thin and reading the source is faster and more reliable than
+`git subtree`, pinned to the tag this repo runs — `effect@4.0.0`, the same version as the `catalog:`
+entry. Added because v4 RC documentation was thin and reading the source is faster and more reliable than
 guessing: several APIs in this repo were settled by reading it (`Result` uses `.success`, not `.value`;
 `Schema.toStandardSchemaV1` exists so no form adapter is needed; `createStartHandler` is all the default
 server entry does).
@@ -57,8 +57,9 @@ Pinned to a tag rather than `main` on purpose. Tip-of-main would show APIs the i
 have, and an agent reading source that disagrees with the lockfile is worse off than one reading nothing —
 it would be confidently wrong instead of uncertain.
 
-**It costs 54 MB and 4311 files.** That is the trade: a slower clone and a larger checkout, for a local
-copy of the answers.
+**It costs 49 MB and 2575 files** (54 MB and 4311 at rc.118; the stable tag dropped the RC's
+`.changeset/pre` notes). That is the trade: a slower clone and a larger checkout, for a local copy of the
+answers.
 
 ## Filename conventions
 

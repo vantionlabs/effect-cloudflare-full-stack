@@ -2,9 +2,9 @@
 
 Regenerate with `bun run effect:verify` after every effect bump.
 
-- **Installed version:** `4.0.0-rc.118`
+- **Installed version:** `4.0.0`
 - **`unstable/` prefix present:** no
-- Generated: 2026-09-28
+- Generated: 2026-10-01 (export map identical to rc.118's; the import checks below re-run at 4.0.0)
 
 ## Module specifiers to import from
 
@@ -57,7 +57,7 @@ Regenerate with `bun run effect:verify` after every effect bump.
 
 ## Verified by import (not just the export map)
 
-Confirmed present at `4.0.0-rc.118` by actually importing:
+Confirmed present at `4.0.0-rc.118`, and again at `4.0.0` on 2026-10-01, by actually importing:
 
 | Module            | Symbols                                                                                                         |
 | ----------------- | --------------------------------------------------------------------------------------------------------------- |
