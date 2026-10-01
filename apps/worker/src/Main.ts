@@ -42,7 +42,8 @@ import {
   RoomRpcLive,
   RPC_V1_PATH,
   RpcV1,
-  UsageHttp
+  UsageHttp,
+  UsageRpcLive
 } from "@ea/api/v1"
 import { HealthHttp } from "@ea/api/v1"
 import { IdentityResolverLive, SessionHttp, SessionRpcLive, SessionStore } from "@ea/better-auth/Session"
@@ -298,7 +299,8 @@ const RpcEdges = Layer.mergeAll(
   MessageRpcLive,
   RoomRpcLive,
   AskRpcLive,
-  AssistantRpcLive
+  AssistantRpcLive,
+  UsageRpcLive
 )
 
 /** The HTTP and RPC surfaces, over the shared services. */

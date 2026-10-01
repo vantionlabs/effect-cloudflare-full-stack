@@ -7,6 +7,7 @@
 export * from "./DocumentNotFound.ts"
 export * from "./EmailNotSent.ts"
 export * from "./EventNotFound.ts"
+export * from "./InvalidUsagePeriod.ts"
 export * from "./RailsRefused.ts"
 export * from "./Terminal.ts"
 export * from "./UnknownVertical.ts"

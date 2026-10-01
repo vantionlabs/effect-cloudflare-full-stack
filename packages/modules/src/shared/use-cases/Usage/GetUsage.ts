@@ -10,6 +10,7 @@
  * through `Db.scoped`, which is what `scripts/boundaries.ts` checks for every statement against `usage_records`.
  */
 import { Db } from "@ea/database/Database"
+import { InvalidUsagePeriod } from "@ea/modules/shared/domain/Errors"
 import type { Meter } from "@ea/modules/shared/domain/Usage"
 import { Effect } from "effect"
 
@@ -27,6 +28,28 @@ export interface UsageReport extends UsagePeriod {
 
 /** `bigint` sums arrive as strings from the driver. Meter totals stay far inside `Number.MAX_SAFE_INTEGER`. */
 const toNumber = (value: string | number): number => typeof value === "number" ? value : Number(value)
+
+const DAY_MS = 86_400_000
+const MAX_SPAN_DAYS = 366
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Resolves a requested period: either bound may be omitted (the current UTC month fills it), and the result is a
+ * half-open `[from, to)` of whole days, 1–366 long. One rule for every edge — the RPC the console uses and the v1
+ * HTTP endpoint — so the two cannot drift on what they accept.
+ */
+export const resolveUsagePeriod = (
+  requested: { readonly from?: string | undefined; readonly to?: string | undefined },
+  now: Date
+): Effect.Effect<UsagePeriod, InvalidUsagePeriod> => {
+  const month = currentMonth(now)
+  const from = requested.from ?? month.from
+  const to = requested.to ?? month.to
+  const span = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS
+  return DAY.test(from) && DAY.test(to) && Number.isFinite(span) && span > 0 && span <= MAX_SPAN_DAYS
+    ? Effect.succeed({ from, to })
+    : Effect.fail(new InvalidUsagePeriod({ from, to }))
+}
 
 /** The current calendar month in UTC — the period an invoice covers, and the default. */
 export const currentMonth = (now: Date): UsagePeriod => {

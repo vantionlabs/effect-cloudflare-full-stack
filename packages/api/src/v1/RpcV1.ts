@@ -14,10 +14,18 @@ import { RoomRpcs } from "@ea/modules/chat/domain/Room"
 import { DecisionRpcs } from "@ea/modules/decision/domain/Decision"
 import { IdentityRpcs } from "@ea/modules/iam/domain/Identity"
 import { IntakeRpcs } from "@ea/modules/intake/domain/Intake"
+import { UsageRpcs } from "@ea/modules/shared/domain/Usage"
+/*
+ * Imported only so the inferred type of `RpcV1` can be NAMED: `Intake.upload` fails with it, and without an import
+ * in scope declaration emit reaches it through `node_modules` and refuses (TS2883). Unused at runtime.
+ */
+import type { UnsupportedDocument as _UnsupportedDocument } from "@ea/modules/intake/domain/Errors"
 import { AskRpcs } from "@ea/modules/policy/domain/Ask"
 import { AssistantRpcs } from "@ea/modules/policy/domain/Assistant"
 
-export const RpcV1 = IdentityRpcs.merge(IntakeRpcs).merge(DecisionRpcs).merge(AskRpcs).merge(AssistantRpcs)
+export const RpcV1 = IdentityRpcs.merge(IntakeRpcs).merge(DecisionRpcs).merge(AskRpcs).merge(AssistantRpcs).merge(
+  UsageRpcs
+)
   .merge(MessageRpcs).merge(RoomRpcs)
 
 /** Where the RPC endpoint is mounted. Exported so the client and the server cannot disagree. */

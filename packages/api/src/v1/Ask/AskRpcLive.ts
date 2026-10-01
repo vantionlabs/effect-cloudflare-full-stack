@@ -13,7 +13,7 @@
  * can redirect which corpus is searched. A memoised toolkit would capture one organization and serve it to
  * everybody — the worst possible version of this bug, because it would work correctly in a single-tenant test.
  */
-import { AskRpcs } from "@ea/modules/policy/domain/Ask"
+import { AskAnswer, AskAnswerCitation, AskRpcs } from "@ea/modules/policy/domain/Ask"
 import { AskCorpus, AskCorpusStream, askToolkitFor } from "@ea/modules/policy/use-cases/Ask"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
 import type { AskableCollection } from "@ea/modules/shared/domain/Corpus"
@@ -55,6 +55,20 @@ export const AskRpcLive = AskRpcs.toLayer(
          * unavailable" is to retry, which a 500 already says, and freezing a provider's failure shape into a
          * published contract would promise not to change something we do not control.
          */
+        Effect.map((result) =>
+          /*
+           * An `AskAnswer` INSTANCE, not the use case's plain result. The success schema is a `Schema.Class`, and
+           * encoding one requires an instance — so returning the plain object failed on the SERVER with "Expected
+           * AskAnswer", which reached the client as a defect. This RPC had never been called by a client until the
+           * console's Ask page; the streaming variant builds its `Answered` correctly, which is why nothing showed.
+           */
+          new AskAnswer({
+            answer: result.answer,
+            citations: result.citations.map((citation) => new AskAnswerCitation(citation)),
+            steps: result.steps,
+            truncated: result.truncated
+          })
+        ),
         Effect.catchTag("AiError", Effect.die)
       ),
     /*

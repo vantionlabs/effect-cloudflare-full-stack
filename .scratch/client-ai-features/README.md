@@ -24,6 +24,7 @@ person approving it — the same rule the decide pipeline enforces with rails.
 
 - [x] **Indexing on upload** (`document.index`). Found missing while scoping: uploads to `policy` were stored and
       never indexed, so only tests and evals could populate the corpus.
-- [ ] A `knowledge` collection for technical documentation, kept out of invoice-decision retrieval.
-- [ ] `ask` scoped to a collection.
-- [ ] A console Ask page, server-rendered, with citations that name the document and section.
+- [x] A `knowledge` collection for technical documentation, kept out of invoice-decision retrieval.
+- [x] `ask` scoped to a collection, with a mechanics' prompt that never states an unquoted value.
+- [x] A console Ask page (`/ask`): server-rendered through Effect Atom hydration, ask and upload over RPC.
+- [ ] Citations that name the DOCUMENT and section — today they carry the verbatim excerpt and clause ref only.

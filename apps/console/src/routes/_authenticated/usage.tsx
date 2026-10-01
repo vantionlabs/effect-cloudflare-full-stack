@@ -1,36 +1,48 @@
 /**
  * What this organization has used this month: the numbers an invoice would be built from.
  *
- * Rendered on the server: the loader runs `getUsageReport` during SSR (and as a server-function call on a client
- * navigation), so the page arrives with its figures. Nothing here fetches after hydration.
+ * Rendered on the server with Effect Atom's SSR: the loader runs the `Usage.report` RPC atom on the server and
+ * dehydrates it, and the page reads it inside `HydrationBoundary`. The page arrives with its figures, and the
+ * browser does not fetch them again.
  *
  * Billable units first, cost second, and they are kept visibly apart — documents and decisions are what a customer
  * is charged for; tokens are what the platform pays, broken down by model because a 70B call and a small one
  * differ by an order of magnitude.
  */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { getUsageReport } from "@/usage/usage-report"
+import { loadUsagePage, usageReportAtom } from "@/usage/usage-atoms"
+import { HydrationBoundary, useAtomValue } from "@effect/atom-react"
 import { createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_authenticated/usage")({
-  loader: () => getUsageReport(),
-  component: UsagePage
+  loader: () => loadUsagePage(),
+  component: UsageRoute
 })
+
+function UsageRoute() {
+  return (
+    <HydrationBoundary state={Route.useLoaderData()}>
+      <UsagePage />
+    </HydrationBoundary>
+  )
+}
 
 const number = new Intl.NumberFormat("en-GB")
 
 function UsagePage() {
-  const view = Route.useLoaderData()
+  const result = useAtomValue(usageReportAtom)
 
-  if (view._tag === "Unavailable") {
+  if (result._tag !== "Success") {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <p className="text-sm" role="alert">Usage could not be loaded (HTTP {view.status}).</p>
+        <p className="text-sm" role={result._tag === "Failure" ? "alert" : "status"}>
+          {result._tag === "Failure" ? "Usage could not be loaded." : "Loading usage…"}
+        </p>
       </main>
     )
   }
 
-  const { report } = view
+  const report = result.value
   const total = (meter: string) =>
     report.totals.filter((row) => row.meter === meter).reduce((sum, row) => sum + row.quantity, 0)
   const models = [...new Set(report.totals.flatMap((row) => row.model === null ? [] : [row.model]))].sort()
