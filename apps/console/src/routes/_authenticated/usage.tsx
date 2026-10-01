@@ -10,7 +10,8 @@
  * differ by an order of magnitude.
  */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { loadUsagePage, usageReportAtom } from "@/usage/usage-atoms"
+import { loadUsagePage } from "@/usage/load-usage-page"
+import { usageReportAtom } from "@/usage/usage-atoms"
 import { HydrationBoundary, useAtomValue } from "@effect/atom-react"
 import { createFileRoute } from "@tanstack/react-router"
 

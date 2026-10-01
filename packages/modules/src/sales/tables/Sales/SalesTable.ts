@@ -105,3 +105,84 @@ export const ChangeProposalTable = Effect.gen(function*() {
     create index if not exists change_proposals_pending_idx on change_proposals (organization_id, status, created_at desc)
   `
 })
+
+/**
+ * After a quote is sent (migration 0031): the customer accepts or declines it, an accepted quote becomes a JOB
+ * (work in progress), a finished job is INVOICED, and an invoice is PAID. Every step is a person's action.
+ *
+ * A job's value and an invoice's amount are copied from the quote's total at the moment they are created, so a
+ * later change anywhere cannot rewrite what was agreed or billed — the same rule as quote lines copying prices.
+ */
+export const WorkTable = Effect.gen(function*() {
+  const sql = yield* SqlClient.SqlClient
+
+  // Widen quote statuses by the constraint's real name (read from pg_constraint). Expand-only.
+  yield* sql`alter table quotes drop constraint if exists quotes_status_check`
+  yield* sql`
+    alter table quotes add constraint quotes_status_check
+      check (status in ('draft', 'approved', 'sent', 'discarded', 'accepted', 'declined'))
+  `
+  yield* sql`alter table quotes add column if not exists responded_at timestamptz`
+
+  yield* sql`
+    create table if not exists jobs (
+      id               text primary key,
+      organization_id  text not null,
+      quote_id         text not null unique references quotes(id),
+      customer_name    text,
+      status           text not null check (status in ('open', 'done', 'invoiced')),
+      value_cents      integer not null check (value_cents >= 0),
+      accepted_at      timestamptz not null default now(),
+      completed_at     timestamptz,
+      created_by       text not null
+    )
+  `
+  yield* sql`create index if not exists jobs_status_idx on jobs (organization_id, status)`
+
+  yield* sql`
+    create table if not exists invoices (
+      id               text primary key,
+      organization_id  text not null,
+      job_id           text not null unique references jobs(id),
+      customer_name    text,
+      amount_cents     integer not null check (amount_cents >= 0),
+      issued_on        date not null,
+      due_on           date not null check (due_on >= issued_on),
+      status           text not null check (status in ('open', 'paid')),
+      paid_on          date,
+      check ((status = 'paid') = (paid_on is not null))
+    )
+  `
+  yield* sql`create index if not exists invoices_due_idx on invoices (organization_id, status, due_on)`
+})
+
+/**
+ * One PENDING proposal per identical change (migration 0032).
+ *
+ * The model issues tool calls concurrently — four identical ones for a single instruction — so a read-then-insert
+ * check let all four through, each having looked before any had written. A partial unique index makes the insert
+ * itself the claim: concurrent duplicates collapse into one row, and decided proposals are not constrained.
+ */
+export const ChangeProposalUnique = Effect.gen(function*() {
+  const sql = yield* SqlClient.SqlClient
+  /*
+   * Duplicates created before the index existed would make it fail to build — and did, on the local database. Keep
+   * the OLDEST pending proposal of each identical set and mark the rest rejected, attributed to this migration so
+   * the record says why. Nothing is deleted, and nothing a person decided is touched.
+   */
+  yield* sql`
+    update change_proposals p set status = 'rejected', decided_by = 'migration-0032-duplicate', decided_at = now()
+     where p.status = 'pending'
+       and exists (
+         select 1 from change_proposals q
+          where q.status = 'pending' and q.organization_id = p.organization_id and q.kind = p.kind
+            and q.sku = p.sku and q.after = p.after
+            and (q.created_at, q.id) < (p.created_at, p.id)
+       )
+  `
+  yield* sql`
+    create unique index if not exists change_proposals_one_pending_idx
+      on change_proposals (organization_id, kind, sku, after)
+      where status = 'pending'
+  `
+})

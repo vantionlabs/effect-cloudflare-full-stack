@@ -31,7 +31,7 @@ import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
 import { ReportDeliveryTable } from "@ea/modules/reporting/tables/ReportDelivery"
-import { ChangeProposalTable, SalesTable } from "@ea/modules/sales/tables/Sales"
+import { ChangeProposalTable, ChangeProposalUnique, SalesTable, WorkTable } from "@ea/modules/sales/tables/Sales"
 import { Migrator } from "effect/sql"
 import { CorpusKnowledge } from "../Corpus/CorpusTable.ts"
 import { EventIndexType, EventTable } from "../Event/EventTable.ts"
@@ -133,7 +133,11 @@ export const migrations = {
   // Sales: the price list, quotes and their lines.
   "0029_sales": SalesTable,
   // Price-list changes proposed by asking, applied only by a person.
-  "0030_change_proposals": ChangeProposalTable
+  "0030_change_proposals": ChangeProposalTable,
+  // After a quote is sent: accepted or declined, jobs (work in progress), invoices and payment.
+  "0031_work": WorkTable,
+  // One pending proposal per identical change, enforced by the database because tool calls run concurrently.
+  "0032_change_proposals_one_pending": ChangeProposalUnique
 }
 
 export const loader = Migrator.fromRecord(migrations)

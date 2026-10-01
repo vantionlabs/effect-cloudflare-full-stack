@@ -39,6 +39,7 @@ import {
   IntakeRpcLive,
   MessageHttp,
   MessageRpcLive,
+  PlanningRpcLive,
   RoomHttp,
   RoomRpcLive,
   RPC_V1_PATH,
@@ -305,7 +306,8 @@ const RpcEdges = Layer.mergeAll(
   AssistantRpcLive,
   UsageRpcLive,
   SalesRpcLive,
-  DataRpcLive
+  DataRpcLive,
+  PlanningRpcLive
 )
 
 /** The HTTP and RPC surfaces, over the shared services. */

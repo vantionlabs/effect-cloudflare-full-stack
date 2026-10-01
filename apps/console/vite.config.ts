@@ -17,7 +17,33 @@ import tailwindcss from "@tailwindcss/vite"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 import viteReact from "@vitejs/plugin-react"
 import { fileURLToPath } from "node:url"
-import { defineConfig } from "vite"
+import { defineConfig, type Plugin } from "vite"
+
+/**
+ * `cloudflare:workers` resolves, in the CLIENT environment only, to an empty stub.
+ *
+ * `rpc.ts` and `auth/auth-client.ts` reach the API binding through `createIsomorphicFn`'s server branch, which
+ * imports `cloudflare:workers`. That branch never runs in a browser — but TanStack Start's server-function lookup
+ * (`?server-fn-module-lookup`) transforms the modules a server function imports for the client environment WITHOUT
+ * stripping that branch, and Vite then cannot resolve `cloudflare:workers` there. Both files returned 500 under the
+ * lookup; the browser's client entry failed to load and the page never hydrated. It looked like a cold-start flake
+ * and was blamed on the dependency optimizer for longer than it should have been: it began when server-function
+ * modules started importing `rpc.ts`.
+ *
+ * The stub only has to make the client graph RESOLVE. Nothing in it is ever executed: the server branch is the only
+ * importer, and it does not run outside the Worker. The SSR environment is untouched and gets the real module.
+ */
+const cloudflareWorkersClientStub = (): Plugin => ({
+  name: "effect-ai:cloudflare-workers-client-stub",
+  enforce: "pre",
+  resolveId(id) {
+    if (id === "cloudflare:workers" && this.environment.name === "client") return "\0cloudflare-workers-client-stub"
+    return undefined
+  },
+  load(id) {
+    return id === "\0cloudflare-workers-client-stub" ? "export const env = {}\n" : undefined
+  }
+})
 
 export default defineConfig({
   build: {
@@ -42,6 +68,7 @@ export default defineConfig({
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) }
   },
   plugins: [
+    cloudflareWorkersClientStub(),
     cloudflare({
       viteEnvironment: { name: "ssr" },
       /*

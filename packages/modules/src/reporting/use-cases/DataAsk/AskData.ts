@@ -37,6 +37,8 @@ Rules:
 - Every number in your answer must be one the tools returned. Do NOT add, subtract, average or otherwise compute
   new numbers — the tools already give totals and percentages. An answer containing a computed figure is withheld.
 - Only if no returned field corresponds to what was asked, say so, and say what the tools do give.
+- For cash and planning questions use planning_figures, and say that it counts money coming IN only and on which
+  assumptions (payment terms, days to finish an open job) — both are in its result.
 - Answer in one or two sentences, in the language of the question, and mention the period.`
 
 export const AskData = (question: string) =>

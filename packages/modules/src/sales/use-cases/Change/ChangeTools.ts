@@ -66,18 +66,40 @@ export const changeToolkitFor = (instruction: string) =>
       // Who asked — recorded on every proposal, so an applied change can always be traced to a person.
       const user = yield* CurrentUser
 
+      /*
+       * Stores a proposal — or returns the IDENTICAL one already pending.
+       *
+       * The real model repeats itself, and concurrently: asked once to raise one price, it issued four identical
+       * tool calls at the same time, and the page showed four proposals. A check-then-insert let all four through,
+       * each having looked before any had written. So the insert is the claim, against a partial unique index on
+       * pending proposals (migration 0032), and a conflict reads back the one that won. Different pending changes to
+       * one product are still allowed; the stale check at apply time decides between them.
+       */
       const store = (kind: "update_product" | "create_product", sku: string, before: unknown, after: unknown) =>
         Effect.gen(function*() {
           const id = yield* ids.next
-          yield* db.scoped((sql, orgId) =>
-            sql`
-              insert into change_proposals (id, organization_id, status, kind, sku, before, after, instruction, created_by)
-              select ${id}, ${orgId}, 'pending', ${kind}, ${sku},
-                     ${before === null ? null : JSON.stringify(before)}::jsonb, ${JSON.stringify(after)}::jsonb,
-                     ${instruction}, ${user.userId}
-            `
+          const changeId = yield* db.scoped((sql, orgId) =>
+            Effect.gen(function*() {
+              const inserted = yield* sql<{ id: string }>`
+                insert into change_proposals (id, organization_id, status, kind, sku, before, after, instruction, created_by)
+                values (
+                  ${id}, ${orgId}, 'pending', ${kind}, ${sku},
+                  ${before === null ? null : JSON.stringify(before)}::jsonb, ${JSON.stringify(after)}::jsonb,
+                  ${instruction}, ${user.userId}
+                )
+                on conflict (organization_id, kind, sku, after) where status = 'pending' do nothing
+                returning id
+              `
+              if (inserted[0] !== undefined) return inserted[0].id
+              const existing = yield* sql<{ id: string }>`
+                select id from change_proposals
+                 where organization_id = ${orgId} and status = 'pending' and kind = ${kind} and sku = ${sku}
+                   and after = ${JSON.stringify(after)}::jsonb
+              `
+              return existing[0]!.id
+            })
           )
-          return { proposed: true, change_id: id }
+          return { proposed: true, change_id: changeId }
         })
 
       return {

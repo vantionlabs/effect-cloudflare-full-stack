@@ -461,7 +461,9 @@ const TENANT_TABLES = new Set([
   "products",
   "quotes",
   "quote_lines",
-  "change_proposals"
+  "change_proposals",
+  "jobs",
+  "invoices"
   /*
    * better-auth's `apikey` is deliberately NOT here. It is not ours — the `@better-auth/api-key` plugin owns it,
    * it has no `organization_id` column (ownership is `referenceId`), and no query in this repo touches it: the

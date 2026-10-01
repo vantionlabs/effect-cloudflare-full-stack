@@ -117,6 +117,16 @@ describe("changing the price list by asking", () => {
     expect(await tag(ApplyChange(change.id))).toBe("ChangeNotPending")
   })
 
+  it("makes ONE proposal however many times the model asks for the same change", async () => {
+    // The real model called the tool four times for one instruction; the page showed four identical proposals.
+    const call = { name: "propose_product_change", params: { sku: "SV-350", price_eur: "199" } }
+    const first = await propose(RAISE, [call, call, call, call])
+    expect(first.proposals).toHaveLength(1)
+    // And asking again while it is still pending returns the same proposal, not a second one.
+    const again = await propose(RAISE, [call])
+    expect(again.proposals.map((p) => p.id)).toEqual(first.proposals.map((p) => p.id))
+  })
+
   it("refuses a price the instruction does not contain", async () => {
     const run = await propose(RAISE, [{ name: "propose_product_change", params: { sku: "SV-350", price_eur: "250" } }])
     expect(run.proposals).toEqual([])

@@ -3,3 +3,4 @@
 export * from "./Cents.ts"
 export * from "./Money.ts"
 export * from "./ParseAmount.ts"
+export * from "./Terms.ts"

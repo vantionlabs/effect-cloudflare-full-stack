@@ -12,7 +12,7 @@ cash), the product models it.
 | 2 | Editing data by asking                                          | proposals a person approves before anything is written        |
 | 4 | Work-in-progress and cash-flow planning                         | quotes and their outcomes, as the source of pipeline and cash |
 
-**Order now: 4.** Sales comes first because it creates the business data the other three
+**All five are built.** What remains is listed per feature. Sales comes first because it creates the business data the other three
 operate on.
 
 **The rule all of them share: the model proposes, code computes, a person approves.** A model never sets a price,
@@ -51,3 +51,14 @@ shape the decide pipeline enforces with rails.
       every value must appear verbatim in the instruction; each proposal shows its exact before -> after; applying is
       a person's action, a compare-and-swap that also refuses a proposal the product has moved on from.
 - [ ] The same for other records — a quote's customer, a draft's lines — once there is a reason to edit them.
+
+## #4 — done
+
+- [x] After a quote is sent: customer accepted or declined (a person records it); acceptance creates a JOB.
+- [x] Jobs are finished and invoiced; an invoice is due after the payment terms (`PAYMENT_TERMS_DAYS`, in `shared`
+      because sales and reporting must agree on it); payment is recorded by a person.
+- [x] `/planning`: work in progress, open and overdue invoices, pipeline, and a 12-week cash-IN forecast computed in
+      code, with its assumptions stated on the page.
+- [x] Insights answers cash and WIP questions through `planning_figures`, with the same traceable-figures rule.
+- [ ] Expenses, so the forecast can become a balance. Today it is honest about being inflows only.
+- [ ] Per-customer payment terms (a column, replacing the product-wide constant).

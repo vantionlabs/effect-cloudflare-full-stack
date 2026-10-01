@@ -14,11 +14,16 @@ import { ChangeIsStale } from "../Errors/ChangeIsStale.ts"
 import { ChangeNotFound } from "../Errors/ChangeNotFound.ts"
 import { ChangeNotPending } from "../Errors/ChangeNotPending.ts"
 import { InvalidProduct } from "../Errors/InvalidProduct.ts"
+import { InvoiceAlreadyPaid } from "../Errors/InvoiceAlreadyPaid.ts"
+import { InvoiceNotFound } from "../Errors/InvoiceNotFound.ts"
+import { JobNotFound } from "../Errors/JobNotFound.ts"
+import { JobNotInState } from "../Errors/JobNotInState.ts"
 import { QuoteHasNoRecipient } from "../Errors/QuoteHasNoRecipient.ts"
 import { QuoteNotFound } from "../Errors/QuoteNotFound.ts"
 import { QuoteNotInState } from "../Errors/QuoteNotInState.ts"
 import { Product, Unit } from "../Product/Product.ts"
 import { Quote, QuoteStatus } from "../Quote/Quote.ts"
+import { Invoice, Job } from "../Work/Work.ts"
 
 const QuoteRef = { quoteId: Schema.String }
 
@@ -83,5 +88,28 @@ export const SalesRpcs = RpcGroup.make(
     payload: { changeId: Schema.String },
     success: ProposedChange,
     error: Schema.Union([ChangeNotFound, ChangeNotPending])
+  }),
+  /** The customer's answer to a sent quote, recorded by a person. Accepting creates the job. */
+  Rpc.make("Sales.respondToQuote", {
+    payload: { quoteId: Schema.String, accepted: Schema.Boolean },
+    success: Quote,
+    error: Schema.Union([QuoteNotFound, QuoteNotInState])
+  }),
+  Rpc.make("Sales.jobs", { payload: {}, success: Schema.Array(Job) }),
+  Rpc.make("Sales.completeJob", {
+    payload: { jobId: Schema.String },
+    success: Job,
+    error: Schema.Union([JobNotFound, JobNotInState])
+  }),
+  Rpc.make("Sales.invoiceJob", {
+    payload: { jobId: Schema.String },
+    success: Job,
+    error: Schema.Union([JobNotFound, JobNotInState])
+  }),
+  Rpc.make("Sales.invoices", { payload: {}, success: Schema.Array(Invoice) }),
+  Rpc.make("Sales.recordPayment", {
+    payload: { invoiceId: Schema.String },
+    success: Invoice,
+    error: Schema.Union([InvoiceNotFound, InvoiceAlreadyPaid])
   })
 ).middleware(AuthenticatedRpc)

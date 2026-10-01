@@ -49,7 +49,8 @@ export const ProposeChanges = (instruction: string) =>
       if (!response.content.some((part) => part.type === "tool-call")) break
     }
     const db = yield* Db
-    const proposals = yield* db.scoped((sql, orgId) => loadChanges(sql, orgId, proposed))
+    // De-duplicated: a repeated call returns the same pending proposal's id (see `ChangeTools.ts`).
+    const proposals = yield* db.scoped((sql, orgId) => loadChanges(sql, orgId, [...new Set(proposed)]))
     // Refusals are the tools' own reasons, not the model's prose, which is deliberately dropped.
     return new ProposalRun({ proposals, refusals: [...new Set(refusals)] })
   })

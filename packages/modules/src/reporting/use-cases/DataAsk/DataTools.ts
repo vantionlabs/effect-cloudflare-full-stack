@@ -15,6 +15,7 @@ import { resolveUsagePeriod } from "@ea/modules/shared/use-cases/Usage"
 import { Effect, Schema } from "effect"
 import { Tool, Toolkit } from "effect/ai"
 import type { SqlClient } from "effect/sql"
+import { GetPlanning } from "../Planning/GetPlanning.ts"
 import { ComputeWeeklyKpis } from "../WeeklyReport/ComputeWeeklyKpis.ts"
 
 const Period = {
@@ -48,7 +49,29 @@ export const ListQuotesTool = Tool.make("list_quotes", {
   success: Schema.Unknown
 })
 
-export const DataToolkit = Toolkit.make(ActivityFigures, QuoteFigures, ListQuotesTool)
+export const PlanningFigures = Tool.make("planning_figures", {
+  description: "Work in progress (open jobs; finished jobs not yet invoiced), open and overdue invoices, sent quotes " +
+    "not yet answered (pipeline), and the expected cash coming IN per week for the next 12 weeks, in euros. Inflows " +
+    "only — expenses are not recorded. States its assumptions (payment terms, days to finish an open job).",
+  /*
+   * A real parameter, not an empty object. `Schema.Struct({})` compiled to a JSON schema with `anyOf`, which the
+   * OpenAI-compatible client refuses ("Root JSON Schema must have type \"object\" and must not use \"anyOf\"") —
+   * and it refused the WHOLE toolkit, so every Insights question failed, not just planning ones. Found by asking
+   * the real model; the scripted model in the tests never validates tool schemas.
+   */
+  parameters: Schema.Struct({
+    /*
+     * A STRING the code parses, not an Int: the real model sent this as a string ("4"), and an Int parameter then
+     * failed the whole call ("Invalid parameters … Expected number"). Anything unparseable falls back to 4 weeks.
+     */
+    horizon_weeks: Schema.optional(Schema.String).annotate({
+      description: "How many weeks ahead to total, 1 to 12, e.g. 4 for \"the next month\". Defaults to 4."
+    })
+  }),
+  success: Schema.Unknown
+})
+
+export const DataToolkit = Toolkit.make(ActivityFigures, QuoteFigures, ListQuotesTool, PlanningFigures)
 
 /** Euros as a two-decimal string from integer cents — a figure the model can quote exactly. */
 const euros = (cents: number): string => (cents / 100).toFixed(2)
@@ -105,6 +128,39 @@ export const dataToolkitFor = DataToolkit.toLayer(
             })
           )
           return { period, quotes_by_status: byStatus, total_count: rows.reduce((s, r) => s + Number(r.n), 0) }
+        }).pipe(Effect.provide(context), Effect.orDie),
+      planning_figures: (input) =>
+        Effect.map(GetPlanning, (plan) => {
+          const requested = Number.parseInt(input.horizon_weeks ?? "4", 10)
+          const horizon = Math.min(Math.max(Number.isFinite(requested) ? requested : 4, 1), plan.weeks.length)
+          const sum = (amount: { readonly count: number; readonly cents: number }) => ({
+            count: amount.count,
+            value_eur: euros(amount.cents)
+          })
+          return {
+            today: plan.today,
+            assumptions: {
+              payment_terms_days: plan.assumptions.paymentTermsDays,
+              open_job_assumed_finished_after_days: plan.assumptions.openJobDays
+            },
+            work_in_progress: {
+              open_jobs: sum(plan.workInProgress.openJobs),
+              finished_not_invoiced: sum(plan.workInProgress.doneNotInvoiced)
+            },
+            open_invoices: sum(plan.openInvoices),
+            overdue_invoices: sum(plan.overdue),
+            pipeline_sent_quotes: sum(plan.pipeline),
+            expected_cash_in_per_week: plan.weeks.map((week) => ({
+              week_starting: week.weekStart,
+              eur: euros(week.total)
+            })),
+            horizon_weeks: horizon,
+            expected_cash_in_over_horizon_eur: euros(
+              plan.weeks.slice(0, horizon).reduce((s, week) => s + week.total, 0)
+            ),
+            expected_cash_in_next_12_weeks_eur: euros(plan.weeks.reduce((s, week) => s + week.total, 0)),
+            expected_later_eur: euros(plan.later)
+          }
         }).pipe(Effect.provide(context), Effect.orDie),
       list_quotes: (input) =>
         Effect.gen(function*() {

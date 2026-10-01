@@ -18,6 +18,14 @@ import {
 import type { UpsertProductInput } from "@ea/modules/sales/use-cases/Product"
 import { ListProducts, UpsertProduct } from "@ea/modules/sales/use-cases/Product"
 import { ApproveQuote, DiscardQuote, DraftQuote, ListQuotes, SendQuote } from "@ea/modules/sales/use-cases/Quote"
+import {
+  CompleteJob,
+  InvoiceJob,
+  ListInvoices,
+  ListJobs,
+  RecordPayment,
+  RespondToQuote
+} from "@ea/modules/sales/use-cases/Work"
 import { Effect } from "effect"
 import { LanguageModel } from "effect/ai"
 import { serveForTenant } from "../Serve.ts"
@@ -50,6 +58,13 @@ export const SalesRpcLive = SalesRpcs.toLayer(
     },
     "Sales.changes": () => serveForTenant(ListChanges),
     "Sales.applyChange": (payload: { readonly changeId: string }) => serveForTenant(ApplyChange(payload.changeId)),
-    "Sales.rejectChange": (payload: { readonly changeId: string }) => serveForTenant(RejectChange(payload.changeId))
+    "Sales.rejectChange": (payload: { readonly changeId: string }) => serveForTenant(RejectChange(payload.changeId)),
+    "Sales.respondToQuote": (payload: { readonly quoteId: string; readonly accepted: boolean }) =>
+      serveForTenant(RespondToQuote(payload.quoteId, payload.accepted)),
+    "Sales.jobs": () => serveForTenant(ListJobs),
+    "Sales.completeJob": (payload: { readonly jobId: string }) => serveForTenant(CompleteJob(payload.jobId)),
+    "Sales.invoiceJob": (payload: { readonly jobId: string }) => serveForTenant(InvoiceJob(payload.jobId)),
+    "Sales.invoices": () => serveForTenant(ListInvoices),
+    "Sales.recordPayment": (payload: { readonly invoiceId: string }) => serveForTenant(RecordPayment(payload.invoiceId))
   })
 )

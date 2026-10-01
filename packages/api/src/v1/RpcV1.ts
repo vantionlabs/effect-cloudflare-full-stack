@@ -15,6 +15,7 @@ import { DecisionRpcs } from "@ea/modules/decision/domain/Decision"
 import { IdentityRpcs } from "@ea/modules/iam/domain/Identity"
 import { IntakeRpcs } from "@ea/modules/intake/domain/Intake"
 import { DataRpcs } from "@ea/modules/reporting/domain/DataAsk"
+import { PlanningRpcs } from "@ea/modules/reporting/domain/Planning"
 import { SalesRpcs } from "@ea/modules/sales/domain/Sales"
 import { UsageRpcs } from "@ea/modules/shared/domain/Usage"
 /*
@@ -28,7 +29,7 @@ import { AssistantRpcs } from "@ea/modules/policy/domain/Assistant"
 export const RpcV1 = IdentityRpcs.merge(IntakeRpcs).merge(DecisionRpcs).merge(AskRpcs).merge(AssistantRpcs).merge(
   UsageRpcs
 )
-  .merge(MessageRpcs).merge(RoomRpcs).merge(SalesRpcs).merge(DataRpcs)
+  .merge(MessageRpcs).merge(RoomRpcs).merge(SalesRpcs).merge(DataRpcs).merge(PlanningRpcs)
 
 /** Where the RPC endpoint is mounted. Exported so the client and the server cannot disagree. */
 export const RPC_V1_PATH = "/api/rpc/v1"

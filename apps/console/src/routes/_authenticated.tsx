@@ -67,11 +67,12 @@ function AuthenticatedLayout() {
         <header className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-4">
             <span className="text-sm font-medium">effect-ai</span>
-            {/* Plain links rather than a nav component: six destinations do not need an abstraction. */}
+            {/* Plain links rather than a nav component: seven destinations do not need an abstraction. */}
             <Link to="/" className="text-muted-foreground text-sm hover:underline">Queue</Link>
             <Link to="/chat" className="text-muted-foreground text-sm hover:underline">Chat</Link>
             <Link to="/ask" className="text-muted-foreground text-sm hover:underline">Ask</Link>
             <Link to="/sales" className="text-muted-foreground text-sm hover:underline">Sales</Link>
+            <Link to="/planning" className="text-muted-foreground text-sm hover:underline">Planning</Link>
             <Link to="/insights" className="text-muted-foreground text-sm hover:underline">Insights</Link>
             <Link to="/usage" className="text-muted-foreground text-sm hover:underline">Usage</Link>
           </div>

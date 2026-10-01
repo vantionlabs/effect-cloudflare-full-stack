@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useHydrated } from "@/hooks/use-hydrated"
+import { loadSalesPage } from "@/sales/load-sales-page"
 import {
   applyChangeAtom,
   approveQuoteAtom,
@@ -20,13 +21,13 @@ import {
   changesAtom,
   discardQuoteAtom,
   draftQuoteAtom,
-  loadSalesPage,
   PRODUCTS_KEY,
   productsAtom,
   proposeChangesAtom,
   QUOTES_KEY,
   quotesAtom,
   rejectChangeAtom,
+  respondToQuoteAtom,
   sendQuoteAtom,
   upsertProductAtom
 } from "@/sales/sales-atoms"
@@ -84,6 +85,7 @@ function SalesPage() {
   const approve = useAtomSet(approveQuoteAtom, { mode: "promiseExit" })
   const discard = useAtomSet(discardQuoteAtom, { mode: "promiseExit" })
   const send = useAtomSet(sendQuoteAtom, { mode: "promiseExit" })
+  const respond = useAtomSet(respondToQuoteAtom, { mode: "promiseExit" })
   const upsertProduct = useAtomSet(upsertProductAtom, { mode: "promiseExit" })
 
   const [request, setRequest] = useState("")
@@ -223,6 +225,43 @@ function SalesPage() {
                       >
                         Send to customer
                       </Button>
+                    )
+                    : null}
+                  {quote.status === "sent"
+                    ? (
+                      <>
+                        <Button
+                          size="sm"
+                          disabled={!hydrated || busyQuote === quote.id}
+                          onClick={async () => {
+                            setBusyQuote(quote.id)
+                            const exit = await respond({
+                              payload: { quoteId: quote.id, accepted: true },
+                              reactivityKeys: [QUOTES_KEY, "planning", "jobs"]
+                            })
+                            if (Exit.isFailure(exit)) setNote(explain(exit))
+                            setBusyQuote(undefined)
+                          }}
+                        >
+                          Customer accepted
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!hydrated || busyQuote === quote.id}
+                          onClick={async () => {
+                            setBusyQuote(quote.id)
+                            const exit = await respond({
+                              payload: { quoteId: quote.id, accepted: false },
+                              reactivityKeys: [QUOTES_KEY, "planning"]
+                            })
+                            if (Exit.isFailure(exit)) setNote(explain(exit))
+                            setBusyQuote(undefined)
+                          }}
+                        >
+                          Declined
+                        </Button>
+                      </>
                     )
                     : null}
                   {quote.status === "draft" || quote.status === "approved"

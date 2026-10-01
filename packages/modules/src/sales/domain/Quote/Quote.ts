@@ -1,8 +1,8 @@
 /**
  * A quote and its lifecycle. **Only a person moves it forward.**
  *
- *   draft ──approve──▶ approved ──send──▶ sent
- *     └─────discard──▶ discarded
+ *   draft ──approve──▶ approved ──send──▶ sent ──customer accepts──▶ accepted (a job is created)
+ *     └─────discard──▶ discarded           └──customer declines──▶ declined
  *
  * The model writes drafts and nothing else. Approving records who approved; sending requires an approved quote
  * and a customer email that came from the request. Each transition is a compare-and-swap on the status, so two
@@ -16,7 +16,7 @@ import { ProductId, Unit } from "../Product/Product.ts"
 export const QuoteId = Schema.String.pipe(Schema.brand("QuoteId"))
 export type QuoteId = typeof QuoteId.Type
 
-export const QuoteStatus = Schema.Literals(["draft", "approved", "sent", "discarded"])
+export const QuoteStatus = Schema.Literals(["draft", "approved", "sent", "discarded", "accepted", "declined"])
 export type QuoteStatus = typeof QuoteStatus.Type
 
 export class QuoteLine extends Schema.Class<QuoteLine>("QuoteLine")({
