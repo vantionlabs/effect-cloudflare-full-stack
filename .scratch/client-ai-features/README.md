@@ -27,4 +27,5 @@ person approving it — the same rule the decide pipeline enforces with rails.
 - [x] A `knowledge` collection for technical documentation, kept out of invoice-decision retrieval.
 - [x] `ask` scoped to a collection, with a mechanics' prompt that never states an unquoted value.
 - [x] A console Ask page (`/ask`): server-rendered through Effect Atom hydration, ask and upload over RPC.
-- [ ] Citations that name the DOCUMENT and section — today they carry the verbatim excerpt and clause ref only.
+- [x] Citations that name the document and section (`pk23500.md · 2. Hydraulische druk`), taken from what
+      retrieval returned rather than from the model's own labels.

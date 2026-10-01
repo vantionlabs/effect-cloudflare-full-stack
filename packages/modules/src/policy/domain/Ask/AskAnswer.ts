@@ -12,7 +12,14 @@ import { Schema } from "effect"
 export class AskAnswerCitation extends Schema.Class<AskAnswerCitation>("AskAnswerCitation")({
   chunk_id: Schema.String,
   clause_ref: Schema.NullOr(Schema.String),
-  excerpt: Schema.String
+  excerpt: Schema.String,
+  /**
+   * WHERE the excerpt is: the section heading and the document's name. Taken from what retrieval returned for this
+   * chunk, never from the model — it can mislabel a quote, so it is not trusted to label the source. Optional so a
+   * citation recorded before these fields existed still reads.
+   */
+  heading: Schema.optional(Schema.NullOr(Schema.String)),
+  document: Schema.optional(Schema.NullOr(Schema.String))
 }) {}
 
 export class AskAnswer extends Schema.Class<AskAnswer>("AskAnswer")({

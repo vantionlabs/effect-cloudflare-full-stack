@@ -18,7 +18,7 @@ import { AskAnswer, AskAnswerCitation } from "./AskAnswer.ts"
  * `truncated` is published because it is the difference between an answer and a partial one: the step bound
  * stopped the loop, so a client must say so rather than presenting it as complete.
  */
-export const AskCitationV1 = wireFrom(AskAnswerCitation, ["chunk_id", "clause_ref", "excerpt"])
+export const AskCitationV1 = wireFrom(AskAnswerCitation, ["chunk_id", "clause_ref", "excerpt", "heading", "document"])
 
 export const AskAnswerV1 = wire({
   ...pickFields(AskAnswer.fields, ["answer", "steps", "truncated"]),

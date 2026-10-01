@@ -186,6 +186,13 @@ describe("retrieval", () => {
     expect(result.chunks.every((chunk) => chunk.document_id !== "retrieval_doc_txn")).toBe(true)
   })
 
+  it("names the document each chunk came from, so a citation can say which one", async () => {
+    const result = await run(ORG_A, RetrievePolicy({ query: "goedkeuring facturen" }))
+    expect(result.chunks.length).toBeGreaterThan(0)
+    // The seed's filename, looked up in the same tenant-scoped transaction as the search.
+    expect(result.chunks.every((chunk) => chunk.document_title === "inkoopbeleid.md")).toBe(true)
+  })
+
   it("keeps knowledge and policy apart in both directions", async () => {
     /*
      * The same text indexed as `knowledge`: identical content means a leak would look like a plausible hit, so

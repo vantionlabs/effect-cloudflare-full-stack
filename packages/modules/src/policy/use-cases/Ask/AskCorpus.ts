@@ -94,6 +94,8 @@ export const SearchPolicy = Tool.make("search_policy", {
       chunk_id: Schema.String,
       clause_ref: Schema.NullOr(Schema.String),
       heading: Schema.NullOr(Schema.String),
+      /** Which document — so the model can say "in the PK 23.500 manual", and does not have to guess. */
+      document: Schema.NullOr(Schema.String),
       content: Schema.String
     })),
     /** Surfaced to the model on purpose: a lexical-only answer is weaker and it should say so. */
@@ -132,6 +134,7 @@ export const askToolkitFor = (collection: AskableCollection) =>
                 chunk_id: chunk.chunk_id,
                 clause_ref: chunk.clause_ref,
                 heading: chunk.heading,
+                document: chunk.document_title ?? null,
                 content: chunk.content
               })),
               retrieval_mode: retrieval.mode
@@ -184,8 +187,8 @@ const systemFor = (collection: AskableCollection): string =>
 
 export interface AskResult {
   readonly answer: string
-  /** The clauses relied on, every one of them verified against what the tool actually returned. */
-  readonly citations: ReadonlyArray<AskCitation>
+  /** The clauses relied on, every one of them verified against what the tool actually returned, and located. */
+  readonly citations: ReadonlyArray<LocatedCitation>
   /** How many tool calls it took. Reported so a loop that always hits the bound is visible. */
   readonly steps: number
   /** True when the bound stopped it rather than the model finishing. The answer is then partial. */
@@ -207,13 +210,37 @@ export interface AskResult {
  * An answer with NO citations passes: "the corpus does not settle this" is a correct answer and the prompt asks
  * for it. What must not pass is a citation that cannot be checked.
  */
+/** What a search actually returned for one chunk: the only evidence a citation is checked or labelled against. */
+interface ServedChunk {
+  readonly content: string
+  readonly heading: string | null
+  readonly document: string | null
+}
+
+/** A verified citation, with WHERE it is from — taken from what was served, not from the model. */
+export interface LocatedCitation extends AskCitation {
+  readonly heading: string | null
+  readonly document: string | null
+}
+
+const locate = (citation: AskCitation, served: ReadonlyMap<string, ServedChunk>): LocatedCitation => {
+  const source = served.get(citation.chunk_id)
+  return {
+    chunk_id: citation.chunk_id,
+    clause_ref: citation.clause_ref,
+    excerpt: citation.excerpt,
+    heading: source?.heading ?? null,
+    document: source?.document ?? null
+  }
+}
+
 const ungroundedCitations = (
   citations: ReadonlyArray<AskCitation>,
-  served: ReadonlyMap<string, string>
+  served: ReadonlyMap<string, ServedChunk>
 ): ReadonlyArray<string> => {
   const reasons: Array<string> = []
   for (const citation of citations) {
-    const content = served.get(citation.chunk_id)
+    const content = served.get(citation.chunk_id)?.content
     if (content === undefined) {
       reasons.push(
         `citation: chunk ${citation.chunk_id} was never returned by a search for this question` +
@@ -267,7 +294,7 @@ const runLoop = (
      * reaching across a layer boundary — and the loop already has the parts in hand. This map is the ONLY
      * definition of "was retrieved for this question", which is what makes the check below meaningful.
      */
-    const served = new Map<string, string>()
+    const served = new Map<string, ServedChunk>()
 
     for (let step = 1; step <= MAX_STEPS; step++) {
       const response = yield* Effect.provideService(
@@ -278,8 +305,10 @@ const runLoop = (
       prompt = Prompt.concat(prompt, Prompt.fromResponseParts(response.content))
 
       for (const part of response.toolResults) {
-        const result = part.result as { readonly clauses?: ReadonlyArray<{ chunk_id: string; content: string }> }
-        for (const clause of result.clauses ?? []) served.set(clause.chunk_id, clause.content)
+        const result = part.result as { readonly clauses?: ReadonlyArray<ServedChunk & { chunk_id: string }> }
+        for (const clause of result.clauses ?? []) {
+          served.set(clause.chunk_id, { content: clause.content, heading: clause.heading, document: clause.document })
+        }
       }
 
       /*
@@ -334,7 +363,8 @@ const runLoop = (
 
         return {
           answer: answer.answer,
-          citations: answer.citations,
+          // Located from what retrieval served for each chunk — never from the model's own labels.
+          citations: answer.citations.map((citation) => locate(citation, served)),
           steps: step,
           truncated: false
         } satisfies AskResult

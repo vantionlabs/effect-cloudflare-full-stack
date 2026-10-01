@@ -52,17 +52,18 @@ export const RetrievePolicy = (input: RetrievePolicyInput) =>
     )
     const vector = embedding._tag === "Some" ? `[${embedding.value.join(",")}]` : null
 
-    const rows = yield* db.scopedForOrg((sql, orgId) =>
-      sql<{
-        chunk_id: string
-        document_id: string
-        heading: string | null
-        clause_ref: string | null
-        content: string
-        score: number
-        semantic_rank: number | null
-        lexical_rank: number | null
-      }>`
+    const { rows, titles } = yield* db.scopedForOrg((sql, orgId) =>
+      Effect.gen(function*() {
+        const rows = yield* sql<{
+          chunk_id: string
+          document_id: string
+          heading: string | null
+          clause_ref: string | null
+          content: string
+          score: number
+          semantic_rank: number | null
+          lexical_rank: number | null
+        }>`
         select * from retrieve_policy(
           ${input.query},
           ${vector}::vector,
@@ -71,8 +72,22 @@ export const RetrievePolicy = (input: RetrievePolicyInput) =>
           ${input.limit ?? DEFAULT_LIMIT}
         )
       `
+        /*
+         * The names of the documents those chunks came from, so a citation can say WHICH manual — a mechanic cannot
+         * act on "section 2" without it. One indexed lookup in the same transaction, tenant-scoped like the search.
+         */
+        const ids = [...new Set(rows.map((row) => row.document_id))]
+        const titles = ids.length === 0
+          ? []
+          : yield* sql<{ id: string; filename: string }>`
+              select id, filename from source_documents
+               where organization_id = ${orgId} and id in ${sql.in(ids)}
+            `
+        return { rows, titles }
+      })
     )
 
+    const titleOf = new Map(titles.map((row) => [row.id, row.filename]))
     const chunks = rows.map((row) =>
       new RetrievedChunk({
         chunk_id: ChunkId.make(row.chunk_id),
@@ -82,7 +97,8 @@ export const RetrievePolicy = (input: RetrievePolicyInput) =>
         content: row.content,
         score: row.score,
         semantic_rank: row.semantic_rank,
-        lexical_rank: row.lexical_rank
+        lexical_rank: row.lexical_rank,
+        document_title: titleOf.get(row.document_id) ?? null
       })
     )
 

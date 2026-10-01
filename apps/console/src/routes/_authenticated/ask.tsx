@@ -41,9 +41,22 @@ function AskRoute() {
 interface Answer {
   readonly answer: string
   readonly truncated: boolean
-  readonly citations: ReadonlyArray<
-    { readonly chunk_id: string; readonly clause_ref: string | null; readonly excerpt: string }
-  >
+  readonly citations: ReadonlyArray<{
+    readonly chunk_id: string
+    readonly clause_ref: string | null
+    readonly excerpt: string
+    /** Where it is from, as the search recorded it — see `AskAnswerCitation`. Absent on older answers. */
+    readonly heading?: string | null | undefined
+    readonly document?: string | null | undefined
+  }>
+}
+
+/** "pk23500.md · 2. Hydraulische druk", from whatever parts are known. */
+const sourceOf = (citation: Answer["citations"][number]): string | null => {
+  const parts = [citation.document, citation.heading ?? citation.clause_ref].filter(
+    (part): part is string => typeof part === "string" && part !== ""
+  )
+  return parts.length === 0 ? null : parts.join(" · ")
 }
 
 type Outcome =
@@ -166,10 +179,14 @@ function AskPage() {
                 : (
                   <ul className="flex flex-col gap-2" aria-label="Sources">
                     {outcome.answer.citations.map((citation) => (
-                      <li key={citation.chunk_id} className="border-l-2 pl-3 text-sm">
-                        {citation.clause_ref === null
+                      <li key={citation.chunk_id} className="flex flex-col gap-1 border-l-2 pl-3 text-sm">
+                        {sourceOf(citation) === null
                           ? null
-                          : <span className="font-medium">{citation.clause_ref}:</span>}
+                          : (
+                            <span className="text-muted-foreground text-xs" data-testid="source">
+                              {sourceOf(citation)}
+                            </span>
+                          )}
                         <q>{citation.excerpt}</q>
                       </li>
                     ))}

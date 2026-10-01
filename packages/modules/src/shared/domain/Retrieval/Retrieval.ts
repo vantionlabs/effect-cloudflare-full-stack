@@ -37,7 +37,15 @@ export class RetrievedChunk extends Schema.Class<RetrievedChunk>("RetrievedChunk
   score: Schema.Finite,
   /** Null when this chunk did not appear in that half's candidates. */
   semantic_rank: Schema.NullOr(Schema.Int),
-  lexical_rank: Schema.NullOr(Schema.Int)
+  lexical_rank: Schema.NullOr(Schema.Int),
+  /**
+   * The document's name — the manual a mechanic would go and fetch. Looked up by `RetrievePolicy`, not carried by
+   * the SQL function, so it needed no change to `retrieve_policy`'s return type.
+   *
+   * Optional because a Workflow step's stored retrieval predates it: an instance memoised before this field
+   * existed must still read, and "unknown document" is the honest reading of one.
+   */
+  document_title: Schema.optional(Schema.NullOr(Schema.String))
 }) {}
 
 export class Retrieval extends Schema.Class<Retrieval>("Retrieval")({

@@ -103,17 +103,10 @@ const run = (model: Layer.Layer<AgentModel>, search: Layer.Layer<PolicySearch>) 
         AskToolkitLive.pipe(
           Layer.provideMerge(Layer.mergeAll(model, search, Layer.succeed(CurrentOrg)(ORG)))
         )
-      )
-    ) as Effect.Effect<
-      {
-        answer: string
-        citations: ReadonlyArray<{ chunk_id: string; clause_ref: string | null; excerpt: string }>
-        steps: number
-        truncated: boolean
-      },
-      never,
-      never
-    >
+      ),
+      // A refusal or provider error is a failed test here; `refusalOf` below is for the tests that expect one.
+      Effect.orDie
+    )
   )
 
 /** The failure a refused answer produced, as a value. `Effect.flip`, for the reason in AGENTS.md. */
@@ -227,6 +220,45 @@ describe("grounding", () => {
 
     expect(result.citations).toHaveLength(1)
     expect(result.citations[0]!.chunk_id).toBe("c1")
+  })
+
+  it("says WHERE a citation is from, using what the search returned — not the model's own label", async () => {
+    /*
+     * The model calls the clause "Artikel 99"; the search served chunk c1 under the heading "Artikel 4 …" from
+     * "inkoopbeleid.md". The located citation keeps the model's clause_ref (it is what the model said) but takes
+     * heading and document from the search, because a model that can mislabel a quote must not label its source.
+     */
+    const search = Layer.succeed(PolicySearch)({
+      search: () =>
+        Effect.succeed({
+          mode: "hybrid",
+          chunks: [{
+            chunk_id: "c1",
+            document_id: "d1",
+            document_title: "inkoopbeleid.md",
+            heading: "Artikel 4 Goedgekeurde leveranciers",
+            clause_ref: "Artikel 4",
+            content: "Een factuur van een leverancier die niet op de lijst staat wordt doorgestuurd.",
+            score: 1,
+            semantic_rank: 1,
+            lexical_rank: 1
+          }]
+        } as unknown as Retrieval)
+    })
+    const result = await run(
+      scripted({
+        toolCalls: 1,
+        answer: "Nee.",
+        citations: [{ chunk_id: "c1", clause_ref: "Artikel 99", excerpt: RETRIEVED }]
+      }).layer,
+      search
+    )
+    expect(result.citations[0]).toMatchObject({
+      chunk_id: "c1",
+      clause_ref: "Artikel 99",
+      heading: "Artikel 4 Goedgekeurde leveranciers",
+      document: "inkoopbeleid.md"
+    })
   })
 
   /*
