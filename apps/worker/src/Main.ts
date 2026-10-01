@@ -42,6 +42,7 @@ import {
   RoomRpcLive,
   RPC_V1_PATH,
   RpcV1,
+  SalesRpcLive,
   UsageHttp,
   UsageRpcLive
 } from "@ea/api/v1"
@@ -301,7 +302,8 @@ const RpcEdges = Layer.mergeAll(
   RoomRpcLive,
   AskRpcLive,
   AssistantRpcLive,
-  UsageRpcLive
+  UsageRpcLive,
+  SalesRpcLive
 )
 
 /** The HTTP and RPC surfaces, over the shared services. */

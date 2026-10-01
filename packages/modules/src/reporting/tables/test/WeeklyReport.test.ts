@@ -65,7 +65,7 @@ beforeEach(async () => {
       ) {
         yield* sql`insert into "user" (id, name, email, "createdAt", "updatedAt") values (${id}, ${id}, ${email}, now(), now())`
       }
-      yield* sql`insert into organization (id, name, slug, "createdAt") values (${ACTIVE}, 'Been Hydrauliek', ${ACTIVE}, now())`
+      yield* sql`insert into organization (id, name, slug, "createdAt") values (${ACTIVE}, 'Acme Hydraulics', ${ACTIVE}, now())`
       yield* sql`insert into organization (id, name, slug, "createdAt") values (${IDLE}, 'Idle BV', ${IDLE}, now())`
       for (
         const [id, org, user, role] of [
@@ -117,7 +117,7 @@ beforeEach(async () => {
 describe("the weekly report", () => {
   it("emails the active organization's owners and admins — not its members, not the idle organization", async () => {
     const { sent } = await sendWith(NOW)
-    const ours = sent.filter((message) => message.subject.startsWith("Been Hydrauliek"))
+    const ours = sent.filter((message) => message.subject.startsWith("Acme Hydraulics"))
     expect(ours.map((message) => message.to).sort()).toEqual(["admin@workshop.test", "owner@workshop.test"])
     expect(sent.some((message) => message.to === "idle@workshop.test")).toBe(false)
     expect(sent.some((message) => message.to === "member@workshop.test")).toBe(false)
@@ -139,7 +139,7 @@ describe("the weekly report", () => {
   it("goes out ONCE: a second run in the same week sends nothing and says why", async () => {
     await sendWith(NOW)
     const again = await sendWith(new Date("2026-10-05T06:05:00Z"))
-    expect(again.sent.filter((message) => message.subject.startsWith("Been Hydrauliek"))).toEqual([])
+    expect(again.sent.filter((message) => message.subject.startsWith("Acme Hydraulics"))).toEqual([])
     expect(again.summary.alreadySent).toBeGreaterThanOrEqual(1)
 
     const [delivery] = await asAdmin(

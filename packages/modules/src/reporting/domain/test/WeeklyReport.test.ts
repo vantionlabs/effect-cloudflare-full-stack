@@ -31,13 +31,13 @@ describe("renderWeeklyReport", () => {
   }
 
   it("names the organization and the period in the subject", () => {
-    expect(renderWeeklyReport("Been Hydrauliek", kpis).subject).toBe(
-      "Been Hydrauliek: weekly figures 2026-09-28 – 2026-10-05"
+    expect(renderWeeklyReport("Acme Hydraulics", kpis).subject).toBe(
+      "Acme Hydraulics: weekly figures 2026-09-28 – 2026-10-05"
     )
   })
 
   it("states every figure with its share of decisions", () => {
-    const { text } = renderWeeklyReport("Been Hydrauliek", kpis)
+    const { text } = renderWeeklyReport("Acme Hydraulics", kpis)
     expect(text).toContain("Documents received:        12")
     expect(text).toContain("approved automatically:  2 (25%)")
     expect(text).toContain("needed a person:         1 (13%)")

@@ -31,6 +31,7 @@ import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
 import { ReportDeliveryTable } from "@ea/modules/reporting/tables/ReportDelivery"
+import { SalesTable } from "@ea/modules/sales/tables/Sales"
 import { Migrator } from "effect/sql"
 import { CorpusKnowledge } from "../Corpus/CorpusTable.ts"
 import { EventIndexType, EventTable } from "../Event/EventTable.ts"
@@ -128,7 +129,9 @@ export const migrations = {
   // `knowledge`: technical documentation, a corpus of its own that invoice decisions never search.
   "0027_corpus_knowledge": CorpusKnowledge,
   // The weekly report's once-per-week claim.
-  "0028_report_deliveries": ReportDeliveryTable
+  "0028_report_deliveries": ReportDeliveryTable,
+  // Sales: the price list, quotes and their lines.
+  "0029_sales": SalesTable
 }
 
 export const loader = Migrator.fromRecord(migrations)
