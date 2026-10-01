@@ -5,7 +5,7 @@
   "tsx": true,
   "tailwind": {
     "config": "",
-    "css": "src/styles.css",
+    "css": "src/styles/app.css",
     "baseColor": "neutral",
     "cssVariables": true,
     "prefix": ""
@@ -21,5 +21,7 @@
   },
   "menuColor": "default",
   "menuAccent": "subtle",
-  "registries": {}
+  "registries": {
+    "@beautifui": "https://www.beautifului.dev/r/{name}.json"
+  }
 }

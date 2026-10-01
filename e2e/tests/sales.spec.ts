@@ -62,3 +62,26 @@ test("an instruction becomes a proposed price change that only applies when a pe
   await expect(products).toContainText("199,00")
   await expect(page.getByTestId("proposal")).toHaveCount(0)
 })
+
+/*
+ * Payment terms per customer: set, shown, then cleared back to the default. No model involved — this is the form and
+ * the list, which the planning forecast and invoice due dates read.
+ */
+test("a customer's payment terms are set and cleared back to the default", async ({ page, baseURL }) => {
+  await createAccount(page.request, baseURL ?? "")
+  await page.goto("/sales")
+  const email = page.getByLabel("Customer email")
+  await expect(email).toBeEnabled()
+  await email.fill("Piet@Smit-Transport.nl")
+  await page.getByLabel("Payment terms in days").fill("14")
+  await page.getByRole("button", { name: "Save terms" }).click()
+
+  const terms = page.getByRole("table", { name: "Customer payment terms" })
+  // Stored lower-cased: two spellings of one address are one customer.
+  await expect(terms).toContainText("piet@smit-transport.nl")
+  await expect(terms).toContainText("14 days")
+
+  await page.getByRole("button", { name: "Use default terms for piet@smit-transport.nl" }).click()
+  await expect(terms).toBeHidden()
+  await expect(page.getByText("Every customer pays within the default 30 days.")).toBeVisible()
+})

@@ -9,11 +9,11 @@
  * goes. Omitting either produces a page that renders on the server and never hydrates, which looks like
  * "React is broken" rather than "a tag is missing".
  */
+import { getCurrentSession } from "@/features/auth/api/current-session"
 import { useHydrateSession } from "@/hooks/use-session"
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import type { ReactNode } from "react"
-import { getCurrentSession } from "../auth/current-session.ts"
-import appCss from "../styles.css?url"
+import appCss from "../styles/app.css?url"
 
 export const Route = createRootRoute({
   /*

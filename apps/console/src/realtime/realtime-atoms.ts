@@ -5,12 +5,13 @@
  * and at no other time. Context would re-render every consumer of the socket on every frame, which is the
  * thing the provider's `useMemo` is already careful to avoid for connection status.
  */
+import { decisionThreadKey, roomThreadKey } from "@/components/thread/thread-atoms"
+import { ROOMS_KEY } from "@/features/chat/api/room-atoms"
+import { DECISIONS_KEY } from "@/features/queue/api/queue-atoms"
+import { Api } from "@/rpc/client"
 import type { Viewer } from "@ea/realtime/Presence"
 import { Effect } from "effect"
 import { Atom, Reactivity } from "effect/reactivity"
-import { DECISIONS_KEY } from "../queue-atoms.ts"
-import { Api } from "../rpc.ts"
-import { decisionThreadKey, ROOMS_KEY, roomThreadKey } from "../thread-atoms.ts"
 
 /**
  * Everyone connected to this organization's room, including you.

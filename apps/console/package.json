@@ -15,8 +15,9 @@
     "@base-ui/react": "^1.8.0",
     "@ea/api": "workspace:*",
     "@ea/modules": "workspace:*",
+    "@ea/realtime": "workspace:*",
     "@effect/atom-react": "catalog:",
-    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/inter": "^5.3.0",
     "@tanstack/ai": "catalog:",
     "@tanstack/react-form": "catalog:",
     "@tanstack/react-router": "catalog:",
@@ -29,8 +30,8 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "shadcn": "^4.21.0",
-    "tw-animate-css": "^1.4.0",
-    "@ea/realtime": "workspace:*"
+    "shadow-plugin": "^2.1.1",
+    "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "catalog:",

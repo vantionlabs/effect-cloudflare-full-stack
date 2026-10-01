@@ -1,0 +1,77 @@
+/*
+ * The console's one stylesheet.
+ *
+ * Beautiful UI's foundation (https://www.beautifului.dev, installed with `shadcn add @beautifui/…`) is the design
+ * system: its tokens — page, surface, ink, line, accent and the semantic tints — and its `@theme`. It imports
+ * Tailwind itself, so this file does not.
+ *
+ * The shadcn primitives in `components/ui` (input, label, field, card) speak shadcn's token names. Rather than
+ * fork them, those names are pointed at Beautiful UI's tokens below, so both kinds of component draw from one
+ * palette and one dark mode. The exception is `--accent`: Beautiful UI defines it as the blue brand colour, which
+ * shadcn uses for hover backgrounds — so `components/ui` must use `bg-hover` instead, and does.
+ */
+@import "../app/beautifui/foundation.css";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+
+:root {
+  /* Foundation reads these; it was written for next/font, which sets them as variables. */
+  --font-inter: "Inter Variable";
+  --font-mono-face: ui-monospace;
+
+  --background: var(--page);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--canvas);
+  --secondary: var(--hover);
+  --secondary-foreground: var(--ink);
+  --muted: var(--inset);
+  --muted-foreground: var(--ink-2);
+  --destructive: var(--red);
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--accent);
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Tabular figures wherever money or counts line up in columns. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

@@ -78,11 +78,10 @@
        */
       "ignore": [
         "src/components/ui/**",
-        "src/lib/utils.ts",
+        // Beautiful UI's atoms, vendored the same way (see AGENTS.md).
+        "src/components/atoms/**",
       ],
       "ignoreDependencies": [
-        // shadcn's icon dependency, pulled in by registry components rather than imported by the app.
-        "lucide-react",
         /*
          * `@tanstack/ai` is declared AHEAD of its first import, which knip is right to flag and which is
          * a deliberate exception rather than an oversight.

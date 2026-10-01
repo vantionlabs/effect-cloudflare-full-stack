@@ -332,6 +332,34 @@ const rules: ReadonlyArray<Rule> = [
     }
   },
   {
+    /*
+     * The console's feature folders compose only through `components/` and `lib/` — the same rule the modules
+     * follow through `shared`. Something two features need moves out of both; reaching sideways is how one page's
+     * change starts breaking another's. See AGENTS.md, "How apps/console/src is organised".
+     *
+     * `features/auth/api` is the session, which the shell and the hooks need, so anyone may import it. `realtime/`
+     * is not a feature: it is the one place that maps socket frames onto each feature's cache keys, so it names them.
+     */
+    label: "a console feature does not import another feature",
+    appliesTo: (p) => p.startsWith("apps/console/src/"),
+    forbidden: [{
+      pattern: /^@\/features\//,
+      because: "move what both features need into components/ or lib/"
+    }],
+    permitted: (path, specifier) => {
+      if (specifier.startsWith("@/features/auth/api/")) return true
+      if (path.startsWith("apps/console/src/realtime/")) return true
+      const own = /^apps\/console\/src\/features\/([^/]+)\//.exec(path)?.[1]
+      const target = /^@\/features\/([^/]+)\//.exec(specifier)?.[1]
+      // Routes and the shell sit outside features and may use any of them; a feature may use itself.
+      return own === undefined ?
+        !path.startsWith("apps/console/src/components/") && !path.startsWith(
+          "apps/console/src/lib/"
+        ) :
+        own === target
+    }
+  },
+  {
     label: "only the platform directory may open sockets or touch the driver",
     appliesTo: (p) => p.startsWith("apps/worker/src/") && !p.includes("/platform/"),
     forbidden: [

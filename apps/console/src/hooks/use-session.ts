@@ -16,8 +16,8 @@
  * is `session._tag === "Guest" ? null : ...` in every authenticated component, which is noise that also
  * invites rendering something for a case that cannot happen.
  */
-import type { CurrentSession } from "@/auth/current-session"
-import { sessionAtom } from "@/auth/session-atoms"
+import type { CurrentSession } from "@/features/auth/api/current-session"
+import { sessionAtom } from "@/features/auth/api/session-atoms"
 import { useAtomInitialValues, useAtomSet, useAtomValue } from "@effect/atom-react"
 import { useRouteContext } from "@tanstack/react-router"
 import { useEffect } from "react"

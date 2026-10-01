@@ -5,7 +5,7 @@
  * `/chat?room=…` into a message and their colleague lands in the same place. The same reasoning as `next` on the
  * login route — state that identifies what you are looking at belongs in the URL.
  */
-import { ChatScreen } from "@/chat-screen"
+import { ChatPage } from "@/features/chat/chat-page"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_authenticated/chat")({
@@ -25,7 +25,7 @@ function ChatRoute() {
   const navigate = useNavigate()
 
   return (
-    <ChatScreen
+    <ChatPage
       selected={room}
       onSelect={(roomId) =>
         /*

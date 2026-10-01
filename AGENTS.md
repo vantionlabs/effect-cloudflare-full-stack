@@ -128,6 +128,49 @@ not `QueueGrid.tsx` — because that is what every contributor coming from the R
 console is where such a contributor is most likely to start. The two conventions meet at a package
 boundary, which is the only place a convention change is cheap to notice.
 
+### How `apps/console/src` is organised
+
+```
+routes/              THIN. createFileRoute + guard/loader + <HydrationBoundary><FeaturePage/></…>. No markup.
+features/<feature>/  everything one area of the product needs, and nothing another area needs
+  api/               RPC atoms (`*-atoms.ts`) and SSR loaders (`load-*-page.ts`)
+  components/        the feature's own pieces, one component per file
+  <feature>-page.tsx the page, composed from its components and the shared ones below
+components/
+  layout/            app-shell, app-sidebar, page (Page, PageHeader, PageSection, Panel)
+  data/              data-table, stat, status-pill
+  feedback/          notice
+  ui/                shadcn primitives (input, label, field, card, separator) — vendored
+  atoms/, primitives/ Beautiful UI — vendored, see below
+lib/                 format (money, quantities, days), failure (tagged error → sentence), utils (cn)
+hooks/  rpc/  realtime/  styles/
+```
+
+**A feature never imports another feature**, with one exception: `features/auth/api` is the session, which the
+shell and hooks need. Something two features share moves to `components/` or `lib/` — that is the signal it is
+shared, not a reason to reach sideways.
+
+**Loaders import atoms DYNAMICALLY**, inside the server function's handler. A static import of the atom or RPC
+graph from a `createServerFn` module makes the TanStack compiler fail with "could not load module info for
+src/rpc/client.ts" on a cold dev server — the hydration failures that were blamed on Vite's optimizer.
+
+**Beautiful UI** (`https://www.beautifului.dev`, MIT) is the design system: its tokens in `app/beautifui/foundation.css`
+and the components in `components/atoms` and `components/primitives`, installed with
+`bunx shadcn add @beautifui/<name>` (the registry is named in `components.json`). Those files keep the registry's
+PascalCase names and paths so `--overwrite` can update them; they are the one exception to kebab-case here. Two
+things to know before adding more:
+
+- Most of its components are showcase pieces with **fixed data shapes** (`RecordsTable` rows are a CRM record,
+  `ChatComposer` replays scripted messages, `ToolChips` reveals steps on a timer and falls back to demo diffs). Use
+  the ones whose shape fits honestly — today `Button`, `ValuePill`, `ContextCards` (citations) and `LoadingState` —
+  and build tables and forms from `components/data` in the same style. Only what is imported is kept; add others
+  with `shadcn add` when a screen needs them.
+- `@beautifui/sidebar-nav` imports `@central-icons-react`, a **paid** icon set, and hardcodes a demo workspace.
+  `components/layout/app-sidebar.tsx` is our own, with lucide.
+
+`foundation.css` carries one LOCAL PATCH (an orphaned `}` from the registry that broke the build); re-check it after
+any `--overwrite`.
+
 ## What stays in `apps/worker`
 
 The app is an entrypoint. Eight files, and each one is there for a reason that survives the question "could this

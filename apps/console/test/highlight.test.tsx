@@ -11,7 +11,7 @@
  */
 import { containsVerbatim } from "@ea/modules/shared/domain/Verbatim"
 import { describe, expect, it } from "vitest"
-import { locate } from "../src/highlight.tsx"
+import { locate } from "../src/features/queue/components/highlight.tsx"
 
 const CLAUSE = "Facturen boven EUR 5.000 vereisen twee goedkeuringen\n  van de inkoopafdeling."
 

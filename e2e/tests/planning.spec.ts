@@ -42,3 +42,27 @@ test("an accepted quote flows through work in progress and invoicing into cash",
   await page.getByTestId("invoice").first().getByRole("button", { name: "Record payment" }).click()
   await expect(page.getByTestId("open-invoices")).toContainText("0,00")
 })
+
+/*
+ * An expense is cash out: added, it lowers the net of the week it falls in (on a new account, the only figure that
+ * week); stopped, it no longer counts. The amount is typed the Dutch way and must arrive as exact cents.
+ */
+test("a one-off expense lowers that week's net until it is removed", async ({ page, baseURL }) => {
+  await createAccount(page.request, baseURL ?? "")
+  await page.goto("/planning")
+
+  const inAWeek = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
+  await expect(page.getByLabel("Description")).toBeEnabled()
+  await page.getByLabel("Description").fill("Workshop rent")
+  await page.getByLabel("Amount (€)").fill("1.234,56")
+  await page.getByLabel("First payment").fill(inAWeek)
+  await page.getByRole("button", { name: "Add expense" }).click()
+
+  const forecast = page.getByRole("table", { name: "Forecast" })
+  await expect(page.getByTestId("expense")).toContainText("Workshop rent")
+  await expect(forecast).toContainText("-€ 1.234,56")
+
+  await page.getByTestId("expense").getByRole("button", { name: "Remove" }).click()
+  await expect(page.getByTestId("expense")).toHaveCount(0)
+  await expect(forecast).not.toContainText("-€ 1.234,56")
+})
