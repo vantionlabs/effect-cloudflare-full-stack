@@ -308,14 +308,14 @@ because its absence caused a wrong answer**: a code comment said "no gateway exi
 went stale silently, and it was then read and reported as a current finding. An inline claim has no date to
 be judged against, which is what the rule at the bottom of this file is for.
 
-| Fact                      | Value                                                                                                                                            |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Gateway id                | `effect-ai-ai-dev`                                                                                                                               |
-| Created                   | **2026-09-29 16:18:23** — so Pulumi _was_ applied for this resource                                                                              |
-| Settings                  | `cache_ttl: 3600`, `cache_invalidate_on_update: true`, `collect_logs: true`, rate limit 600/60s sliding — exactly what `infra/index.ts` declares |
-| Log volume                | 63 entries                                                                                                                                       |
-| `workers_ai_billing_mode` | `postpaid` (not unified/prepaid credits)                                                                                                         |
-| `zdr`                     | `false` — as `infra/index.ts` intends, since Zero Data Retention is a per-client decision (plan risk R8)                                         |
+| Fact                      | Value                                                                                                                                                          |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gateway ids               | `effect-ai-ai-dev`, `effect-ai-ai-staging`, `effect-ai-ai-production` — one per environment as of 2026-10-01; before that every environment shared the dev one |
+| Created                   | **2026-09-29 16:18:23** — so Pulumi _was_ applied for this resource                                                                                            |
+| Settings                  | `cache_ttl: 3600`, `cache_invalidate_on_update: true`, `collect_logs: true`, rate limit 600/60s sliding — exactly what `infra/index.ts` declares               |
+| Log volume                | 178 entries on the dev gateway when last measured                                                                                                              |
+| `workers_ai_billing_mode` | `postpaid` (not unified/prepaid credits)                                                                                                                       |
+| `zdr`                     | `false` — as `infra/index.ts` intends, since Zero Data Retention is a per-client decision (plan risk R8)                                                       |
 
 **The embedder's routing is verified by execution, with a before/after.** The logs contain only
 `@cf/meta/llama-3.3-70b-instruct-fp8-fast` from 14:42 UTC, and `@cf/baai/bge-m3` appears first at 17:00 UTC —

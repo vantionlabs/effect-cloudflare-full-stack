@@ -74,8 +74,8 @@
   "vars": {
     "ENVIRONMENT": "production",
     "CLOUDFLARE_ACCOUNT_ID": "f4599b98c2430a831bcfc291d156a988",
-    "CLOUDFLARE_AI_GATEWAY": "effect-ai-ai-dev",
-    "AI_GATEWAY": "effect-ai-ai-dev",
+    "CLOUDFLARE_AI_GATEWAY": "effect-ai-ai-production",
+    "AI_GATEWAY": "effect-ai-ai-production",
     /*
      * The CONSOLE's hostname, which changed when the console became a Worker.
      *
@@ -312,8 +312,8 @@
       "vars": {
         "ENVIRONMENT": "staging",
         "CLOUDFLARE_ACCOUNT_ID": "f4599b98c2430a831bcfc291d156a988",
-        "CLOUDFLARE_AI_GATEWAY": "effect-ai-ai-dev",
-        "AI_GATEWAY": "effect-ai-ai-dev",
+        "CLOUDFLARE_AI_GATEWAY": "effect-ai-ai-staging",
+        "AI_GATEWAY": "effect-ai-ai-staging",
         /*
          * Staging's console is a Pages PREVIEW branch, which gets a stable alias for free.
          *
