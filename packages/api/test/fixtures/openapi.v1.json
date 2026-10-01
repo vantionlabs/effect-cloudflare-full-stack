@@ -2560,6 +2560,101 @@
           "required": true
         }
       }
+    },
+    "/api/v1/usage": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "operationId": "usage.report",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Day"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Day"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "UsageReportV1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageReportV1Encoded"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2599,6 +2694,114 @@
         },
         "required": [
           "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "effect_HttpApiError_BadRequestEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "BadRequest"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "UsageReportV1Encoded": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "to": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "totals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageTotalV1Encoded"
+            }
+          },
+          "daily": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageDayV1Encoded"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "totals",
+          "daily"
+        ],
+        "additionalProperties": false
+      },
+      "UsageDayV1Encoded": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "meter": {
+            "type": "string",
+            "enum": [
+              "documents.ingested",
+              "decisions.completed",
+              "model.input_tokens",
+              "model.output_tokens"
+            ]
+          },
+          "quantity": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "meter",
+          "quantity"
+        ],
+        "additionalProperties": false
+      },
+      "Day": {
+        "type": "string",
+        "description": "A UTC calendar day, YYYY-MM-DD."
+      },
+      "UsageTotalV1Encoded": {
+        "type": "object",
+        "properties": {
+          "meter": {
+            "type": "string",
+            "enum": [
+              "documents.ingested",
+              "decisions.completed",
+              "model.input_tokens",
+              "model.output_tokens"
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "meter",
+          "model",
+          "quantity"
         ],
         "additionalProperties": false
       },
@@ -2678,21 +2881,6 @@
         "required": [
           "_tag",
           "room_id"
-        ],
-        "additionalProperties": false
-      },
-      "effect_HttpApiError_BadRequestEncoded": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": [
-              "BadRequest"
-            ]
-          }
-        },
-        "required": [
-          "_tag"
         ],
         "additionalProperties": false
       },
@@ -2944,6 +3132,9 @@
     },
     {
       "name": "ask"
+    },
+    {
+      "name": "usage"
     }
   ]
 }

@@ -452,7 +452,9 @@ const TENANT_TABLES = new Set([
   "messages",
   "message_reactions",
   "message_mentions",
-  "room_reads"
+  "room_reads",
+  // Usage metering. Listed from its first migration, so no query against it was ever unchecked.
+  "usage_records"
   /*
    * better-auth's `apikey` is deliberately NOT here. It is not ours — the `@better-auth/api-key` plugin owns it,
    * it has no `organization_id` column (ownership is `referenceId`), and no query in this repo touches it: the

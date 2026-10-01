@@ -39,6 +39,8 @@ import { ExtractDocument } from "@ea/modules/decision/use-cases/Extraction"
 import { Cents } from "@ea/modules/shared/domain/Money"
 import { PolicySearch } from "@ea/modules/shared/domain/Retrieval"
 import type { Retrieval } from "@ea/modules/shared/domain/Retrieval"
+import { modelUsageOf } from "@ea/modules/shared/domain/Usage"
+import { recordModelUsage, writeUsage } from "@ea/modules/shared/use-cases/Usage"
 import { Effect, Schema } from "effect"
 import { LanguageModel } from "effect/ai"
 import { decideKey, DecideResult, proposePrompt } from "./DecideContract.ts"
@@ -75,7 +77,11 @@ export const extractStep = (payload: { readonly documentText: string }) =>
         schema: Invoice,
         objectName: INVOICE,
         checkArithmetic
-      })
+      }).pipe(
+        // Recorded inside the step, straight after the call: a re-run step calls the model again, and that is
+        // real spend. See `recordModelUsage`. `orDie` covers it too — a lost meter row is a defect, not a retry.
+        Effect.tap((result) => recordModelUsage(result.modelUsage))
+      )
     ),
     (result): ExtractOutputValue => ({
       fields: result.data,
@@ -124,7 +130,7 @@ export const decideStep = (options: {
         }),
         schema: ProposedDecision,
         objectName: "ProposedDecision"
-      })
+      }).pipe(Effect.tap((response) => recordModelUsage(modelUsageOf(response))))
     ),
     (response) => response.value
   )
@@ -315,6 +321,16 @@ export const settleDecision = (options: {
             )
           `
         }
+        /*
+         * Billed only by the claim's WINNER, inside the claim's transaction. A losing redelivery returns above
+         * without reaching this, and the key is the decide key itself, so even a replayed winner counts once.
+         */
+        yield* writeUsage(sql, orgId, [{
+          meter: "decisions.completed",
+          quantity: 1,
+          subjectId: decisionId,
+          idempotencyKey: `decide:${decideKey(payload.documentId, payload.vertical)}`
+        }])
         return true
       })
     ))

@@ -33,6 +33,7 @@ import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
 import { Migrator } from "effect/sql"
 import { EventTable } from "../Event/EventTable.ts"
 import { TenancyTable } from "../Tenancy/TenancyTable.ts"
+import { UsageTable } from "../Usage/UsageTable.ts"
 
 export const migrations = {
   "0001_tenancy": TenancyTable,
@@ -117,7 +118,9 @@ export const migrations = {
    * rather than assumed: re-applying a file that a LATER migration has since altered is what produced
    * `column "subject_kind" does not exist`, and nothing has altered `events`.
    */
-  "0024_event_workflow_instance": EventTable
+  "0024_event_workflow_instance": EventTable,
+  // Usage metering: one row per metered consumption, written in the transaction of the work it counts.
+  "0025_usage": UsageTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

@@ -24,6 +24,7 @@ import { IntakeId } from "@ea/modules/intake/domain/Intake"
 import type { Collection } from "@ea/modules/shared/domain/Corpus"
 import { decideEventKey } from "@ea/modules/shared/domain/Event"
 import { EmitEvent } from "@ea/modules/shared/use-cases/Event"
+import { writeUsage } from "@ea/modules/shared/use-cases/Usage"
 import { Effect } from "effect"
 
 export interface UploadInput {
@@ -91,6 +92,14 @@ export const IngestUpload = (input: UploadInput) =>
           insert into intakes (id, organization_id, source, document_id, created_by)
           values (${intakeId}, ${orgId}, 'upload', ${documentId}, ${identity.userId})
         `
+        // The meter commits with the rows it counts: a rolled-back upload is never billed. Keyed on the intake,
+        // so nothing that replays this transaction can count it twice.
+        yield* writeUsage(sql, orgId, [{
+          meter: "documents.ingested",
+          quantity: 1,
+          subjectId: documentId,
+          idempotencyKey: `intake:${intakeId}`
+        }])
       })
     )
 

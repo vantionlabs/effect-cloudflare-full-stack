@@ -80,6 +80,20 @@ const EXTRACTED = {
  * from `chunkId` so a citation can name a chunk that was never retrieved — which is rail 2's real case,
  * as distinct from citing nothing at all.
  */
+/**
+ * What every counting-model call reports, shaped exactly as `LanguageModelWorkersAi` reports it: the model in a
+ * `response-metadata` part, the token totals in `finish`. So the metering assertions below exercise the real path
+ * — `ExtractDocument` / the decide step -> `modelUsageOf` -> `recordModelUsage` — rather than the helper alone.
+ */
+const reported = [
+  { type: "response-metadata" as const, modelId: "counting-model" },
+  {
+    type: "finish" as const,
+    reason: "stop" as const,
+    usage: { inputTokens: { total: 100 }, outputTokens: { total: 20 } }
+  }
+]
+
 const countingModel = (options: {
   readonly failDecide: boolean
   readonly chunkId?: string
@@ -94,7 +108,7 @@ const countingModel = (options: {
           // The extraction instruction is distinctive; the decide prompt names policy clauses instead.
           if (prompt.includes("You extract structured fields")) {
             calls.extract++
-            return Effect.succeed([{ type: "text" as const, text: JSON.stringify(EXTRACTED) }])
+            return Effect.succeed([{ type: "text" as const, text: JSON.stringify(EXTRACTED) }, ...reported])
           }
           calls.decide++
           if (options.failDecide) {
@@ -112,7 +126,7 @@ const countingModel = (options: {
               }],
               rationale: "Boven de grens van EUR 5.000."
             })
-          }])
+          }, ...reported])
         }),
       streamText: () => Stream.die(new Error("not used"))
     })
@@ -219,6 +233,7 @@ beforeEach(async () => {
          * that way. Same for `rules`, which no other test arms.
          */
         yield* sql`delete from events where organization_id = ${ORG}`
+        yield* sql`delete from usage_records where organization_id = ${ORG}`
         yield* sql`delete from rules where organization_id = ${ORG}`
         yield* sql`delete from source_documents where organization_id = ${ORG}`
         for (
@@ -296,6 +311,30 @@ describe("the decide pipeline", () => {
     expect(again.replayed).toBe(true)
     // Not one model call of any kind: the short circuit is earlier than any memo could be.
     expect(model.calls).toEqual(afterFirst)
+  })
+
+  it("meters the decision once and the model calls each time, in the same runs", async () => {
+    /*
+     * The two meter kinds, through the real pipeline. The decision is a billable unit, written in the claim's
+     * transaction and keyed on the decide key, so a second run of the same document cannot bill it again. The
+     * tokens are cost: two model calls (extract + decide) at 100 in / 20 out each.
+     */
+    await run(countingModel({ failDecide: false, chunkId }).layer, DecideDocument(payload))
+    await run(countingModel({ failDecide: false, chunkId }).layer, DecideDocument(payload))
+
+    const rows = await asAdmin(
+      Effect.flatMap(SqlClient.SqlClient, (sql) =>
+        sql<{ meter: string; model: string | null; total: number }>`
+          select meter, model, sum(quantity)::int as total from usage_records
+           where organization_id = ${ORG} group by meter, model order by meter
+        `)
+    )
+    expect(rows).toEqual([
+      { meter: "decisions.completed", model: null, total: 1 },
+      // The second run short-circuited before any model call, so it added no cost either.
+      { meter: "model.input_tokens", model: "counting-model", total: 200 },
+      { meter: "model.output_tokens", model: "counting-model", total: 40 }
+    ])
   })
 
   it("makes no model call on a redelivery, which is what the short circuit is for", async () => {

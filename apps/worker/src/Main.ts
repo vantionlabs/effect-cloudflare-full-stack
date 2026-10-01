@@ -41,7 +41,8 @@ import {
   RoomHttp,
   RoomRpcLive,
   RPC_V1_PATH,
-  RpcV1
+  RpcV1,
+  UsageHttp
 } from "@ea/api/v1"
 import { HealthHttp } from "@ea/api/v1"
 import { IdentityResolverLive, SessionHttp, SessionRpcLive, SessionStore } from "@ea/better-auth/Session"
@@ -278,7 +279,8 @@ const HttpEdges = Layer.mergeAll(
   DecisionHttp,
   RoomHttp,
   MessageHttp,
-  AskHttp
+  AskHttp,
+  UsageHttp
 )
 
 /** Every v1 RPC edge. The agent brings its own language model, locally — see AskRpcLive.ts. */

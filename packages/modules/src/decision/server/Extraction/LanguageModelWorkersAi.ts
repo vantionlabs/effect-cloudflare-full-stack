@@ -220,7 +220,13 @@ const bodyFor = (
 
 /** Turns the decoded completion into the text parts `generateObject` and `generateText` both expect. */
 const toParts = (
-  completion: typeof ChatCompletion.Type
+  completion: typeof ChatCompletion.Type,
+  /**
+   * The model this adapter CALLED, reported as `response-metadata`. Usage metering labels token counts by it,
+   * and a token count without a model is not a cost: a 70B call and a small one differ by an order of magnitude.
+   * The adapter is the only place that knows it — the response body does not echo it back.
+   */
+  modelId: string
 ): Effect.Effect<Array<Response.PartEncoded>, AiError.AiError> => {
   const choice = completion.choices[0]
   if (choice === undefined) return Effect.fail(fail("Workers AI returned no choices"))
@@ -242,7 +248,10 @@ const toParts = (
   if (choice.message.content === null || choice.message.content === "") {
     return Effect.fail(fail("Workers AI returned an empty message"))
   }
-  const parts: Array<Response.PartEncoded> = [{ type: "text", text: choice.message.content }]
+  const parts: Array<Response.PartEncoded> = [
+    { type: "response-metadata", modelId },
+    { type: "text", text: choice.message.content }
+  ]
   if (completion.usage !== undefined) {
     parts.push({
       type: "finish",
@@ -365,7 +374,7 @@ export const LanguageModelWorkersAiRest: Layer.Layer<LanguageModel.LanguageModel
             )
           }
 
-          return yield* toParts(yield* decode(raw, response.status))
+          return yield* toParts(yield* decode(raw, response.status), config.model)
         }).pipe(
           /*
            * Three attempts, exponential from 500ms, and ONLY for a transient status.
@@ -437,7 +446,7 @@ export const LanguageModelWorkersAiBinding = (
             catch: (cause) => fail(`env.AI.run failed: ${String(cause)}`)
           })
           // The binding returns the completion unwrapped, without the REST `{ success, result }` envelope.
-          return yield* toParts(yield* decode(raw, 200))
+          return yield* toParts(yield* decode(raw, 200), model)
         }),
       streamText: () =>
         Effect.fail(fail("streaming is not implemented for Workers AI in this codebase", "streamText"))

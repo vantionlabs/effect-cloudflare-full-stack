@@ -17,6 +17,7 @@
  * consulted here. Keeping the checks separate from their consequences is what lets `CheckRule` ask
  * "if the model proposed auto-approve for everything, what would still stop it?"
  */
+import { type ModelUsage, modelUsageOf } from "@ea/modules/shared/domain/Usage"
 import { Effect, type Schema } from "effect"
 import { LanguageModel } from "effect/ai"
 import type { AiError } from "effect/ai"
@@ -85,6 +86,8 @@ export interface ExtractionResult<A> {
   readonly arithmetic: ArithmeticReport
   /** True only when both model-free checks passed. Rail 2 reads this, not the individual reports. */
   readonly checksPassed: boolean
+  /** What the model call cost, for metering. Undefined when the model did not report it (the scripted one). */
+  readonly modelUsage: ModelUsage | undefined
 }
 
 export interface ExtractOptions<S extends VerticalSchema> {
@@ -124,6 +127,7 @@ export const ExtractDocument = <S extends VerticalSchema>(
       data,
       verification,
       arithmetic,
-      checksPassed: verification.unverified.length === 0 && arithmeticOk(arithmetic)
+      checksPassed: verification.unverified.length === 0 && arithmeticOk(arithmetic),
+      modelUsage: modelUsageOf(response)
     }
   })
