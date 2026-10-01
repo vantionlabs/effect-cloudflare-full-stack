@@ -18,7 +18,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input"
 import { useHydrated } from "@/hooks/use-hydrated"
 import { useSchemaForm } from "@/hooks/use-schema-form"
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
 
@@ -196,6 +196,11 @@ function LoginPage() {
               </form.Subscribe>
             </FieldGroup>
           </form>
+          <div className="text-muted-foreground mt-4 flex justify-between text-sm">
+            <Link to="/forgot-password" className="hover:underline">Forgot password?</Link>
+            {/* `next` carried through, so an invitee who signs up instead still lands on the invitation. */}
+            <Link to="/sign-up" search={{ next }} className="hover:underline">Create an account</Link>
+          </div>
         </CardContent>
       </Card>
     </main>

@@ -217,6 +217,12 @@ export const makeAuth = (config: AuthConfig): AuthInstance => {
     emailAndPassword: {
       enabled: true,
       /*
+       * **Off by default in better-auth 1.7.6** (`api/routes/password.mjs` only deletes sessions when this is
+       * set), which means a reset left every existing session alive. A reset is often the response to a
+       * suspected compromise, and one that does not sign the intruder out does not answer it.
+       */
+      revokeSessionsOnPasswordReset: true,
+      /*
        * **Without this, password reset does not exist** — better-auth 1.7.6 answers `400 RESET_PASSWORD_DISABLED`
        * (read in `dist/api/routes/password.mjs`, not assumed; an earlier draft of this comment claimed it
        * answered 200 and silently did nothing, which was wrong). So the user-visible gain from defining the
