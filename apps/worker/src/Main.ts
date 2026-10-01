@@ -30,6 +30,7 @@ import {
   AskHttp,
   AskRpcLive,
   AssistantRpcLive,
+  DataRpcLive,
   DecisionHttp,
   DecisionRpcLive,
   IdentityHttp,
@@ -303,7 +304,8 @@ const RpcEdges = Layer.mergeAll(
   AskRpcLive,
   AssistantRpcLive,
   UsageRpcLive,
-  SalesRpcLive
+  SalesRpcLive,
+  DataRpcLive
 )
 
 /** The HTTP and RPC surfaces, over the shared services. */

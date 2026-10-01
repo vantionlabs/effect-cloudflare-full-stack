@@ -12,7 +12,7 @@ cash), the product models it.
 | 2 | Editing data by asking                                          | proposals a person approves before anything is written        |
 | 4 | Work-in-progress and cash-flow planning                         | quotes and their outcomes, as the source of pipeline and cash |
 
-**Order now: 3 (on demand), then 2, then 4.** Sales comes first because it creates the business data the other three
+**Order now: 2, then 4.** Sales comes first because it creates the business data the other three
 operate on.
 
 **The rule all of them share: the model proposes, code computes, a person approves.** A model never sets a price,
@@ -28,10 +28,11 @@ shape the decide pipeline enforces with rails.
 - [x] Console `/ask`, server-rendered through Effect Atom hydration, ask and upload over RPC.
 - [x] Citations naming the document and section, taken from retrieval rather than the model.
 
-## #3 — started
+## #3 — done
 
 - [x] Weekly figures by email every Monday to owners and admins, once per week.
-- [ ] Data on demand: questions answered over the product's own data, with the same grounding rules.
+- [x] Data on demand (`/insights`): read-only, tenant-scoped tools — never text-to-SQL — and an answer shown only
+      when every figure in it is traceable to what the tools returned; the data itself is always shown beneath.
 
 ## #1 — done
 
