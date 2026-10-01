@@ -118,6 +118,29 @@ response bodies", merged 2026-09-25.)
 — neither is published at `4.0.0-rc.118`, and both target stores this project rejected (D1 per ADR-0002,
 DO-SQLite by extension).
 
+### Effect 4.0.0 (stable): what changed since rc.118
+
+**Checked 2026-10-01** against the `## 4.0.0` section of `repos/effect/packages/effect/CHANGELOG.md`
+(tag `effect@4.0.0`, commit 67ba4e46). Effect 4.0 shipped 2026-09-30, and npm `latest` is `4.0.0` for
+`effect`, `@effect/sql-pg`, `@effect/atom-react`, `@effect/ai-openai-compat` and `@effect/vitest`. The export
+map is the same 28 paths as rc.118, and no module moved or was renamed.
+
+The changes that could break a caller, and where each one lands here:
+
+| Change in 4.0.0                                                                                | This repo                                                                                                         |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `Schema.brand` takes ONE identifier, and a brand is type-only (no longer kept in the AST)      | every brand is `Schema.String.pipe(Schema.brand("XId"))` or `Schema.Int` likewise; none is read back from the AST |
+| `partition` / `separate` / `Option.partitionMap` return `[successes, failures]`, swapped       | not called anywhere                                                                                               |
+| `Queue.State.takers` holds `Queue.Taker` entries; `takeN` waits for its whole batch            | `AskCorpus` only offers to and ends a queue                                                                       |
+| `RpcMessage.ExitEncoded` interrupt `fiberId` may be `null`                                     | nothing reads encoded exits                                                                                       |
+| `TestSchema.verifyLosslessTransformation` renamed to `verifyRoundTrip`, module marked unstable | not used                                                                                                          |
+| Server WebSockets close with 1000 / 1001 / 1011                                                | the room socket is the push-only one from ADR-0020, so Effect's server socket is not used                         |
+| Fixes: `Atom.family` stale finalizer, lost `Atom.fn` results, `Effect.race` losers interrupted | the console uses `Atom.family` (`knowledge-atoms.ts`), so it gets the fix without a change                        |
+
+The upgrade needed **no source change**: `tsc`, oxlint and the unit and worker suites pass unchanged. The
+`RpcServer.layerProtocolWebsocket` / `makeProtocolWithHttpEffectWebsocket` reading below (rc.118) still holds
+at 4.0.0.
+
 ---
 
 ## Cloudflare
