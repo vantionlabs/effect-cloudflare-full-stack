@@ -5,16 +5,16 @@ import type { UsageDay } from "../usage-figures.ts"
 
 export function DailyUsage(props: { readonly days: ReadonlyArray<UsageDay> }) {
   return (
-    <PageSection id="daily" title="By day">
+    <PageSection id="daily" title="Per dag">
       <DataTable<UsageDay>
-        caption="Usage by day"
+        caption="Verbruik per dag"
         rows={props.days}
         rowKey={(row) => row.day}
-        empty="Nothing recorded this period."
+        empty="Deze periode is er nog niets geregistreerd. Zodra er een document binnenkomt, verschijnt het hier."
         columns={[
-          { key: "day", header: "Day", cell: (row) => formatDay(row.day) },
-          { key: "documents", header: "Documents", align: "right", cell: (row) => formatCount(row.documents) },
-          { key: "decisions", header: "Decisions", align: "right", cell: (row) => formatCount(row.decisions) },
+          { key: "day", header: "Dag", cell: (row) => formatDay(row.day) },
+          { key: "documents", header: "Documenten", align: "right", cell: (row) => formatCount(row.documents) },
+          { key: "decisions", header: "Beslissingen", align: "right", cell: (row) => formatCount(row.decisions) },
           { key: "tokens", header: "Tokens", align: "right", cell: (row) => formatCount(row.tokens) }
         ]}
       />

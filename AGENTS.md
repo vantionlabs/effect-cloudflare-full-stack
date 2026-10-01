@@ -168,8 +168,29 @@ things to know before adding more:
 - `@beautifui/sidebar-nav` imports `@central-icons-react`, a **paid** icon set, and hardcodes a demo workspace.
   `components/layout/app-sidebar.tsx` is our own, with lucide.
 
-`foundation.css` carries one LOCAL PATCH (an orphaned `}` from the registry that broke the build); re-check it after
-any `--overwrite`.
+`foundation.css` carries two LOCAL PATCHes (an orphaned `}` that broke the build, and a global `:focus-visible`
+radius that squared off focused pills); re-check both after any `--overwrite`. `shadcn add` prompts before
+overwriting it — answer no (`yes n | bunx shadcn add …`). Vendored components we changed carry `LOCAL CHANGE`
+comments, and their optional props were widened with `| undefined` for `exactOptionalPropertyTypes`. The MIT notice
+is `components/BEAUTIFUL-UI-LICENSE`; keep it.
+
+**Their components ship demo data and timers — strip them before use.** The rule: the console never shows invented
+content or invented steps. Delete module-level demo constants and make the prop required; delete any
+`setTimeout`/`setInterval` that advances a state the server did not report; never let a default label carry a
+number or a claim.
+
+**Interface copy is Dutch** (`apps/console/PRODUCT.md`). Money and dates come from `lib/format` (nl-NL); every label,
+button, empty state and error sentence is written in Dutch. AI answers follow the language of the question.
+
+**Loading:** server-rendered pages arrive with their data. Anything the BROWSER fetches afterwards shows a skeleton
+from `components/feedback/skeleton` shaped like the content — never "Loading…" text and never a spinner in content.
+
+**Motion** lives in `lib/motion` (`enter`, `popIn`, `superseded`), `components/motion` (`Collapsible`,
+`RollingDigits`) and `hooks/use-stick-to-bottom`, taken from Beautiful UI's site: CSS keyframes, two curves, no
+library. Motion conveys state (arrived, stale, opened); it never decorates a page at rest, and it starts from a
+visible default so SSR content is never hidden waiting for JavaScript.
+
+**Theme:** `lib/theme` — a head script sets `.dark` before first paint; the choice lives on the account page.
 
 ## What stays in `apps/worker`
 

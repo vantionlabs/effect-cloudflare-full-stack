@@ -8,28 +8,41 @@
  * Live updates arrive by invalidation, not by appending: `realtime-bridge.tsx` invalidates this thread's key
  * when a `MessagePosted` frame names it, and the query re-reads. So the socket makes it timely and the database
  * remains the only source of what it contains.
+ *
+ * Two layouts. `fill` (a chat channel) takes the pane's height: the messages scroll on their own and stay pinned to
+ * the newest one while the reader is at the bottom (`useStickToBottom`), with the composer fixed beneath. `inline`
+ * (a decision's notes, inside the inspector) flows with the page. Messages that ARRIVE while the thread is open enter
+ * with `fade-up`; the ones it opened with do not.
  */
 import { Button } from "@/components/atoms/Button"
 import { Notice } from "@/components/feedback/notice"
+import { Skeleton } from "@/components/feedback/skeleton"
 import { Input } from "@/components/ui/input"
+import { useArrivals } from "@/hooks/use-arrivals"
 import { useHydrated } from "@/hooks/use-hydrated"
 import { useIdentity } from "@/hooks/use-session"
+import { useStickToBottom } from "@/hooks/use-stick-to-bottom"
 import { describeFailure } from "@/lib/failure"
+import { enter } from "@/lib/motion"
+import { cn } from "@/lib/utils"
+import type { Message } from "@ea/modules/chat/domain/Message"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { Exit } from "effect"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { decisionThreadAtom, markReadAtom, postMessageAtom, roomThreadAtom } from "./thread-atoms.ts"
 import { ThreadMessage } from "./thread-message.tsx"
 
 export function Thread({
   id,
   kind,
+  layout = "inline",
   title
 }: {
   readonly kind: "decision" | "room"
   readonly id: string
-  /** What to call the panel. The queue calls it NOTES; a channel uses MESSAGES. */
+  /** What to call the panel. The queue calls it "Notities"; a channel uses "Berichten". */
   readonly title: string
+  readonly layout?: "fill" | "inline"
 }) {
   const thread = useAtomValue(kind === "decision" ? decisionThreadAtom(id) : roomThreadAtom(id))
   const post = useAtomSet(postMessageAtom, { mode: "promiseExit" })
@@ -87,31 +100,33 @@ export function Thread({
        * is closed, un-archive it or post elsewhere — and it is the reason that error is typed at all.
        */
       setRejected(describeFailure(exit, {
-        RoomArchived: "This channel is archived, so the message was not sent."
+        RoomArchived: "Dit kanaal is gearchiveerd, dus het bericht is niet verstuurd."
       }))
     }
     setSending(false)
   }, [draft, post, room, sending])
 
+  const fill = layout === "fill"
   return (
-    <section className="flex flex-col gap-3 border-t border-line pt-4">
-      <h3 className="text-[12px] font-semibold tracking-wide text-ink-2 uppercase">
-        {title} · {messages.length}
+    <section
+      className={cn(
+        "flex flex-col gap-3",
+        fill ? "min-h-0 flex-1" : "border-t border-line pt-4"
+      )}
+    >
+      <h3 className="text-[13px] font-semibold text-ink">
+        {title} <span className="font-normal text-ink-3">· {messages.length}</span>
       </h3>
 
-      {messages.length === 0
-        ? <p className="text-[13px] text-ink-3">Nothing here yet.</p>
-        : (
-          <ol className="flex flex-col gap-4">
-            {messages.map((message) => <ThreadMessage key={message.id} message={message} viewerId={identity.id} />)}
-          </ol>
-        )}
+      {thread._tag === "Initial"
+        ? <ThreadSkeleton />
+        : <MessageList messages={messages} viewerId={identity.id} fill={fill} />}
 
       {rejected === undefined ? null : <Notice tone="error">{rejected}</Notice>}
 
       <form
         /*
-         * `method="post"` and a disabled control while sending, for the reasons in `login.tsx`: before hydration
+         * `method="post"` and a disabled control while sending, for the reasons in `login-page.tsx`: before hydration
          * the browser owns this form, and a GET submission would put the message in the URL.
          */
         method="post"
@@ -124,8 +139,8 @@ export function Thread({
         <Input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Write a message"
-          aria-label="Write a message"
+          placeholder="Schrijf een bericht"
+          aria-label="Schrijf een bericht"
           disabled={!hydrated}
           /*
            * `j`/`k`/`a`/`r` are document-level shortcuts; the handler ignores events from inputs, so typing "a"
@@ -139,9 +154,73 @@ export function Thread({
           className="h-8"
           disabled={!hydrated || draft.trim() === "" || sending}
         >
-          {sending ? "Sending…" : "Send"}
+          {sending ? "Versturen…" : "Versturen"}
         </Button>
       </form>
     </section>
+  )
+}
+
+function MessageList(props: {
+  readonly messages: ReadonlyArray<Message>
+  readonly viewerId: string
+  readonly fill: boolean
+}) {
+  const scroller = useRef<HTMLDivElement>(null)
+  useStickToBottom(scroller)
+  const arrived = useArrivals(props.messages, (message) => message.id)
+
+  /*
+   * The scroller and its first child are ALWAYS rendered, empty or not: `useStickToBottom` attaches to them once, on
+   * mount, so a channel that starts empty must already have them for its first message to stay in view.
+   */
+  return (
+    <div ref={scroller} className={cn(props.fill && "min-h-0 flex-1 overflow-y-auto pr-1")}>
+      <div>
+        {props.messages.length === 0
+          ? (
+            <p className="text-[13px] text-ink-3">
+              Nog geen berichten. Schrijf hieronder het eerste; iedereen in je organisatie kan het lezen.
+            </p>
+          )
+          : (
+            <ol className="flex flex-col">
+              {props.messages.map((message, index) => {
+                const slot = arrived.get(message.id)
+                return (
+                  <ThreadMessage
+                    key={message.id}
+                    message={message}
+                    viewerId={props.viewerId}
+                    continued={continues(props.messages[index - 1], message)}
+                    style={slot === undefined ? undefined : enter(slot, { ms: 300 })}
+                  />
+                )
+              })}
+            </ol>
+          )}
+      </div>
+    </div>
+  )
+}
+
+/** Within five minutes of each other, a person's messages read as one turn: the name and time are shown once. */
+const GROUP_MS = 5 * 60_000
+const continues = (previous: Message | undefined, message: Message): boolean =>
+  previous !== undefined &&
+  previous.authorUserId === message.authorUserId &&
+  Date.parse(message.createdAt) - Date.parse(previous.createdAt) < GROUP_MS
+
+/** The thread's shape while its messages load in the browser. */
+function ThreadSkeleton() {
+  return (
+    <div role="status" aria-label="Berichten laden" className="flex flex-col gap-4">
+      {[0, 1, 2].map((row) => (
+        <div key={row} className="flex flex-col gap-1.5">
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className={row === 1 ? "h-3.5 w-3/4" : "h-3.5 w-1/2"} />
+        </div>
+      ))}
+    </div>
   )
 }

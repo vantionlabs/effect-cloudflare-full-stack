@@ -19,6 +19,7 @@
  * construction. The server branch absolutises internally, where the fake host is never resolved because a
  * service binding ignores it.
  */
+import { apiKeyClient } from "@better-auth/api-key/client"
 import { createIsomorphicFn } from "@tanstack/react-start"
 import { organizationClient } from "better-auth/client/plugins"
 import { createAuthClient } from "better-auth/react"
@@ -76,5 +77,12 @@ export const authClient = createAuthClient({
    * `resolveIdentity` refuses a session that cannot name a tenant, "signed in with no active org" is a
    * state that 401s on everything. The server declares `organization()`; this is the other end of it.
    */
-  plugins: [organizationClient()]
+  plugins: [
+    organizationClient(),
+    /*
+     * The client half of the server's `apiKey` plugin, for Settings → API-sleutels: list, create (the key is returned
+     * once), delete. Same version as the server's plugin, so the typed methods match its endpoints.
+     */
+    apiKeyClient()
+  ]
 })

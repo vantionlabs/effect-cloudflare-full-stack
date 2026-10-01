@@ -5,6 +5,7 @@
  * parser the price list uses) — never `Number(x) * 100`, which turns 0,29 into 28.999… and rounds a cent away.
  */
 import { Button } from "@/components/atoms/Button"
+import { Shimmer } from "@/components/atoms/Shimmer"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
@@ -36,13 +37,13 @@ export function ExpenseForm(props: {
   return (
     <form
       method="post"
-      aria-label="Add expense"
+      aria-label="Uitgave toevoegen"
       className="grid grid-cols-1 gap-3 rounded-card bg-surface p-4 shadow-card sm:grid-cols-[2fr_1fr_1fr_1fr_auto] sm:items-end"
       onSubmit={async (event) => {
         event.preventDefault()
         setProblem(undefined)
         const cents = parseScaledInteger(amount.trim(), 2)
-        if (Result.isFailure(cents) || cents.success <= 0) return setProblem("Enter the amount like 1.250,00.")
+        if (Result.isFailure(cents) || cents.success <= 0) return setProblem("Vul het bedrag in zoals 1.250,00.")
         setBusy(true)
         const added = await props.onAdd({ description, amountCents: cents.success, startsOn, repeat })
         setBusy(false)
@@ -53,19 +54,19 @@ export function ExpenseForm(props: {
       }}
     >
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="expense-description">Description</Label>
+        <Label htmlFor="expense-description">Omschrijving</Label>
         <Input
           id="expense-description"
           value={description}
           maxLength={200}
           required
           disabled={!hydrated}
-          placeholder="Rent, payroll, supplier…"
+          placeholder="Huur, salarissen, leverancier…"
           onChange={(event) => setDescription(event.target.value)}
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="expense-amount">Amount (€)</Label>
+        <Label htmlFor="expense-amount">Bedrag (€)</Label>
         <Input
           id="expense-amount"
           inputMode="decimal"
@@ -77,7 +78,7 @@ export function ExpenseForm(props: {
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="expense-date">First payment</Label>
+        <Label htmlFor="expense-date">Eerste betaling</Label>
         <Input
           id="expense-date"
           type="date"
@@ -88,19 +89,19 @@ export function ExpenseForm(props: {
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="expense-repeat">Repeats</Label>
+        <Label htmlFor="expense-repeat">Herhaling</Label>
         <NativeSelect
           id="expense-repeat"
           value={repeat}
           disabled={!hydrated}
           onChange={(event) => setRepeat(event.target.value === "monthly" ? "monthly" : "once")}
         >
-          <NativeSelectOption value="once">Once</NativeSelectOption>
-          <NativeSelectOption value="monthly">Monthly</NativeSelectOption>
+          <NativeSelectOption value="once">Eenmalig</NativeSelectOption>
+          <NativeSelectOption value="monthly">Maandelijks</NativeSelectOption>
         </NativeSelect>
       </div>
       <Button type="submit" variant="primary" disabled={!hydrated || busy}>
-        {busy ? "Adding…" : "Add expense"}
+        {busy ? <Shimmer>Toevoegen…</Shimmer> : "Uitgave toevoegen"}
       </Button>
       {problem === undefined ? null : <p role="alert" className="text-[13px] text-red sm:col-span-5">{problem}</p>}
     </form>

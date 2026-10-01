@@ -19,8 +19,8 @@ export function ValuePill({
   className = ""
 }: {
   children: React.ReactNode
-  tone?: Tone
-  className?: string
+  tone?: Tone | undefined
+  className?: string | undefined
 }) {
   const t = TONES[tone]
   return (

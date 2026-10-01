@@ -40,10 +40,12 @@ export const SetCustomerTerms = (email: string, termsDays: number | null) =>
     const key = customerKey(email)
     // A shape check, not validation of deliverability: the point is to refuse a name typed into the email box.
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(key)) {
-      return yield* new InvalidTerms({ reason: `"${email}" is not an email address` })
+      return yield* new InvalidTerms({ reason: `"${email}" is geen e-mailadres` })
     }
     if (termsDays !== null && (!Number.isInteger(termsDays) || termsDays < 0 || termsDays > MAX_TERMS_DAYS)) {
-      return yield* new InvalidTerms({ reason: `terms must be a whole number of days from 0 to ${MAX_TERMS_DAYS}` })
+      return yield* new InvalidTerms({
+        reason: `de betalingstermijn moet een heel aantal dagen zijn, van 0 tot ${MAX_TERMS_DAYS}`
+      })
     }
     const db = yield* Db
     const user = yield* CurrentUser

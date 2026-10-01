@@ -1,31 +1,40 @@
-/** The question box. Disabled until hydration: before that, a submit would be the browser's own (see `login.tsx`). */
+/** The question box. Disabled until hydration: before that, a submit would be the browser's own (see `login-page.tsx`). */
 import { Button } from "@/components/atoms/Button"
 import { Input } from "@/components/ui/input"
 import { useHydrated } from "@/hooks/use-hydrated"
-import { useState } from "react"
 
-export function QuestionForm(props: { readonly asking: boolean; readonly onAsk: (question: string) => void }) {
+export function QuestionForm(props: {
+  readonly question: string
+  readonly onQuestionChange: (question: string) => void
+  readonly asking: boolean
+  readonly onAsk: (question: string) => void
+}) {
   const hydrated = useHydrated()
-  const [question, setQuestion] = useState("")
   return (
     <form
       method="post"
-      className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card sm:flex-row"
+      className="flex flex-col gap-3 rounded-card bg-surface p-3 shadow-card sm:flex-row"
       onSubmit={(event) => {
         event.preventDefault()
-        if (question.trim() !== "") props.onAsk(question)
+        if (props.question.trim() !== "") props.onAsk(props.question)
       }}
     >
       <Input
-        aria-label="Question"
-        placeholder="E.g. how many quotes did we send this month, and for how much?"
-        value={question}
+        aria-label="Vraag"
+        placeholder="Bijv. hoeveel offertes hebben we deze maand verstuurd, en voor welk bedrag?"
+        value={props.question}
         maxLength={1000}
         disabled={!hydrated}
-        onChange={(event) => setQuestion(event.target.value)}
+        onChange={(event) => props.onQuestionChange(event.target.value)}
+        className="h-9"
       />
-      <Button variant="primary" type="submit" disabled={!hydrated || props.asking || question.trim() === ""}>
-        {props.asking ? "Looking it up…" : "Ask"}
+      <Button
+        variant="primary"
+        type="submit"
+        className="shrink-0"
+        disabled={!hydrated || props.asking || props.question.trim() === ""}
+      >
+        {props.asking ? "Bezig…" : "Vraag stellen"}
       </Button>
     </form>
   )

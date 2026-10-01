@@ -1,6 +1,9 @@
 /**
  * Planning: work in progress, invoices, expenses, and the cash expected in and out over the next twelve weeks.
  *
+ * While an action's refresh is in flight the figures stay on screen, dimmed (`superseded`) — they are about to be
+ * replaced, and a page that blanked out on every click would read as broken.
+ *
  * Every figure is computed in code from jobs, invoices and expenses (`reporting/domain/Planning`); nothing here is a
  * model's estimate. The assumptions the forecast rests on — default payment terms, customers with their own terms,
  * how long an open job takes — are stated on the page, and so is its limit: the running net is the change from today,
@@ -9,9 +12,11 @@
  * Server-rendered through Effect Atom hydration; each action is an RPC mutation that refreshes the forecast too.
  */
 import { Notice } from "@/components/feedback/notice"
+import { SkeletonStats, SkeletonTable } from "@/components/feedback/skeleton"
 import { Page, PageHeader, PageSection } from "@/components/layout/page"
 import { describeFailure } from "@/lib/failure"
 import { plural } from "@/lib/format"
+import { superseded } from "@/lib/motion"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { Exit } from "effect"
 import { useState } from "react"
@@ -59,14 +64,20 @@ export function PlanningPage() {
 
   if (planning._tag !== "Success") {
     return (
-      <Page>
+      <Page width="wide">
         <PageHeader title="Planning" />
         {planning._tag === "Failure"
-          ? <Notice tone="error">Planning could not be loaded.</Notice>
-          : <p role="status" className="text-sm text-ink-2">Loading…</p>}
+          ? <Notice tone="error">De planning kon niet worden geladen.</Notice>
+          : (
+            <>
+              <SkeletonStats count={5} label="Overzicht wordt geladen" />
+              <SkeletonTable rows={6} columns={6} label="Prognose wordt geladen" />
+            </>
+          )}
       </Page>
     )
   }
+  const refreshing = planning.waiting
   const plan = planning.value
   const { assumptions } = plan
 
@@ -76,33 +87,38 @@ export function PlanningPage() {
         title="Planning"
         description={
           <>
-            Work in progress, and the cash expected in and out. Assumes {assumptions.paymentTermsDays}-day payment terms
+            Onderhanden werk en het geld dat de komende weken binnenkomt en uitgaat. Uitgangspunten: een
+            betalingstermijn van {assumptions.paymentTermsDays} dagen
             {assumptions.customersWithOwnTerms > 0
-              ? ` (${plural(assumptions.customersWithOwnTerms, "customer has", "customers have")} their own)`
-              : ""} and open jobs finishing {assumptions.openJobDays} days after acceptance.
+              ? ` (${plural(assumptions.customersWithOwnTerms, "klant heeft", "klanten hebben")} een eigen termijn)`
+              : ""}, en een lopende opdracht is {assumptions.openJobDays} dagen na akkoord klaar.
           </>
         }
       />
 
-      <PlanningSummary plan={plan} />
-
-      {note === undefined ? null : <Notice tone="error">{note}</Notice>}
-
-      <CashForecast plan={plan} />
+      <div className="flex flex-col gap-8" style={superseded(refreshing)} aria-busy={refreshing}>
+        <PlanningSummary plan={plan} />
+        {note === undefined ? null : <Notice tone="error">{note}</Notice>}
+        <CashForecast plan={plan} />
+      </div>
 
       <PageSection
         id="expenses"
-        title="Expenses"
-        description="Payments going out, once or every month. The forecast counts each on its payment day."
+        title="Uitgaven"
+        description="Betalingen die eenmalig of elke maand de deur uit gaan. De prognose telt ze op hun betaaldag."
       >
         <ExpenseForm
           today={plan.today}
           onAdd={(expense) => act(addExpense({ payload: expense, reactivityKeys: EXPENSE_REFRESH }))}
         />
-        <ExpenseList
-          expenses={expenses._tag === "Success" ? expenses.value : []}
-          onStop={(expenseId) => void act(stopExpense({ payload: { expenseId }, reactivityKeys: EXPENSE_REFRESH }))}
-        />
+        {expenses._tag === "Initial"
+          ? <SkeletonTable rows={2} columns={3} label="Uitgaven worden geladen" />
+          : (
+            <ExpenseList
+              expenses={expenses._tag === "Success" ? expenses.value : []}
+              onStop={(expenseId) => void act(stopExpense({ payload: { expenseId }, reactivityKeys: EXPENSE_REFRESH }))}
+            />
+          )}
       </PageSection>
 
       <JobList

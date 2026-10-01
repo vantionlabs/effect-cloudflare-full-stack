@@ -10,15 +10,15 @@ test("a question about the data is answered from the data, and the data is shown
   await createAccount(page.request, baseURL ?? "")
 
   await page.goto("/insights")
-  const question = page.getByLabel("Question")
+  const question = page.getByLabel("Vraag")
   await expect(question).toBeEnabled()
   await question.fill("How many quotes were created this month, and how many were sent?")
-  await page.getByRole("button", { name: "Ask" }).click()
+  await page.getByRole("button", { name: "Vraag stellen" }).click()
 
   await expect(page.getByTestId("data-lookup").first()).toBeVisible({ timeout: 60_000 })
   // Either outcome is legitimate; an error is not.
-  await expect(page.getByTestId("data-answer").or(page.getByText("No answer given"))).toBeVisible()
-  await expect(page.getByText("could not be answered")).toBeHidden()
+  await expect(page.getByTestId("data-answer").or(page.getByText("Geen antwoord gegeven"))).toBeVisible()
+  await expect(page.getByText("kon niet worden beantwoord")).toBeHidden()
 })
 
 /*
@@ -30,13 +30,13 @@ test("a cash-flow question uses the planning figures and is answered or withheld
   test.setTimeout(120_000)
   await createAccount(page.request, baseURL ?? "")
   await page.goto("/insights")
-  const question = page.getByLabel("Question")
+  const question = page.getByLabel("Vraag")
   await expect(question).toBeEnabled()
   await question.fill("How much cash do we expect to come in over the next 4 weeks?")
-  await page.getByRole("button", { name: "Ask" }).click()
+  await page.getByRole("button", { name: "Vraag stellen" }).click()
   await expect(page.getByTestId("data-lookup").first()).toBeVisible({ timeout: 60_000 })
-  await expect(page.getByTestId("data-answer").or(page.getByText("No answer given"))).toBeVisible()
-  await expect(page.getByText("could not be answered")).toBeHidden()
+  await expect(page.getByTestId("data-answer").or(page.getByText("Geen antwoord gegeven"))).toBeVisible()
+  await expect(page.getByText("kon niet worden beantwoord")).toBeHidden()
 })
 
 /*
@@ -48,13 +48,13 @@ test("a question in Dutch is answered in Dutch", async ({ page, baseURL }) => {
   test.setTimeout(120_000)
   await createAccount(page.request, baseURL ?? "")
   await page.goto("/insights")
-  const question = page.getByLabel("Question")
+  const question = page.getByLabel("Vraag")
   await expect(question).toBeEnabled()
   await question.fill("Hoeveel offertes zijn er deze maand gemaakt, en hoeveel daarvan zijn verstuurd?")
-  await page.getByRole("button", { name: "Ask" }).click()
+  await page.getByRole("button", { name: "Vraag stellen" }).click()
   await expect(page.getByTestId("data-lookup").first()).toBeVisible({ timeout: 60_000 })
   const answer = page.getByTestId("data-answer")
-  await expect(answer.or(page.getByText("No answer given"))).toBeVisible()
+  await expect(answer.or(page.getByText("Geen antwoord gegeven"))).toBeVisible()
   if (await answer.isVisible()) {
     const text = (await answer.innerText()).toLowerCase()
     expect(text).toMatch(/\b(de|het|een|zijn|er|deze|maand|offertes)\b/)

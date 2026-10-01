@@ -179,7 +179,7 @@ describe("a quote, from request to customer", () => {
     expect(sent.status).toBe("sent")
     expect(email.sent).toHaveLength(1)
     expect(email.sent[0]!.to).toBe("piet@smit-transport.nl")
-    expect(email.sent[0]!.text).toContain("Total:")
+    expect(email.sent[0]!.text).toContain("Totaal:")
     expect(await failureTag(SendQuote(quote.id), { email: email.layer })).toBe("QuoteNotInState")
     expect(email.sent).toHaveLength(1)
   })

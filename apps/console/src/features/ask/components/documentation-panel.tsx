@@ -3,15 +3,19 @@
  *
  * Uploading is the `Intake.upload` RPC as a mutation — a thing the person DOES — with the file's bytes; indexing
  * then runs on the queue, so a new manual is searchable shortly rather than instantly, and the note says so.
+ *
+ * The list is server-rendered (the route's loader dehydrates it); a skeleton shows only if the browser has to fetch
+ * it itself, and a refresh after an upload keeps the current list on screen while the new one loads.
  */
 import { Notice } from "@/components/feedback/notice"
+import { SkeletonText } from "@/components/feedback/skeleton"
 import { Panel } from "@/components/layout/page"
 import { useHydrated } from "@/hooks/use-hydrated"
 import { describeFailure } from "@/lib/failure"
 import { formatDay } from "@/lib/format"
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react"
 import { Exit } from "effect"
-import { Upload } from "lucide-react"
+import { FileText, Upload } from "lucide-react"
 import { useState } from "react"
 import { knowledgeDocumentsAtom, uploadAtom } from "../api/knowledge-atoms.ts"
 
@@ -37,31 +41,40 @@ export function DocumentationPanel() {
     })
     setUploading(false)
     if (Exit.isSuccess(exit)) {
-      setUploadNote(`${file.name} uploaded. It becomes searchable once it has been indexed, usually within a minute.`)
+      setUploadNote(`${file.name} is geüpload. Het is doorzoekbaar zodra het is verwerkt, meestal binnen een minuut.`)
       refreshDocuments()
       return
     }
     setUploadNote(describeFailure(exit, {
-      UnsupportedDocument: `${file.name} is not a format that can be read. Try a PDF, Word document, or text file.`
+      UnsupportedDocument:
+        `${file.name} is geen bestandsformaat dat we kunnen lezen. Probeer een PDF, Word-document of tekstbestand.`
     }))
   }
 
   return (
     <Panel className="flex flex-col gap-3">
       {documents._tag === "Failure"
-        ? <Notice tone="error">The document list could not be loaded.</Notice>
+        ? <Notice tone="error">De lijst met documenten kon niet worden geladen.</Notice>
         : documents._tag === "Initial"
-        ? <p className="text-[13px] text-ink-2">Loading documentation…</p>
+        ? <SkeletonText lines={3} label="Documenten laden" />
         : documents.value.length === 0
-        ? <p className="text-[13px] text-ink-2">No documentation uploaded yet.</p>
+        ? (
+          <p className="text-[13px] text-ink-2">
+            Nog geen documentatie. Upload handleidingen, schema's of servicebulletins (PDF, Word of tekst); daarna kunt
+            u er hierboven vragen over stellen.
+          </p>
+        )
         : (
-          <ul className="flex flex-col text-[13px]" aria-label="Documents">
+          <ul className="flex flex-col text-[13px]" aria-label="Documenten">
             {documents.value.map((document) => (
               <li
                 key={document.documentId}
-                className="flex justify-between gap-4 border-b border-line-soft py-2 last:border-b-0"
+                className="flex items-center justify-between gap-4 border-b border-line-soft py-2 last:border-b-0"
               >
-                <span className="truncate text-ink">{document.filename}</span>
+                <span className="flex min-w-0 items-center gap-2">
+                  <FileText className="size-3.5 shrink-0 text-ink-3" aria-hidden />
+                  <span className="truncate text-ink">{document.filename}</span>
+                </span>
                 <span className="tabular shrink-0 text-ink-3">{formatDay(document.receivedAt)}</span>
               </li>
             ))}
@@ -69,8 +82,8 @@ export function DocumentationPanel() {
         )}
       <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-full bg-surface px-3 py-1.5 text-[13px] font-medium text-ink shadow-btn hover:bg-inset has-disabled:cursor-not-allowed has-disabled:opacity-50 has-focus-visible:ring-2 has-focus-visible:ring-accent">
         <Upload className="size-3.5" aria-hidden />
-        {uploading ? "Uploading…" : "Upload a document"}
-        <span className="sr-only">Upload documentation</span>
+        {uploading ? "Bezig met uploaden…" : "Document uploaden"}
+        <span className="sr-only">Documentatie uploaden</span>
         <input
           type="file"
           className="sr-only"

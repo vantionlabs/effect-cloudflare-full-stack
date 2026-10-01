@@ -85,7 +85,12 @@ export interface BetterAuthService {
    * caller-supplied, so it is a CLAIM: what makes it safe is that the membership is checked afterwards, and a
    * key naming an organization its user does not belong to resolves to nothing.
    */
-  readonly verifyApiKey: (key: string) => Effect.Effect<ApiKeyOwner | ApiKeyRateLimited | null>
+  /**
+   * `headers` are the incoming request's. With `ALLOWED_HOSTS` set, better-auth derives its base URL from the request,
+   * and a call without one threw "Invalid base URL: /" — which `orNull` turned into a 401 for EVERY key in every
+   * deployed environment, while the worker tests (no `ALLOWED_HOSTS`) passed.
+   */
+  readonly verifyApiKey: (key: string, headers: Headers) => Effect.Effect<ApiKeyOwner | ApiKeyRateLimited | null>
   /** Resolves the session from request headers, or `null` when there is none. */
   readonly session: (headers: Headers) => Effect.Effect<ResolvedSession | null>
   /**
@@ -188,9 +193,9 @@ export const acquireAuth = (
 
     return {
       handler: (request) => auth.handler(request),
-      verifyApiKey: (key) =>
+      verifyApiKey: (key, headers) =>
         Effect.map(
-          orNull(() => auth.api.verifyApiKey({ body: { key } })),
+          orNull(() => auth.api.verifyApiKey({ body: { key }, headers })),
           (result) => {
             const verified = result as {
               valid?: boolean

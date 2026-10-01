@@ -11,7 +11,7 @@
  */
 import { Cents, Milli, PerMille } from "@ea/modules/shared/domain/Money"
 import { Schema } from "effect"
-import { ProductId, Unit } from "../Product/Product.ts"
+import { ProductId, Unit, UNIT_LABEL } from "../Product/Product.ts"
 
 export const QuoteId = Schema.String.pipe(Schema.brand("QuoteId"))
 export type QuoteId = typeof QuoteId.Type
@@ -48,7 +48,10 @@ export class Quote extends Schema.Class<Quote>("Quote")({
   sentAt: Schema.NullOr(Schema.String)
 }) {}
 
-/** The quote as the customer receives it. Plain text, for the `Email` port; amounts formatted from integer cents. */
+/**
+ * The quote as the customer receives it, in Dutch — the customers are Dutch businesses (PRODUCT.md). Plain text, for
+ * the `Email` port; amounts formatted from integer cents.
+ */
 export const renderQuoteEmail = (
   organizationName: string,
   quote: Quote
@@ -57,24 +60,24 @@ export const renderQuoteEmail = (
     `€ ${(cents / 100).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const qty = (milli: number) => (milli / 1000).toLocaleString("nl-NL", { maximumFractionDigits: 3 })
   const lines = quote.lines.map((line) =>
-    `${qty(line.quantity)} ${line.unit} × ${line.description} (${line.sku}) à ${euro(line.unitPrice)} = ${
+    `${qty(line.quantity)} ${UNIT_LABEL[line.unit]} × ${line.description} (${line.sku}) à ${euro(line.unitPrice)} = ${
       euro(line.lineTotal)
     }`
   )
   return {
-    subject: `Quote from ${organizationName}`,
+    subject: `Offerte van ${organizationName}`,
     text: [
-      quote.customerName === null ? "Hello," : `Dear ${quote.customerName},`,
+      quote.customerName === null ? "Goedendag," : `Beste ${quote.customerName},`,
       "",
-      `Thank you for your request. Our quote:`,
+      `Dank voor uw aanvraag. Hierbij onze offerte:`,
       "",
       ...lines,
       "",
-      `Subtotal: ${euro(quote.subtotal)}`,
-      `VAT:      ${euro(quote.vatTotal)}`,
-      `Total:    ${euro(quote.total)}`,
+      `Subtotaal:  ${euro(quote.subtotal)}`,
+      `Btw:        ${euro(quote.vatTotal)}`,
+      `Totaal:     ${euro(quote.total)}`,
       "",
-      `Kind regards,`,
+      `Met vriendelijke groet,`,
       organizationName
     ].join("\n")
   }

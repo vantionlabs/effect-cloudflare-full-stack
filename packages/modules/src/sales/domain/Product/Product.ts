@@ -14,6 +14,15 @@ export type ProductId = typeof ProductId.Type
 export const Unit = Schema.Literals(["piece", "hour", "meter", "kilogram", "litre"])
 export type Unit = typeof Unit.Type
 
+/** How a person reads a unit, in Dutch. The stored values stay English: they are part of the API contract. */
+export const UNIT_LABEL: Readonly<Record<Unit, string>> = {
+  piece: "stuk",
+  hour: "uur",
+  meter: "meter",
+  kilogram: "kilogram",
+  litre: "liter"
+}
+
 /**
  * The VAT rates a product may carry, in per-mille: 0%, 9%, 21%. Enforced by the upsert and by a `check` constraint on
  * the column, so a rate outside this set cannot be stored however it arrives.

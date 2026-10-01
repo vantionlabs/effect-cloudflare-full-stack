@@ -31,23 +31,23 @@ test("an invitee with no account signs up from the link and lands in the inviter
   await expect(page).toHaveURL(new RegExp(`/login\\?next=${encodeURIComponent(`/accept-invitation/${invitation.id}`)}`))
 
   // No account yet: sign-up, which must carry `next` through rather than dropping the invitation.
-  await page.getByRole("link", { name: "Create an account" }).click()
-  await page.getByLabel("Name").fill("Invited Person")
-  await page.getByLabel("Email").fill(email)
-  await page.getByLabel("Password").fill("e2e-only-password")
-  await page.getByRole("button", { name: "Create account" }).click()
+  await page.getByRole("link", { name: "Account aanmaken" }).click()
+  await page.getByLabel("Naam").fill("Invited Person")
+  await page.getByLabel("E-mailadres").fill(email)
+  await page.getByLabel("Wachtwoord").fill("e2e-only-password")
+  await page.getByRole("button", { name: "Account aanmaken" }).click()
 
   await expect(page).toHaveURL(`/accept-invitation/${invitation.id}`)
-  await expect(page.getByText("invited you to")).toBeVisible()
+  await expect(page.getByText("heeft je uitgenodigd")).toBeVisible()
   /*
    * SERVER-rendered, not fetched after hydration: the raw HTML for this URL — no JavaScript run — already names
    * the inviter. The first version loaded it in a `useEffect`, and this assertion is what would catch a return to
    * that, because the HTML would then say "Loading invitation…".
    */
   const html = await (await page.request.get(`/accept-invitation/${invitation.id}`)).text()
-  expect(html).toContain("invited you to")
+  expect(html).toContain("heeft je uitgenodigd")
   expect(html).not.toContain("Loading invitation")
-  await page.getByRole("button", { name: "Accept" }).click()
+  await page.getByRole("button", { name: "Accepteren" }).click()
 
   await expect(page).toHaveURL("/")
   await expect(page.getByText(email)).toBeVisible()
@@ -86,7 +86,7 @@ test("somebody signed in as a different person is told the invitation is not the
   await expect(page.getByRole("alert")).toBeVisible()
   // The refusal is in the server's HTML too, decided before the page was sent.
   expect(await (await page.request.get(`/accept-invitation/${invitation.id}`)).text()).toContain("role=\"alert\"")
-  await expect(page.getByRole("button", { name: "Accept" })).toBeHidden()
+  await expect(page.getByRole("button", { name: "Accepteren" })).toBeHidden()
 })
 
 test("an invitation in a role the product does not know is refused when it is made", async ({ request, baseURL }) => {

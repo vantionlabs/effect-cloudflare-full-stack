@@ -30,21 +30,21 @@ test("signing in reaches the console and shows who you are", async ({ page, requ
   await signIn(page, account)
 
   await expect(page).toHaveURL("/")
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Uitloggen" })).toBeVisible()
   /*
    * A personal organization is created on session creation, so the tenant is set and the console renders
    * the queue rather than the "no active organization" dead end. If this assertion ever fails, the
    * `databaseHooks.session.create.after` hook stopped setting `activeOrganizationId` — and that is worth
    * catching here, because the symptom in production is a console that looks signed in and shows nothing.
    */
-  await expect(page.getByText("no active organization")).toBeHidden()
+  await expect(page.getByText("hoort nog bij geen organisatie")).toBeHidden()
 })
 
 test("signing out clears the session, not just the screen", async ({ page, request, baseURL }) => {
   const account = await createAccount(request, baseURL ?? "")
   await signIn(page, account)
 
-  await page.getByRole("button", { name: "Sign out" }).click()
+  await page.getByRole("button", { name: "Uitloggen" }).click()
   await expect(page).toHaveURL(/\/login/)
 
   /*
@@ -93,12 +93,13 @@ test("the page sent to the browser carries the session's data but not its token"
 
 test("credentials the server refuses are reported, on the page, in its own words", async ({ page }) => {
   await page.goto("/login?next=%2F")
-  await page.getByLabel("Email").fill("nobody@example.test")
-  await page.getByLabel("Password").fill("not-the-right-password")
-  await page.getByRole("button", { name: "Sign in" }).click()
+  await page.getByLabel("E-mailadres").fill("nobody@example.test")
+  await page.getByLabel("Wachtwoord").fill("not-the-right-password")
+  await page.getByRole("button", { name: "Inloggen" }).click()
 
   /*
-   * better-auth's message, not one of ours. The form deliberately carries no minimum-length or
+   * better-auth's refusal, not one of ours — shown in Dutch, mapped by its error code
+   * (`features/auth/api/auth-errors.ts`) so the distinction it makes survives the translation. The form deliberately carries no minimum-length or
    * emptiness rules — credential policy lives in the API's better-auth config, and a copy in the browser
    * would be a second place to change. So the message a user sees for a bad password necessarily comes
    * from the server, and this is the only tier that can check it arrives and gets rendered.
@@ -108,7 +109,7 @@ test("credentials the server refuses are reported, on the page, in its own words
    * exactly that for one run. A test whose assertion is satisfied by the page's furniture is worse than no
    * test, because it reports that something works.
    */
-  await expect(page.getByText("Invalid email or password")).toBeVisible()
+  await expect(page.getByText("Onjuist e-mailadres of wachtwoord.")).toBeVisible()
   await expect(page).toHaveURL("/login?next=%2F")
 })
 
@@ -127,14 +128,14 @@ test("with JavaScript off, the form cannot submit a password at all", async ({ b
   const page = await context.newPage()
   await page.goto("/login?next=%2F")
 
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeDisabled()
+  await expect(page.getByRole("button", { name: "Inloggen" })).toBeDisabled()
   /*
    * The fields too, not only the button. A controlled input re-renders from form state on hydration, so
    * anything typed before that is thrown away — which is how this was found: Playwright filled the form
    * faster than the bundle loaded, React hydrated, and the sign-in submitted nothing at all.
    */
-  await expect(page.getByLabel("Email")).toBeDisabled()
-  await expect(page.getByLabel("Password")).toBeDisabled()
+  await expect(page.getByLabel("E-mailadres")).toBeDisabled()
+  await expect(page.getByLabel("Wachtwoord")).toBeDisabled()
   await expect(page.locator("form")).toHaveAttribute("method", "post")
 
   await context.close()
@@ -147,15 +148,15 @@ test("with JavaScript off, the form cannot submit a password at all", async ({ b
  */
 test("creating an account moves into the console without reloading the page", async ({ page }) => {
   await page.goto("/sign-up")
-  await expect(page.getByRole("button", { name: "Create account" })).toBeEnabled()
+  await expect(page.getByRole("button", { name: "Account aanmaken" })).toBeEnabled()
   await page.evaluate(() => {
     ;(window as unknown as { __noReload?: boolean }).__noReload = true
   })
   const email = `e2e-spa-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`
-  await page.getByLabel("Name").fill("Spa Person")
-  await page.getByLabel("Email").fill(email)
-  await page.getByLabel("Password").fill("e2e-only-password")
-  await page.getByRole("button", { name: "Create account" }).click()
+  await page.getByLabel("Naam").fill("Spa Person")
+  await page.getByLabel("E-mailadres").fill(email)
+  await page.getByLabel("Wachtwoord").fill("e2e-only-password")
+  await page.getByRole("button", { name: "Account aanmaken" }).click()
 
   await expect(page).toHaveURL("/")
   await expect(page.getByText(email)).toBeVisible()

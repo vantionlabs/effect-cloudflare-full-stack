@@ -1,7 +1,5 @@
 "use client"
 
-import { useEffect, useState } from "react"
-
 /* ─────────────────────────────────────────────────────────
  * CONTEXT CARDS
  * Retrieved chunks enter once, then remain available.
@@ -21,51 +19,33 @@ export type ContextCardsLabels = {
   count: string
 }
 
+// LOCAL CHANGE (effect-ai): no default count — a number nobody computed is an invented claim. Callers pass both.
 const DEFAULT_LABELS: ContextCardsLabels = {
-  header: "All chunks",
-  count: "32"
+  header: "Bronnen",
+  count: ""
 }
 
-const CHUNKS: ContextChunk[] = [
-  {
-    title: "Vendor onboarding rule",
-    chars: "290 characters",
-    body: "Cold-chain certification must be verified before a new dairy can be added to the reorder workflow.",
-    source: "Dairy Onboarding SOP.pdf",
-    badge: "PDF",
-    tone: "bg-red"
-  },
-  {
-    title: "Seasonal demand row",
-    chars: "1,250 characters",
-    body: "Q4 velocity table: pistachio +18%, vanilla +6%, rocky road -11%; retire flavors below 40 scoops weekly.",
-    source: "Sales Velocity Export.csv",
-    badge: "CSV",
-    tone: "bg-green"
-  }
-]
+// LOCAL CHANGE (effect-ai): the registry's demo chunks are removed; `chunks` is required.
 
 export default function ContextCards({
-  chunks = CHUNKS,
+  chunks,
   labels,
   className
 }: {
   /** Accepted for gallery/registry parity; ContextCards has no visual variants. */
-  variant?: string
-  chunks?: ContextChunk[]
-  labels?: Partial<ContextCardsLabels>
-  className?: string
-} = {}) {
-  const [chipsShown, setChipsShown] = useState(false)
+  variant?: string | undefined
+  chunks: ContextChunk[]
+  labels?: Partial<ContextCardsLabels> | undefined
+  className?: string | undefined
+}) {
   const copy = { ...DEFAULT_LABELS, ...labels }
 
-  useEffect(() => {
-    const chips = setTimeout(() => setChipsShown(true), 700)
-    return () => clearTimeout(chips)
-  }, [])
-
+  /*
+   * LOCAL CHANGE (effect-ai): full width rather than `max-w-95`, so a passage reads at the page's measure; the source
+   * chips pop in by CSS animation delay rather than a 700ms `setTimeout` + state, so nothing waits on JavaScript.
+   */
   return (
-    <div className={`flex w-full max-w-95 flex-col gap-2${className ? ` ${className}` : ""}`}>
+    <div className={`flex w-full flex-col gap-2${className ? ` ${className}` : ""}`}>
       <div
         className="flex items-center gap-2 px-0.5"
         style={{ animation: "fade-in 400ms ease-out both" }}
@@ -107,14 +87,8 @@ export default function ContextCards({
           <div className="px-3 pb-3">
             <span
               className="inline-flex h-6 items-center gap-1.5 rounded-full bg-inset px-2
-                text-[12px] font-medium text-ink-2 shadow-btn
-                transition-[opacity,transform,background-color] duration-300 hover:bg-hover"
-              style={{
-                opacity: chipsShown ? 1 : 0,
-                transform: chipsShown ? "scale(1)" : "scale(0.95)",
-                transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)",
-                transitionDelay: `${i * 80}ms`
-              }}
+                text-[12px] font-medium text-ink-2 shadow-btn"
+              style={{ animation: `pop-in 250ms cubic-bezier(0.23,1,0.32,1) ${300 + i * 80}ms both` }}
             >
               <span
                 className={`flex size-3.5 items-center justify-center rounded-[4px] ${chunk.tone} text-[7px] font-bold text-white`}
@@ -122,18 +96,7 @@ export default function ContextCards({
                 {chunk.badge}
               </span>
               {chunk.source}
-              <svg
-                width="9"
-                height="9"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M7 17L17 7M7 7h10v10" />
-              </svg>
+              {/* LOCAL CHANGE (effect-ai): no "open" arrow — the chip names the source, it is not a link. */}
             </span>
           </div>
         </div>

@@ -5,12 +5,17 @@
 import type { FailureMessages } from "@/lib/failure"
 
 export const SALES_FAILURES: FailureMessages = {
-  QuoteNotInState: "Someone else already changed this quote. The list has been refreshed.",
-  QuoteHasNoRecipient: "This quote has no customer email to send to.",
+  QuoteNotInState: "Iemand anders heeft deze offerte al gewijzigd. De lijst is bijgewerkt.",
+  QuoteNotFound: "Deze offerte bestaat niet meer. De lijst is bijgewerkt.",
+  QuoteHasNoRecipient: "Deze offerte heeft geen e-mailadres van de klant om naar te sturen.",
   EmailNotSent: (failure) =>
-    `The email could not be sent (${failure.reason ?? "provider error"}). The quote is still approved.`,
-  InvalidProduct: (failure) => failure.reason ?? "That product was not accepted.",
-  ChangeIsStale: "The product changed after this was proposed, so it was not applied. Reject it and ask again.",
-  ChangeNotPending: "Someone already applied or rejected this change.",
-  InvalidTerms: (failure) => failure.reason ?? "Those payment terms were not accepted."
+    `De e-mail kon niet worden verstuurd (${
+      failure.reason ?? "fout bij de mailprovider"
+    }). De offerte blijft goedgekeurd.`,
+  InvalidProduct: (failure) => failure.reason ?? "Dat product is niet geaccepteerd.",
+  ChangeIsStale:
+    "Het product is gewijzigd nadat dit werd voorgesteld, dus het is niet doorgevoerd. Wijs het af en vraag het opnieuw.",
+  ChangeNotPending: "Iemand heeft deze wijziging al doorgevoerd of afgewezen.",
+  ChangeNotFound: "Deze wijziging bestaat niet meer.",
+  InvalidTerms: (failure) => failure.reason ?? "Die betalingstermijn is niet geaccepteerd."
 }

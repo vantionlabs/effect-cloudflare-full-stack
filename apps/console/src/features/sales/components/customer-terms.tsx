@@ -4,15 +4,22 @@
  * Keyed by the customer's email — the one stable identity a quote carries. A customer without terms pays within the
  * default. An invoice copies the terms into its due date when it is issued, so changing or clearing them here moves
  * the NEXT invoice, never one already sent.
+ *
+ * The days are a scrub field (Beautiful UI's, from FineTuneCard): drag the label, use the arrow keys (Shift for ten),
+ * or type. It starts at the default, so the common case — a customer who gets 14 days — is a few keystrokes.
  */
 import { Button } from "@/components/atoms/Button"
+import { Shimmer } from "@/components/atoms/Shimmer"
 import { type Column, DataTable } from "@/components/data/data-table"
 import { Notice } from "@/components/feedback/notice"
+import { SkeletonTable } from "@/components/feedback/skeleton"
+import { ScrubField } from "@/components/primitives/FineTuneCard"
 import { Input } from "@/components/ui/input"
 import { customerTermsAtom, setCustomerTermsAtom, TERMS_KEY } from "@/features/sales/api/sales-atoms"
 import { useHydrated } from "@/hooks/use-hydrated"
 import { describeFailure } from "@/lib/failure"
 import { formatMoment, plural } from "@/lib/format"
+import { superseded } from "@/lib/motion"
 import type { CustomerTerms as Terms } from "@ea/modules/sales/domain/Work"
 import { PAYMENT_TERMS_DAYS } from "@ea/modules/shared/domain/Money"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
@@ -20,12 +27,14 @@ import { Exit } from "effect"
 import { useState } from "react"
 import { SALES_FAILURES } from "../sales-failures.ts"
 
+const MAX_TERMS_DAYS = 365
+
 export function CustomerTerms() {
   const hydrated = useHydrated()
   const terms = useAtomValue(customerTermsAtom)
   const setTerms = useAtomSet(setCustomerTermsAtom, { mode: "promiseExit" })
   const [email, setEmail] = useState("")
-  const [days, setDays] = useState("")
+  const [days, setDays] = useState<number>(PAYMENT_TERMS_DAYS)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | undefined>(undefined)
 
@@ -42,26 +51,31 @@ export function CustomerTerms() {
   }
 
   const columns: ReadonlyArray<Column<Terms>> = [
-    { key: "email", header: "Customer email", cell: (row) => row.customerEmail },
-    { key: "days", header: "Terms", align: "right", cell: (row) => plural(row.termsDays, "day") },
+    { key: "email", header: "E-mail klant", cell: (row) => row.customerEmail },
+    {
+      key: "days",
+      header: "Termijn",
+      align: "right",
+      cell: (row) => <span className="whitespace-nowrap">{plural(row.termsDays, "dag", "dagen")}</span>
+    },
     {
       key: "updated",
-      header: "Changed",
-      cell: (row) => <span className="text-ink-2">{formatMoment(row.updatedAt)}</span>
+      header: "Gewijzigd",
+      cell: (row) => <span className="whitespace-nowrap text-ink-2">{formatMoment(row.updatedAt)}</span>
     },
     {
       key: "clear",
-      header: <span className="sr-only">Actions</span>,
+      header: <span className="sr-only">Acties</span>,
       align: "right",
       cell: (row) => (
         <Button
           variant="quiet"
           size="xs"
           disabled={!hydrated || busy}
-          aria-label={`Use default terms for ${row.customerEmail}`}
+          aria-label={`Standaardtermijn gebruiken voor ${row.customerEmail}`}
           onClick={() => void save(row.customerEmail, null)}
         >
-          Use default
+          Standaard gebruiken
         </Button>
       )
     }
@@ -71,60 +85,56 @@ export function CustomerTerms() {
     <div className="flex flex-col gap-3">
       <form
         method="post"
-        aria-label="Set payment terms"
-        className="flex flex-wrap items-end gap-2"
+        aria-label="Betalingstermijn instellen"
+        className="flex flex-wrap items-center gap-2 rounded-card bg-surface p-3 shadow-card"
         onSubmit={async (event) => {
           event.preventDefault()
-          // Whole days only; anything else is refused here rather than rounded, and the server checks the range.
-          if (!/^\d+$/.test(days.trim())) return setProblem("Enter the terms as a whole number of days, e.g. 14.")
-          if (await save(email, Number(days.trim()))) {
+          if (await save(email, days)) {
             setEmail("")
-            setDays("")
+            setDays(PAYMENT_TERMS_DAYS)
           }
         }}
       >
         <Input
-          aria-label="Customer email"
+          aria-label="E-mail klant"
           type="email"
-          placeholder="customer@example.com"
+          placeholder="klant@voorbeeld.nl"
           className="w-64"
           value={email}
           disabled={!hydrated}
           onChange={(event) => setEmail(event.target.value)}
         />
-        <Input
-          aria-label="Payment terms in days"
-          inputMode="numeric"
-          placeholder={`Days, e.g. ${PAYMENT_TERMS_DAYS}`}
-          className="w-36"
-          value={days}
-          disabled={!hydrated}
-          onChange={(event) => setDays(event.target.value)}
-        />
-        <Button
-          variant="primary"
-          size="sm"
-          type="submit"
-          disabled={!hydrated || busy || email.trim() === "" || days.trim() === ""}
-        >
-          Save terms
+        <div className="w-44">
+          <ScrubField
+            label="Termijn"
+            inputLabel="Betalingstermijn in dagen"
+            value={days}
+            onChange={setDays}
+            min={0}
+            max={MAX_TERMS_DAYS}
+            suffix="dagen"
+            disabled={!hydrated}
+          />
+        </div>
+        <Button variant="primary" size="sm" type="submit" disabled={!hydrated || busy || email.trim() === ""}>
+          {busy ? <Shimmer>Opslaan…</Shimmer> : "Termijn opslaan"}
         </Button>
       </form>
       {problem === undefined ? null : <Notice tone="error">{problem}</Notice>}
-      {terms._tag !== "Success"
-        ? (
-          <p className="text-sm text-ink-2">
-            {terms._tag === "Failure" ? "Payment terms could not be loaded." : "Loading payment terms…"}
-          </p>
-        )
+      {terms._tag === "Initial"
+        ? <SkeletonTable rows={2} columns={3} label="Betalingstermijnen worden geladen" />
+        : terms._tag === "Failure"
+        ? <Notice tone="error">De betalingstermijnen konden niet worden geladen.</Notice>
         : (
-          <DataTable
-            caption="Customer payment terms"
-            rows={terms.value}
-            columns={columns}
-            rowKey={(row) => row.customerEmail}
-            empty={`Every customer pays within the default ${PAYMENT_TERMS_DAYS} days.`}
-          />
+          <div style={superseded(terms.waiting)} aria-busy={terms.waiting}>
+            <DataTable
+              caption="Betalingstermijnen per klant"
+              rows={terms.value}
+              columns={columns}
+              rowKey={(row) => row.customerEmail}
+              empty={`Elke klant betaalt binnen de standaardtermijn van ${PAYMENT_TERMS_DAYS} dagen. Stel hierboven een andere termijn in voor een klant die dat heeft afgesproken.`}
+            />
+          </div>
         )}
     </div>
   )

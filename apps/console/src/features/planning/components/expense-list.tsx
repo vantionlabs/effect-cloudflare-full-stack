@@ -1,4 +1,4 @@
-/** Expenses the forecast counts. Stopping one keeps the record; it just stops paying from today. */
+/** Uitgaven the forecast counts. Stopping one keeps the record; it just stops paying from today. */
 import { Button } from "@/components/atoms/Button"
 import { DataTable } from "@/components/data/data-table"
 import { StatusPill } from "@/components/data/status-pill"
@@ -13,25 +13,30 @@ export function ExpenseList(props: {
   const hydrated = useHydrated()
   return (
     <DataTable<Expense>
-      caption="Expenses"
+      caption="Uitgaven"
       rows={props.expenses}
       rowKey={(expense) => expense.id}
       rowTestId="expense"
-      empty="No expenses recorded. The forecast shows cash in only until you add some."
+      empty="Nog geen uitgaven. Zolang je er geen toevoegt, laat de prognose alleen geld zien dat binnenkomt."
       columns={[
-        { key: "description", header: "Description", cell: (expense) => expense.description },
-        { key: "amount", header: "Amount", align: "right", cell: (expense) => formatEuro(expense.amountCents) },
+        { key: "description", header: "Omschrijving", cell: (expense) => expense.description },
+        {
+          key: "amount",
+          header: "Bedrag",
+          align: "right",
+          cell: (expense) => <span className="whitespace-nowrap">{formatEuro(expense.amountCents)}</span>
+        },
         {
           key: "when",
-          header: "When",
+          header: "Wanneer",
           cell: (expense) =>
             expense.repeat === "monthly"
-              ? <StatusPill tone="accent">{`monthly from ${formatDay(expense.startsOn)}`}</StatusPill>
-              : <StatusPill tone="neutral">{`once on ${formatDay(expense.startsOn)}`}</StatusPill>
+              ? <StatusPill tone="accent">{`maandelijks vanaf ${formatDay(expense.startsOn)}`}</StatusPill>
+              : <StatusPill tone="neutral">{`eenmalig op ${formatDay(expense.startsOn)}`}</StatusPill>
         },
         {
           key: "action",
-          header: <span className="sr-only">Action</span>,
+          header: <span className="sr-only">Actie</span>,
           align: "right",
           cell: (expense) => (
             <Button
@@ -40,7 +45,7 @@ export function ExpenseList(props: {
               disabled={!hydrated}
               onClick={() => props.onStop(expense.id)}
             >
-              {expense.repeat === "monthly" ? "Stop" : "Remove"}
+              {expense.repeat === "monthly" ? "Stoppen" : "Verwijderen"}
             </Button>
           )
         }

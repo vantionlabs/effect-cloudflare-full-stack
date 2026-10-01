@@ -12,42 +12,52 @@ import type { PlanningView } from "@ea/modules/reporting/domain/Planning"
 
 type Week = PlanningView["weeks"][number]
 
-const signed = (cents: number) => <span className={cn(cents < 0 && "text-red")}>{formatEuro(cents)}</span>
+const signed = (cents: number) => (
+  <span className={cn("whitespace-nowrap", cents < 0 && "text-red")}>{formatEuro(cents)}</span>
+)
+// `whitespace-nowrap` on every figure: on a phone the table scrolls sideways rather than breaking "€" from "0,00".
+const quiet = (cents: number) => (
+  <span className={cn("whitespace-nowrap", cents === 0 && "text-ink-3")}>{formatEuro(cents)}</span>
+)
 
 export function CashForecast(props: { readonly plan: PlanningView }) {
   const { plan } = props
   return (
     <PageSection
       id="forecast"
-      title="Cash forecast"
-      description={`Sent quotes not yet answered (${
+      title="Kasstroomprognose"
+      description={`Verstuurde offertes zonder antwoord (${
         formatEuro(plan.pipeline.cents)
-      }) are pipeline and not counted. Expenses are counted on their payment day.`}
+      }) tellen nog niet mee. Uitgaven tellen op hun betaaldag.`}
     >
       <DataTable<Week>
-        caption="Forecast"
+        caption="Prognose"
         rows={plan.weeks}
         rowKey={(week) => week.weekStart}
-        empty="No forecast."
+        empty="Geen prognose."
         columns={[
-          { key: "week", header: "Week of", cell: (week) => formatDay(week.weekStart) },
-          { key: "invoices", header: "Invoices", align: "right", cell: (week) => formatEuro(week.fromInvoices) },
-          { key: "work", header: "Work", align: "right", cell: (week) => formatEuro(week.fromWork) },
-          { key: "in", header: "Cash in", align: "right", cell: (week) => formatEuro(week.total) },
-          { key: "out", header: "Cash out", align: "right", cell: (week) => formatEuro(week.out) },
-          { key: "net", header: "Net", align: "right", cell: (week) => signed(week.net) },
+          {
+            key: "week",
+            header: "Week van",
+            cell: (week) => <span className="whitespace-nowrap">{formatDay(week.weekStart)}</span>
+          },
+          { key: "invoices", header: "Facturen", align: "right", cell: (week) => quiet(week.fromInvoices) },
+          { key: "work", header: "Werk", align: "right", cell: (week) => quiet(week.fromWork) },
+          { key: "in", header: "In", align: "right", cell: (week) => quiet(week.total) },
+          { key: "out", header: "Uit", align: "right", cell: (week) => quiet(week.out) },
+          { key: "net", header: "Netto", align: "right", cell: (week) => signed(week.net) },
           {
             key: "running",
-            header: <span title="The sum of net up to this week. Not a bank balance.">Change from today</span>,
+            header: <span title="De optelsom van netto tot en met deze week. Geen banksaldo.">Verschil t.o.v. nu</span>,
             align: "right",
             cell: (week) => signed(week.runningNet)
           }
         ]}
       />
       <p className="text-[12px] text-ink-3">
-        Expected in after these twelve weeks:{" "}
-        <span className="tabular">{formatEuro(plan.later)}</span>. “Change from today” is how much cash goes up or down
-        from now — not a bank balance, which this product does not know.
+        Verwacht na deze twaalf weken:{" "}
+        <span className="tabular">{formatEuro(plan.later)}</span>. ‘Verschil t.o.v. nu’ is hoeveel geld er vanaf vandaag
+        bij komt of af gaat — geen banksaldo; dat kent dit product niet.
       </p>
     </PageSection>
   )

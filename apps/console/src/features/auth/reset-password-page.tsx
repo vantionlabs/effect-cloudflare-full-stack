@@ -15,6 +15,7 @@ import { useSchemaForm } from "@/hooks/use-schema-form"
 import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
+import { authErrorMessage } from "./api/auth-errors.ts"
 import { useSessionChange } from "./api/use-session-change.ts"
 import { AuthCard, authLinkClass } from "./components/auth-card.tsx"
 import { SubmitButton } from "./components/submit-button.tsx"
@@ -35,7 +36,7 @@ export function ResetPasswordPage(props: { readonly token: string | undefined; r
       setRejected(undefined)
       const result = await authClient.resetPassword({ newPassword: password, token: props.token ?? "" })
       if (result.error !== null && result.error !== undefined) {
-        setRejected(result.error.message ?? "That link has expired or was already used. Request a new one.")
+        setRejected(authErrorMessage(result.error, "Deze link is verlopen of al gebruikt. Vraag een nieuwe aan."))
         return
       }
       // The server revokes every session on reset (`revokeSessionsOnPasswordReset`), so this is always a sign-in.
@@ -44,12 +45,12 @@ export function ResetPasswordPage(props: { readonly token: string | undefined; r
   })
 
   return (
-    <AuthCard title="Choose a new password" description="The link in your email is valid for one hour.">
+    <AuthCard title="Kies een nieuw wachtwoord" description="De link in je mail is een uur geldig.">
       {!props.valid
         ? (
           <p className="text-sm text-red" role="alert">
-            This reset link is invalid or has expired.{" "}
-            <Link to="/forgot-password" className={authLinkClass}>Request a new one</Link>.
+            Deze link is ongeldig of verlopen.{" "}
+            <Link to="/forgot-password" className={authLinkClass}>Vraag een nieuwe aan</Link>.
           </p>
         )
         : (
@@ -65,7 +66,7 @@ export function ResetPasswordPage(props: { readonly token: string | undefined; r
                 {(field) => (
                   <TextField
                     field={field}
-                    label="New password"
+                    label="Nieuw wachtwoord"
                     type="password"
                     autoComplete="new-password"
                     disabled={!hydrated}
@@ -78,8 +79,8 @@ export function ResetPasswordPage(props: { readonly token: string | undefined; r
                   <SubmitButton
                     submitting={isSubmitting}
                     hydrated={hydrated}
-                    label="Set new password"
-                    busyLabel="Saving…"
+                    label="Wachtwoord opslaan"
+                    busyLabel="Opslaan…"
                   />
                 )}
               </form.Subscribe>

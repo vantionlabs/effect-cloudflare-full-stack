@@ -313,10 +313,12 @@ a {
 }
 
 
+/* LOCAL PATCH 2 (effect-ai, 2026-10-01): the registry sets `border-radius: 4px` here, which changes the focused
+ * ELEMENT's own radius — a focused pill button or card snapped to square corners. The outline follows the element's
+ * radius on its own, so the line is removed. Re-check after `shadcn add @beautifui/foundation --overwrite`. */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
 }
 
 input:focus-visible,

@@ -94,7 +94,9 @@ export interface AuthInstance {
   readonly api: {
     readonly getSession: (input: { readonly headers: Headers }) => Promise<unknown>
     readonly getActiveMemberRole: (input: { readonly headers: Headers }) => Promise<unknown>
-    readonly verifyApiKey: (input: { readonly body: { readonly key: string } }) => Promise<unknown>
+    readonly verifyApiKey: (
+      input: { readonly body: { readonly key: string }; readonly headers: Headers }
+    ) => Promise<unknown>
   }
 }
 
@@ -240,9 +242,9 @@ export const makeAuth = (config: AuthConfig): AuthInstance => {
         sendResetPassword: async ({ url, user }: { readonly url: string; readonly user: { readonly email: string } }) =>
           sendEmail({
             to: user.email,
-            subject: "Reset your password",
-            text: `Open this link to choose a new password:\n\n${url}\n\n` +
-              `If you did not ask for this, nothing has changed and you can ignore this message.`
+            subject: "Stel een nieuw wachtwoord in",
+            text: `Open deze link om een nieuw wachtwoord te kiezen:\n\n${url}\n\n` +
+              `Heb je hier niet om gevraagd? Dan is er niets veranderd en kun je dit bericht negeren.`
           })
       }
     },
@@ -262,8 +264,8 @@ export const makeAuth = (config: AuthConfig): AuthInstance => {
         ) =>
           sendEmail({
             to: user.email,
-            subject: "Confirm your email address",
-            text: `Open this link to confirm your email address:\n\n${url}`
+            subject: "Bevestig je e-mailadres",
+            text: `Open deze link om je e-mailadres te bevestigen:\n\n${url}`
           })
       }
     },
@@ -353,9 +355,9 @@ export const makeAuth = (config: AuthConfig): AuthInstance => {
               const inviter = data.inviter.user.name ?? data.inviter.user.email
               await sendEmail({
                 to: data.email,
-                subject: `${inviter} invited you to ${data.organization.name}`,
-                text: `${inviter} invited you to join ${data.organization.name}.\n\n` +
-                  `Open this link to accept:\n\n${origin}/accept-invitation/${data.id}`
+                subject: `${inviter} nodigt je uit voor ${data.organization.name}`,
+                text: `${inviter} nodigt je uit om lid te worden van ${data.organization.name}.\n\n` +
+                  `Open deze link om de uitnodiging te accepteren:\n\n${origin}/accept-invitation/${data.id}`
               })
             }
           })

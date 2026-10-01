@@ -27,7 +27,7 @@ export function SignOutButton() {
         await navigate({ to: "/login", search: { next: "/" }, reloadDocument: true })
       }}
     >
-      Sign out
+      Uitloggen
     </Button>
   )
 }

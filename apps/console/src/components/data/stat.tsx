@@ -1,10 +1,6 @@
-/** A headline figure — "Open invoices € 4.200,00, 3 invoices" — and a responsive grid of them. */
+/** A headline figure — "Open facturen € 4.200,00, 3 facturen". */
 import { cn } from "@/lib/utils"
 import type { ReactNode } from "react"
-
-export function StatGrid(props: { readonly children: ReactNode }) {
-  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{props.children}</div>
-}
 
 export function Stat(props: {
   readonly label: string

@@ -126,13 +126,13 @@ describe("the weekly report", () => {
   it("counts only the week it covers, and reports the backlog as it is now", async () => {
     const { sent } = await sendWith(NOW)
     const text = sent.find((message) => message.to === "owner@workshop.test")!.text
-    expect(text).toContain("2026-09-28 to 2026-10-05")
-    expect(text).toContain("Documents received:        1")
-    expect(text).toContain("Decisions made:            2")
-    expect(text).toContain("approved automatically:  1 (50%)")
-    expect(text).toContain("needed a person:         1 (50%)")
-    expect(text).toContain("rejected:                0")
-    expect(text).toContain("Waiting for review now:    1")
+    expect(text).toContain("2026-09-28 tot 2026-10-05")
+    expect(text).toContain("Documenten ontvangen:          1")
+    expect(text).toContain("Beslissingen genomen:          2")
+    expect(text).toContain("automatisch goedgekeurd:     1 (50%)")
+    expect(text).toContain("door een mens beoordeeld:    1 (50%)")
+    expect(text).toContain("afgewezen:                   0")
+    expect(text).toContain("Wacht nu op beoordeling:       1")
     expect(text).toContain("m1: 1,500 / 300")
   })
 

@@ -67,23 +67,23 @@ export const renderWeeklyReport = (
 ): { readonly subject: string; readonly text: string } => {
   const d = kpis.decisions
   const lines = [
-    `Weekly figures for ${organizationName}`,
-    `${kpis.period.from} to ${kpis.period.to} (UTC, end exclusive)`,
+    `Weekcijfers voor ${organizationName}`,
+    `${kpis.period.from} tot ${kpis.period.to} (UTC, einddatum niet inbegrepen)`,
     "",
-    `Documents received:        ${number(kpis.documentsReceived)}`,
-    `Decisions made:            ${number(d.total)}`,
-    `  approved automatically:  ${number(d.autoApproved)} (${percent(d.autoApproved, d.total)})`,
-    `  sent for approval:       ${number(d.routedForApproval)} (${percent(d.routedForApproval, d.total)})`,
-    `  needed a person:         ${number(d.needsHuman)} (${percent(d.needsHuman, d.total)})`,
-    `  rejected:                ${number(d.rejected)} (${percent(d.rejected, d.total)})`,
+    `Documenten ontvangen:          ${number(kpis.documentsReceived)}`,
+    `Beslissingen genomen:          ${number(d.total)}`,
+    `  automatisch goedgekeurd:     ${number(d.autoApproved)} (${percent(d.autoApproved, d.total)})`,
+    `  ter goedkeuring voorgelegd:  ${number(d.routedForApproval)} (${percent(d.routedForApproval, d.total)})`,
+    `  door een mens beoordeeld:    ${number(d.needsHuman)} (${percent(d.needsHuman, d.total)})`,
+    `  afgewezen:                   ${number(d.rejected)} (${percent(d.rejected, d.total)})`,
     "",
-    `Waiting for review now:    ${number(kpis.pendingReview)}`,
+    `Wacht nu op beoordeling:       ${number(kpis.pendingReview)}`,
     "",
-    kpis.tokens.length === 0 ? "No model calls this week." : "Model usage (tokens in / out):",
+    kpis.tokens.length === 0 ? "Geen modelaanroepen deze week." : "Modelgebruik (tokens in / uit):",
     ...kpis.tokens.map((row) => `  ${row.model}: ${number(row.input)} / ${number(row.output)}`)
   ]
   return {
-    subject: `${organizationName}: weekly figures ${kpis.period.from} – ${kpis.period.to}`,
+    subject: `${organizationName}: weekcijfers ${kpis.period.from} – ${kpis.period.to}`,
     text: lines.join("\n")
   }
 }

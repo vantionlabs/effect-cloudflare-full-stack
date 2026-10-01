@@ -32,8 +32,8 @@ export function NewChannelForm(props: { readonly onCreated: (roomId: string) => 
        * `_tag` (inside `describeFailure`), never `.message`: a `Schema.TaggedError`'s message is usually empty.
        */
       setRejected(describeFailure(exit, {
-        RoomSlugTaken: "A channel with that name already exists.",
-        RoomNameInvalid: "A channel name needs letters or numbers."
+        RoomSlugTaken: "Er bestaat al een kanaal met die naam.",
+        RoomNameInvalid: "Een kanaalnaam heeft letters of cijfers nodig."
       }))
       return
     }
@@ -60,12 +60,12 @@ export function NewChannelForm(props: { readonly onCreated: (roomId: string) => 
         <Input
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="New channel"
-          aria-label="New channel name"
+          placeholder="Nieuw kanaal"
+          aria-label="Naam nieuw kanaal"
           disabled={!hydrated}
         />
         <Button type="submit" variant="secondary" size="sm" className="h-8" disabled={!hydrated || name.trim() === ""}>
-          Create
+          Aanmaken
         </Button>
       </form>
       {rejected === undefined ? null : <Notice tone="error">{rejected}</Notice>}

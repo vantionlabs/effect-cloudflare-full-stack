@@ -5,7 +5,9 @@
  * `/chat?room=…` into a message and their colleague lands in the same place. The same reasoning as `next` on the
  * login route — state that identifies what you are looking at belongs in the URL.
  */
+import { loadChatPage } from "@/features/chat/api/load-chat-page"
 import { ChatPage } from "@/features/chat/chat-page"
+import { HydrationBoundary } from "@effect/atom-react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_authenticated/chat")({
@@ -17,6 +19,7 @@ export const Route = createFileRoute("/_authenticated/chat")({
     const room = search["room"]
     return typeof room === "string" && room !== "" ? { room } : {}
   },
+  loader: () => loadChatPage(),
   component: ChatRoute
 })
 
@@ -25,14 +28,16 @@ function ChatRoute() {
   const navigate = useNavigate()
 
   return (
-    <ChatPage
-      selected={room}
-      onSelect={(roomId) =>
-        /*
-         * `replace`, so clicking through channels does not fill the back button with every one visited — the
-         * back button should leave the chat, not walk it.
-         */
-        void navigate({ to: "/chat", search: roomId === undefined ? {} : { room: roomId }, replace: true })}
-    />
+    <HydrationBoundary state={Route.useLoaderData()}>
+      <ChatPage
+        selected={room}
+        onSelect={(roomId) =>
+          /*
+           * `replace`, so clicking through channels does not fill the back button with every one visited — the
+           * back button should leave the chat, not walk it.
+           */
+          void navigate({ to: "/chat", search: roomId === undefined ? {} : { room: roomId }, replace: true })}
+      />
+    </HydrationBoundary>
   )
 }

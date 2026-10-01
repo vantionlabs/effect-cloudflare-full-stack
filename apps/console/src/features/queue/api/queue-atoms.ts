@@ -24,7 +24,11 @@ import { Atom } from "effect/reactivity"
  */
 export const DECISIONS_KEY = "decisions"
 
-export const queueAtom = Api.query("Decision.queue", { limit: 50 }, { reactivityKeys: [DECISIONS_KEY] })
+export const queueAtom = Api.query("Decision.queue", { limit: 50 }, {
+  // Rendered on the server and hydrated (`load-queue-page.ts`), so the queue arrives with the page.
+  serializationKey: "queue",
+  reactivityKeys: [DECISIONS_KEY]
+})
 
 /**
  * One decision's detail, keyed by id.

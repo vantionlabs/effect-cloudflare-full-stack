@@ -1,5 +1,5 @@
 /**
- * Ask the technical documentation — the mechanics' assistant.
+ * Ask the technical documentation — the mechanics' assistant. Interface in Dutch (PRODUCT.md).
  *
  * Asking is the `Ask.question` RPC as a mutation, from the browser, because it is a thing the person DOES. There is
  * no plain `fetch` to the backend on this page.
@@ -7,9 +7,16 @@
  * The answer is shown with its citations, and that is not decoration: every excerpt was checked against what the
  * search returned before the server answered, and an answer citing something it was not given is refused rather
  * than shown. The assistant is told never to state a pressure, torque or interval it cannot quote.
+ *
+ * `Ask.question`, not the streaming `Ask.stream`: what that procedure streams is the SEARCHING (the answer arrives
+ * once, whole, after its citations are verified), and the console's RPC client speaks plain JSON over HTTP, which
+ * delivers a stream's items together when it ends — so the steps would arrive with the answer, not before it.
+ * Showing them "live" would be a replay. While waiting, the page shows real elapsed time and nothing invented; the
+ * previous answer stays in place, dimmed (`superseded`), because it is stale rather than gone.
  */
 import { Page, PageHeader, PageSection } from "@/components/layout/page"
 import LoadingState from "@/components/primitives/LoadingState"
+import { superseded } from "@/lib/motion"
 import { useAtomSet } from "@effect/atom-react"
 import { Cause, Exit } from "effect"
 import { useState } from "react"
@@ -27,7 +34,6 @@ export function AskPage() {
 
   const ask = async (question: string) => {
     setAsking(true)
-    setOutcome(undefined)
     const exit = await askQuestion({ payload: { question, collection: "knowledge" } })
     if (Exit.isSuccess(exit)) {
       setOutcome({ _tag: "Answered", answer: exit.value })
@@ -46,17 +52,21 @@ export function AskPage() {
   return (
     <Page width="narrow">
       <PageHeader
-        title="Ask the documentation"
-        description="Answers come only from your manuals and schematics, with the passage they rely on."
+        title="Documentatie"
+        description="Antwoorden komen alleen uit uw eigen handleidingen en schema's, met de passage waarop ze steunen."
       />
       <QuestionForm asking={asking} onAsk={(question) => void ask(question)} />
       {/* The model is searching; the timer is real elapsed time, nothing about the steps is invented. */}
-      {asking ? <LoadingState label="Searching the documentation" /> : null}
-      {outcome === undefined ? null : <AnswerPanel outcome={outcome} />}
+      {asking ? <LoadingState label="Documentatie doorzoeken" /> : null}
+      {outcome === undefined ? null : (
+        <div style={superseded(asking)} aria-busy={asking}>
+          <AnswerPanel outcome={outcome} />
+        </div>
+      )}
       <PageSection
         id="documentation"
-        title="Documentation"
-        description="Manuals, schematics and service bulletins the assistant can search."
+        title="Documenten"
+        description="Handleidingen, schema's en servicebulletins waarin de assistent zoekt."
       >
         <DocumentationPanel />
       </PageSection>

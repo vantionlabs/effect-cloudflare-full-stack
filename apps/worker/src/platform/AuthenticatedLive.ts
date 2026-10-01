@@ -71,7 +71,7 @@ export const AuthenticatedLive = Layer.effect(Authenticated)(
              * lookup is what turns that claim into a fact: the organization lives in caller-supplied metadata, so
              * a key naming an organization its user does not belong to resolves to nothing.
              */
-            const owner = yield* apiKeyOwner(config, key)
+            const owner = yield* apiKeyOwner(config, key, new Headers(headers))
             // Before the membership lookup: an over-quota key spends no database round trip.
             if (owner?._tag === "RateLimited") {
               return yield* new RateLimited({ retryAfterSeconds: retryAfterSeconds(owner.tryAgainInMs) })

@@ -75,3 +75,10 @@
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* A plain page. Foundation paints fixed diagonal stripes on <body>, which the design detector flags as a generated-UI
+ * signature and which sit behind every bare container; a work console gets a calm surface. */
+body {
+  background-color: var(--page);
+  background-image: none;
+}

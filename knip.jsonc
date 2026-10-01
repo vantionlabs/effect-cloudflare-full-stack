@@ -84,8 +84,9 @@
        */
       "ignore": [
         "src/components/ui/**",
-        // Beautiful UI's atoms, vendored the same way (see AGENTS.md).
+        // Beautiful UI's atoms and primitives, vendored the same way (see AGENTS.md).
         "src/components/atoms/**",
+        "src/components/primitives/**",
       ],
       "ignoreDependencies": [
         /*

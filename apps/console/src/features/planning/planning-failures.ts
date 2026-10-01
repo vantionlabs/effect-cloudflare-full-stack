@@ -2,10 +2,10 @@
 import type { FailureMessages } from "@/lib/failure"
 
 export const PLANNING_FAILURES: FailureMessages = {
-  JobNotInState: "Someone already did that. The page has been refreshed.",
-  JobNotFound: "That job no longer exists. The page has been refreshed.",
-  InvoiceAlreadyPaid: "Someone already did that. The page has been refreshed.",
-  InvoiceNotFound: "That invoice no longer exists. The page has been refreshed.",
-  InvalidExpense: (failure) => `That expense was not accepted: ${failure.reason ?? "check the fields"}.`,
-  ExpenseNotFound: "That expense was already stopped. The page has been refreshed."
+  JobNotInState: "Iemand anders heeft dit al gedaan. De pagina is bijgewerkt.",
+  JobNotFound: "Deze opdracht bestaat niet meer. De pagina is bijgewerkt.",
+  InvoiceAlreadyPaid: "Deze factuur is al als betaald vastgelegd. De pagina is bijgewerkt.",
+  InvoiceNotFound: "Deze factuur bestaat niet meer. De pagina is bijgewerkt.",
+  InvalidExpense: (failure) => `Deze uitgave is niet geaccepteerd: ${failure.reason ?? "controleer de velden"}.`,
+  ExpenseNotFound: "Deze uitgave was al gestopt. De pagina is bijgewerkt."
 }

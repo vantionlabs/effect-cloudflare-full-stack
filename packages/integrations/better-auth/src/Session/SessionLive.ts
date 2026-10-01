@@ -99,8 +99,8 @@ export const resolveIdentity = (config: AuthConfig, headers: Headers) =>
  * the per-key rate limit — and the other half is the membership check that turns a claimed organization into a
  * verified one. Neither is sufficient alone, which is why they are two calls and not one.
  */
-export const apiKeyOwner = (config: AuthConfig, key: string) =>
-  Effect.scoped(Effect.flatMap(acquireAuth(config), (auth) => auth.verifyApiKey(key)))
+export const apiKeyOwner = (config: AuthConfig, key: string, headers: Headers) =>
+  Effect.scoped(Effect.flatMap(acquireAuth(config), (auth) => auth.verifyApiKey(key, headers)))
 
 /**
  * The same seam as a plain service, for callers that are not handlers.

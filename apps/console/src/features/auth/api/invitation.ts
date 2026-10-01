@@ -14,6 +14,7 @@ import { authClient } from "@/features/auth/api/auth-client"
 import { createServerFn } from "@tanstack/react-start"
 import { getRequest } from "@tanstack/react-start/server"
 import { Schema } from "effect"
+import { authErrorMessage } from "./auth-errors.ts"
 
 /** A projection, field by field, for the reason given in `current-session.ts`: this is serialised into the HTML. */
 export type InvitationView =
@@ -35,9 +36,12 @@ export const getInvitation = createServerFn({ method: "GET" })
       fetchOptions: { headers: getRequest().headers }
     })
     if (result.data === null || result.data === undefined) {
-      // better-auth's message distinguishes "not the recipient", "expired" and "not found", and the remedy differs
-      // for each (sign in as someone else, ask again, check the link), so it is passed through as-is.
-      return { _tag: "Unavailable", reason: result.error?.message ?? "This invitation is no longer available." }
+      // better-auth distinguishes "not the recipient", "expired" and "not found", and the remedy differs for each
+      // (sign in as someone else, ask again, check the link), so the distinction is kept — in Dutch, by error code.
+      return {
+        _tag: "Unavailable",
+        reason: authErrorMessage(result.error, "Deze uitnodiging is niet meer beschikbaar.")
+      }
     }
     return {
       _tag: "Pending",

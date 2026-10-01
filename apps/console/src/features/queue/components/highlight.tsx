@@ -69,8 +69,13 @@ export function Highlight({ excerpt, text }: HighlightProps) {
      * screen can say. Silently rendering the clause unhighlighted would hide the finding.
      */
     return (
-      <div data-unverified="true" className="border-l-[3px] border-red pl-3">
-        <p className="mb-2 text-[13px] font-semibold text-red">not verbatim in this clause</p>
+      <div data-unverified="true" className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1 rounded-control bg-red-tint px-3 py-2 text-[13px]">
+          <p className="font-semibold text-red">Dit citaat staat niet letterlijk in deze passage</p>
+          <p className="text-ink">
+            Geciteerd: <q className="italic">{excerpt}</q>
+          </p>
+        </div>
         <pre className="m-0 font-sans text-[13px] whitespace-pre-wrap text-ink">{text}</pre>
       </div>
     )

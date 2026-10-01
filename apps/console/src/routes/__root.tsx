@@ -11,6 +11,7 @@
  */
 import { getCurrentSession } from "@/features/auth/api/current-session"
 import { useHydrateSession } from "@/hooks/use-session"
+import { THEME_SCRIPT } from "@/lib/theme"
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 import appCss from "../styles/app.css?url"
@@ -28,9 +29,11 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "effect-ai console" }
+      { title: "effect-ai" }
     ],
-    links: [{ rel: "stylesheet", href: appCss }]
+    links: [{ rel: "stylesheet", href: appCss }],
+    // Sets `.dark` before first paint, from the stored choice or the OS — see `lib/theme.ts`.
+    scripts: [{ children: THEME_SCRIPT }]
   }),
   shellComponent: RootDocument,
   component: RootRoute
@@ -49,7 +52,11 @@ function RootRoute() {
 
 function RootDocument({ children }: { readonly children: ReactNode }) {
   return (
-    <html lang="en" className="h-full">
+    /*
+     * `lang="nl"`: the interface is Dutch (PRODUCT.md), and screen readers pick their voice from it.
+     * `suppressHydrationWarning`: the theme script may add `.dark` before React hydrates, which is intended.
+     */
+    <html lang="nl" className="h-full" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

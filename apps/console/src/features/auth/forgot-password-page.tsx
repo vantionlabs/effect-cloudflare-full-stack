@@ -21,6 +21,7 @@ import { useSchemaForm } from "@/hooks/use-schema-form"
 import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
+import { authErrorMessage } from "./api/auth-errors.ts"
 import { AuthCard, authLinkClass } from "./components/auth-card.tsx"
 import { SubmitButton } from "./components/submit-button.tsx"
 import { TextField } from "./components/text-field.tsx"
@@ -43,7 +44,7 @@ export function ForgotPasswordPage() {
       })
       // Only a transport or configuration failure lands here; an unknown address is a success by design.
       if (result.error !== null && result.error !== undefined) {
-        setRejected(result.error.message ?? "The request could not be sent. Try again in a moment.")
+        setRejected(authErrorMessage(result.error, "Het verzoek kon niet worden verstuurd. Probeer het zo opnieuw."))
         return
       }
       setSent(true)
@@ -52,14 +53,14 @@ export function ForgotPasswordPage() {
 
   return (
     <AuthCard
-      title="Reset your password"
-      description="We will email you a link to choose a new one."
-      footer={<Link to="/login" search={{ next: "/" }} className={authLinkClass}>Back to sign in</Link>}
+      title="Wachtwoord opnieuw instellen"
+      description="We mailen je een link waarmee je een nieuw wachtwoord kiest."
+      footer={<Link to="/login" search={{ next: "/" }} className={authLinkClass}>Terug naar inloggen</Link>}
     >
       {sent
         ? (
           <p className="text-sm text-ink" role="status">
-            If an account exists for that address, a reset link is on its way. It expires in an hour.
+            Als er een account bestaat voor dit adres, is er een link onderweg. Die is een uur geldig.
           </p>
         )
         : (
@@ -73,7 +74,7 @@ export function ForgotPasswordPage() {
             <FieldGroup>
               <form.Field name="email">
                 {(field) => (
-                  <TextField field={field} label="Email" type="email" autoComplete="email" disabled={!hydrated} />
+                  <TextField field={field} label="E-mailadres" type="email" autoComplete="email" disabled={!hydrated} />
                 )}
               </form.Field>
               {rejected === undefined ? null : <FieldError>{rejected}</FieldError>}
@@ -82,8 +83,8 @@ export function ForgotPasswordPage() {
                   <SubmitButton
                     submitting={isSubmitting}
                     hydrated={hydrated}
-                    label="Send reset link"
-                    busyLabel="Sending…"
+                    label="Stuur link"
+                    busyLabel="Versturen…"
                   />
                 )}
               </form.Subscribe>

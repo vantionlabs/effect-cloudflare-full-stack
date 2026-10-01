@@ -73,21 +73,16 @@ function useElapsed() {
 
 export default function LoadingState({
   label,
-  variant = "Drive",
-  /** the meme feed for the Surfer variant; hosted on Vercel Blob so it plays in
-   *  production (the local /public/subway-surfers.mp4 stays gitignored).
-   *  Heavily compressed (288px, 20fps, no audio → ~265 KB, from 1.1 MB) to keep
-   *  Blob data transfer down. */
-  videoSrc = "https://95dnc2a95qgwt9ff.public.blob.vercel-storage.com/subway-surfers-min.mp4"
+  variant = "Drive"
 }: {
-  label?: string
-  variant?: string
-  videoSrc?: string
+  /** Required in practice: the default is a placeholder, and a busy state must say what it is doing. */
+  label?: string | undefined
+  variant?: string | undefined
 }) {
   const elapsed = useElapsed()
-  const surfer = variant === "Surfer"
-  const resolvedLabel = label ?? (surfer ? "Subway surfing" : "Churning")
-  const [videoOk, setVideoOk] = useState(true)
+  // LOCAL CHANGE (effect-ai): the registry's "Surfer" variant (a meme video from the author's blob storage) is
+  // removed; a work console does not autoplay video from a third-party host.
+  const resolvedLabel = label ?? "Bezig"
   const { delays, dur, round } = PATTERNS[variant] ?? PATTERNS.Drive
 
   const labelEl = (
@@ -103,47 +98,6 @@ export default function LoadingState({
     </span>
   )
   const elapsedEl = <span className="font-mono text-[12px] text-ink-3 tabular-nums">{elapsed}</span>
-
-  if (surfer) {
-    return (
-      <div role="status" className="flex w-fit flex-col items-start">
-        <div className="flex items-center gap-2.5">
-          <LoaderGrid {...PATTERNS.Drive} />
-          {labelEl}
-          {elapsedEl}
-        </div>
-
-        {/* the context card follows the status text it is illustrating */}
-        <div
-          className="mt-2 w-56 overflow-hidden rounded-[10px] shadow-overlay"
-          style={{ animation: "pop-in 200ms cubic-bezier(0.16,1,0.3,1) both", transformOrigin: "top left" }}
-        >
-          <div className="relative aspect-video w-full" style={{ background: "var(--tooltip-bg)" }}>
-            {videoOk ?
-              (
-                <video
-                  src={videoSrc}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  onError={() => setVideoOk(false)}
-                  className="h-full w-full object-cover"
-                />
-              ) :
-              (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-1.5">
-                  <LoaderGrid {...PATTERNS.Drive} />
-                  <span className="px-3 text-center font-mono text-[10px]" style={{ color: "var(--tooltip-muted)" }}>
-                    Video unavailable
-                  </span>
-                </div>
-              )}
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div role="status" className="flex w-fit items-center gap-2.5">

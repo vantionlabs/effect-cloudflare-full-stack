@@ -56,13 +56,13 @@ export const AddExpense = (input: {
   Effect.gen(function*() {
     const description = input.description.trim()
     if (description.length === 0 || description.length > 200) {
-      return yield* new InvalidExpense({ reason: "a description of 1 to 200 characters is required" })
+      return yield* new InvalidExpense({ reason: "een omschrijving van 1 tot 200 tekens is verplicht" })
     }
     if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
-      return yield* new InvalidExpense({ reason: "the amount must be more than zero" })
+      return yield* new InvalidExpense({ reason: "het bedrag moet groter zijn dan nul" })
     }
     // `isDay` round-trips the date, so 2026-02-30 is refused rather than silently becoming 2 March.
-    if (!isDay(input.startsOn)) return yield* new InvalidExpense({ reason: `"${input.startsOn}" is not a date` })
+    if (!isDay(input.startsOn)) return yield* new InvalidExpense({ reason: `"${input.startsOn}" is geen datum` })
     const db = yield* Db
     const ids = yield* Ids
     const user = yield* CurrentUser

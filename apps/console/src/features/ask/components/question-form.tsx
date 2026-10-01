@@ -1,4 +1,4 @@
-/** The question box. Disabled until hydration, for the reasons in `login.tsx`. */
+/** The question box. Disabled until hydration, for the reasons in `login-page.tsx`. */
 import { Button } from "@/components/atoms/Button"
 import { Input } from "@/components/ui/input"
 import { useHydrated } from "@/hooks/use-hydrated"
@@ -20,7 +20,7 @@ export function QuestionForm(props: { readonly asking: boolean; readonly onAsk: 
       }}
     >
       <Input
-        aria-label="Question"
+        aria-label="Vraag"
         placeholder="Bijv. wat is de maximale werkdruk van de PK 23.500?"
         value={question}
         maxLength={MAX_QUESTION_LENGTH}
@@ -28,8 +28,13 @@ export function QuestionForm(props: { readonly asking: boolean; readonly onAsk: 
         onChange={(event) => setQuestion(event.target.value)}
         className="h-9"
       />
-      <Button type="submit" variant="primary" disabled={!hydrated || props.asking || question.trim() === ""}>
-        {props.asking ? "Searching the documentation…" : "Ask"}
+      <Button
+        type="submit"
+        variant="primary"
+        className="shrink-0"
+        disabled={!hydrated || props.asking || question.trim() === ""}
+      >
+        {props.asking ? "Bezig…" : "Vraag stellen"}
       </Button>
     </form>
   )

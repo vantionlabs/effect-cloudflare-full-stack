@@ -1,5 +1,5 @@
 /**
- * Sales: the price list, and quotes from a customer's request to the customer's inbox.
+ * Verkoop: the price list, and quotes from a customer's request to the customer's inbox.
  *
  * The flow the page enforces is the product's rule for every AI feature: the model proposes, code computes, a person
  * approves. Pasting a request DRAFTS a quote — the model only points at what was asked for and picks products; every
@@ -27,11 +27,11 @@ export function SalesPage() {
   return (
     <Page>
       <PageHeader
-        title="Sales"
-        description="Paste a customer's request to draft a quote. Prices come from your price list; you approve before anything is sent."
+        title="Verkoop"
+        description="Plak een klantvraag en krijg een conceptofferte. Prijzen komen uit je eigen prijslijst; niets gaat naar de klant voordat jij het goedkeurt."
       />
 
-      <PageSection id="new-quote" title="New quote from a request">
+      <PageSection id="new-quote" title="Nieuwe offerte">
         <Panel>
           <QuoteRequestForm onFailure={setNote} />
         </Panel>
@@ -39,19 +39,19 @@ export function SalesPage() {
 
       {note === undefined ? null : <Notice tone="error">{note}</Notice>}
 
-      <PageSection id="quotes" title="Quotes">
+      <PageSection id="quotes" title="Offertes">
         <QuoteList onFailure={setNote} />
       </PageSection>
 
       <PageSection
         id="price-list-changes"
-        title="Change the price list by asking"
-        description='E.g. "raise SV-350 to 199 and stop offering OLD-1". You get proposals to approve; nothing changes until you apply one.'
+        title="De prijslijst wijzigen met een opdracht"
+        description="Bijvoorbeeld: ‘verhoog SV-350 naar 199 en stop met OLD-1’. Je krijgt voorstellen; er verandert niets tot je er een doorvoert."
       >
         <PriceListChanges />
       </PageSection>
 
-      <PageSection id="price-list" title="Price list" description="The only source of prices on a quote.">
+      <PageSection id="price-list" title="Prijslijst" description="De enige bron van prijzen op een offerte.">
         <ProductTable />
         <Panel>
           <ProductForm />
@@ -60,8 +60,8 @@ export function SalesPage() {
 
       <PageSection
         id="payment-terms"
-        title="Payment terms"
-        description={`How many days after an invoice is issued it falls due, per customer. Customers not listed pay within ${PAYMENT_TERMS_DAYS} days. A change applies to the next invoice, never one already sent.`}
+        title="Betalingstermijnen"
+        description={`Hoeveel dagen na het versturen een factuur moet zijn betaald, per klant. Klanten die hier niet staan betalen binnen ${PAYMENT_TERMS_DAYS} dagen. Een wijziging geldt voor de volgende factuur, nooit voor een die al verstuurd is.`}
       >
         <CustomerTerms />
       </PageSection>

@@ -32,22 +32,22 @@ describe("renderWeeklyReport", () => {
 
   it("names the organization and the period in the subject", () => {
     expect(renderWeeklyReport("Acme Hydraulics", kpis).subject).toBe(
-      "Acme Hydraulics: weekly figures 2026-09-28 – 2026-10-05"
+      "Acme Hydraulics: weekcijfers 2026-09-28 – 2026-10-05"
     )
   })
 
   it("states every figure with its share of decisions", () => {
     const { text } = renderWeeklyReport("Acme Hydraulics", kpis)
-    expect(text).toContain("Documents received:        12")
-    expect(text).toContain("approved automatically:  2 (25%)")
-    expect(text).toContain("needed a person:         1 (13%)")
-    expect(text).toContain("Waiting for review now:    3")
+    expect(text).toContain("Documenten ontvangen:          12")
+    expect(text).toContain("automatisch goedgekeurd:     2 (25%)")
+    expect(text).toContain("door een mens beoordeeld:    1 (13%)")
+    expect(text).toContain("Wacht nu op beoordeling:       3")
     expect(text).toContain("@cf/meta/llama-3.3-70b: 12,000 / 3,400")
   })
 
   it("shows a dash rather than 0% or NaN when nothing was decided", () => {
     const { text } = renderWeeklyReport("X", { ...kpis, decisions: { ...kpis.decisions, total: 0, autoApproved: 0 } })
-    expect(text).toContain("approved automatically:  0 (—)")
+    expect(text).toContain("automatisch goedgekeurd:     0 (—)")
     expect(text).not.toContain("NaN")
   })
 })

@@ -18,6 +18,7 @@ import { useSchemaForm } from "@/hooks/use-schema-form"
 import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
+import { authErrorMessage } from "./api/auth-errors.ts"
 import { useSessionChange } from "./api/use-session-change.ts"
 import { AuthCard, authLinkClass } from "./components/auth-card.tsx"
 import { SubmitButton } from "./components/submit-button.tsx"
@@ -58,11 +59,12 @@ export function LoginPage(props: { readonly next: string }) {
 
       if (result.error !== null && result.error !== undefined) {
         /*
-         * better-auth's message, not a generic one: it distinguishes "wrong password" from "email not verified" from
-         * "too many attempts", and a user who cannot tell those apart retries the wrong thing. Held in local state
+         * better-auth's refusal, not a generic one: it distinguishes "wrong password" from "email not verified" from
+         * "too many attempts", and a user who cannot tell those apart retries the wrong thing. Shown in Dutch, mapped
+         * by its error CODE so every distinction survives (`api/auth-errors.ts`). Held in local state
          * rather than as a field error, because it belongs to the SUBMISSION — neither field is individually wrong.
          */
-        setRejected(result.error.message ?? "Those credentials were not accepted.")
+        setRejected(authErrorMessage(result.error, "Deze gegevens werden niet geaccepteerd."))
         return
       }
 
@@ -73,13 +75,13 @@ export function LoginPage(props: { readonly next: string }) {
 
   return (
     <AuthCard
-      title="Sign in"
-      description="Sign in to review decisions."
+      title="Inloggen"
+      description="Log in om verder te werken."
       footer={
         <div className="flex justify-between gap-3">
-          <Link to="/forgot-password" className={authLinkClass}>Forgot password?</Link>
+          <Link to="/forgot-password" className={authLinkClass}>Wachtwoord vergeten?</Link>
           {/* `next` carried through, so an invitee who signs up instead still lands on the invitation. */}
-          <Link to="/sign-up" search={{ next: props.next }} className={authLinkClass}>Create an account</Link>
+          <Link to="/sign-up" search={{ next: props.next }} className={authLinkClass}>Account aanmaken</Link>
         </div>
       }
     >
@@ -117,7 +119,7 @@ export function LoginPage(props: { readonly next: string }) {
             {(field) => (
               <TextField
                 field={field}
-                label="Email"
+                label="E-mailadres"
                 type="email"
                 autoComplete="email"
                 disabled={!hydrated}
@@ -128,7 +130,7 @@ export function LoginPage(props: { readonly next: string }) {
             {(field) => (
               <TextField
                 field={field}
-                label="Password"
+                label="Wachtwoord"
                 type="password"
                 autoComplete="current-password"
                 disabled={!hydrated}
@@ -141,7 +143,12 @@ export function LoginPage(props: { readonly next: string }) {
           {/* Subscribed rather than read from `form.state`, so only the button re-renders while submitting. */}
           <form.Subscribe selector={(state) => state.isSubmitting}>
             {(isSubmitting) => (
-              <SubmitButton submitting={isSubmitting} hydrated={hydrated} label="Sign in" busyLabel="Signing in…" />
+              <SubmitButton
+                submitting={isSubmitting}
+                hydrated={hydrated}
+                label="Inloggen"
+                busyLabel="Bezig met inloggen…"
+              />
             )}
           </form.Subscribe>
         </FieldGroup>

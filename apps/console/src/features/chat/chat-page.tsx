@@ -10,9 +10,11 @@
  */
 import { Notice } from "@/components/feedback/notice"
 import { Thread } from "@/components/thread/thread"
+import { enter } from "@/lib/motion"
 import { useAtomValue } from "@effect/atom-react"
+import { MessagesSquare } from "lucide-react"
 import { roomsAtom } from "./api/room-atoms.ts"
-import { ChannelList } from "./components/channel-list.tsx"
+import { ChannelList, ChannelListSkeleton } from "./components/channel-list.tsx"
 import { NewChannelForm } from "./components/new-channel-form.tsx"
 
 export function ChatPage({
@@ -28,23 +30,39 @@ export function ChatPage({
 
   return (
     <main className="grid min-h-0 flex-1 grid-rows-[auto_1fr] md:h-dvh md:grid-cols-[16rem_1fr] md:grid-rows-1">
-      <nav aria-label="Channels" className="flex min-h-0 flex-col gap-4 border-line bg-surface p-4 md:border-r">
+      <nav aria-label="Kanalen" className="flex min-h-0 flex-col gap-4 border-line bg-surface p-4 md:border-r">
         <h1 className="flex items-baseline gap-2 text-[15px] font-semibold text-ink">
-          Channels <span className="text-[12px] font-normal text-ink-2">{channels.length}</span>
+          Kanalen <span className="text-[12px] font-normal text-ink-2">{channels.length}</span>
         </h1>
-        {rooms._tag === "Failure" ? <Notice tone="error">The channels could not be loaded.</Notice> : null}
+        {rooms._tag === "Failure" ? <Notice tone="error">De kanalen konden niet worden geladen.</Notice> : null}
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <ChannelList channels={channels} currentId={current?.id} onSelect={onSelect} />
+          {
+            /*
+             * The server renders the list (`load-chat-page.ts`); `Initial` is only seen when the browser fetches it
+             * itself, and then the list's shape stands in rather than "no channels yet", which would be a false claim.
+             */
+          }
+          {rooms._tag === "Initial"
+            ? <ChannelListSkeleton />
+            : <ChannelList channels={channels} currentId={current?.id} onSelect={onSelect} />}
         </div>
         <NewChannelForm onCreated={onSelect} />
       </nav>
 
-      <section className="flex min-h-0 flex-col gap-4 overflow-y-auto p-6 md:p-8">
-        {current === undefined
+      <section className="flex min-h-0 flex-col gap-4 p-6 md:p-8">
+        {rooms._tag === "Initial"
+          ? null
+          : current === undefined
           ? (
-            <p className="text-[13px] text-ink-2">
-              No channels yet. Create one on the left — it is visible to everybody in your organization.
-            </p>
+            <div className="flex flex-col items-start gap-2" style={enter(0)}>
+              <span className="flex size-9 items-center justify-center rounded-card bg-accent-tint text-accent-ink">
+                <MessagesSquare className="size-5" aria-hidden />
+              </span>
+              <h2 className="text-[15px] font-semibold text-ink">Nog geen kanalen</h2>
+              <p className="max-w-sm text-[13px] text-ink-2">
+                Maak links een kanaal aan om met je collega's te overleggen. Iedereen in je organisatie kan het zien.
+              </p>
+            </div>
           )
           : (
             <>
@@ -53,7 +71,8 @@ export function ChatPage({
                 <h2 className="text-lg font-semibold text-ink"># {current.slug}</h2>
                 {current.topic === null ? null : <p className="text-[13px] text-ink-2">{current.topic}</p>}
               </header>
-              <Thread kind="room" id={current.id} title="MESSAGES" />
+              {/* Keyed by channel, so switching channels starts a fresh thread rather than "arriving" every message. */}
+              <Thread key={current.id} kind="room" id={current.id} title="Berichten" layout="fill" />
             </>
           )}
       </section>

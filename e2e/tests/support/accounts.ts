@@ -58,13 +58,13 @@ export const createAccount = async (request: APIRequestContext, baseURL: string)
 /** Signs in through the form, which is the only way the console offers. */
 export const signIn = async (page: Page, account: Account): Promise<void> => {
   await page.goto("/login?next=%2F")
-  await page.getByLabel("Email").fill(account.email)
-  await page.getByLabel("Password").fill(account.password)
-  await page.getByRole("button", { name: "Sign in" }).click()
+  await page.getByLabel("E-mailadres").fill(account.email)
+  await page.getByLabel("Wachtwoord").fill(account.password)
+  await page.getByRole("button", { name: "Inloggen" }).click()
   /*
-   * Waits for the header, not for the URL. Sign-in ends in a `reloadDocument` navigation, so the URL
-   * changes before the new document has been server-rendered — asserting on the URL alone would pass
-   * while the page was still the old one.
+   * Waits for the signed-in shell, not for the URL. Sign-in re-reads the session and then navigates
+   * (`useSessionChange`), so the URL can change before the shell has rendered with the new session —
+   * asserting on the URL alone would pass while the page was still the sign-in form.
    *
    * The default timeout, again. This carried a 30 s override for a while, because the first `signIn` in CI
    * took 8.7 s against vite dev's cold compile. CI runs the BUILT console now (see `playwright.config.ts`),

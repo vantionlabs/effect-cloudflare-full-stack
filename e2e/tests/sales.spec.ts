@@ -12,53 +12,53 @@ test("a customer's request becomes a priced draft, is approved by a person, and 
   await page.goto("/sales")
 
   // The price list: one product, added through the form.
-  const sku = page.getByLabel("SKU")
+  const sku = page.getByLabel("Artikelnummer")
   await expect(sku).toBeEnabled()
   await sku.fill("SV-350")
-  await page.getByLabel("Product name").fill("Pressure relief valve 350 bar")
-  await page.getByLabel("Price", { exact: true }).fill("189,00")
-  await page.getByRole("button", { name: "Add product" }).click()
-  await expect(page.getByRole("table", { name: "Products" })).toContainText("SV-350")
+  await page.getByLabel("Productnaam").fill("Pressure relief valve 350 bar")
+  await page.getByLabel("Prijs", { exact: true }).fill("189,00")
+  await page.getByRole("button", { name: "Product toevoegen" }).click()
+  await expect(page.getByRole("table", { name: "Producten" })).toContainText("SV-350")
 
-  await page.getByLabel("Customer request").fill(
+  await page.getByLabel("Klantvraag").fill(
     "Hello, please send me a quote for 2 pressure relief valves 350 bar. Regards, Piet Smit (piet@smit-transport.nl)"
   )
-  await page.getByRole("button", { name: "Draft quote" }).click()
+  await page.getByRole("button", { name: "Offerte opstellen" }).click()
 
   const quote = page.getByTestId("quote").first()
-  await expect(quote.getByTestId("quote-status")).toHaveText("draft", { timeout: 60_000 })
+  await expect(quote.getByTestId("quote-status")).toHaveText("concept", { timeout: 60_000 })
   // 2 × € 189,00 = € 378,00, plus 21% VAT = € 457,38 — from the price list, not the model.
   await expect(quote.getByTestId("quote-total")).toContainText("457,38")
   // A draft cannot be sent: the only way forward is a person's approval.
-  await expect(quote.getByRole("button", { name: "Send to customer" })).toHaveCount(0)
+  await expect(quote.getByRole("button", { name: "Naar klant sturen" })).toHaveCount(0)
 
-  await quote.getByRole("button", { name: "Approve" }).click()
-  await expect(quote.getByTestId("quote-status")).toHaveText("approved")
-  await quote.getByRole("button", { name: "Send to customer" }).click()
-  await expect(quote.getByTestId("quote-status")).toHaveText("sent")
+  await quote.getByRole("button", { name: "Goedkeuren" }).click()
+  await expect(quote.getByTestId("quote-status")).toHaveText("goedgekeurd")
+  await quote.getByRole("button", { name: "Naar klant sturen" }).click()
+  await expect(quote.getByTestId("quote-status")).toHaveText("verstuurd")
 })
 
 test("an instruction becomes a proposed price change that only applies when a person applies it", async ({ page, baseURL }) => {
   test.setTimeout(120_000)
   await createAccount(page.request, baseURL ?? "")
   await page.goto("/sales")
-  const sku = page.getByLabel("SKU")
+  const sku = page.getByLabel("Artikelnummer")
   await expect(sku).toBeEnabled()
   await sku.fill("SV-350")
-  await page.getByLabel("Product name").fill("Pressure relief valve 350 bar")
-  await page.getByLabel("Price", { exact: true }).fill("189,00")
-  await page.getByRole("button", { name: "Add product" }).click()
-  const products = page.getByRole("table", { name: "Products" })
+  await page.getByLabel("Productnaam").fill("Pressure relief valve 350 bar")
+  await page.getByLabel("Prijs", { exact: true }).fill("189,00")
+  await page.getByRole("button", { name: "Product toevoegen" }).click()
+  const products = page.getByRole("table", { name: "Producten" })
   await expect(products).toContainText("189,00")
 
-  await page.getByLabel("Price list instruction").fill("Raise the price of SV-350 to 199 euro.")
-  await page.getByRole("button", { name: "Propose" }).click()
+  await page.getByLabel("Opdracht voor de prijslijst").fill("Raise the price of SV-350 to 199 euro.")
+  await page.getByRole("button", { name: "Voorstellen" }).click()
   const proposal = page.getByTestId("proposal").first()
   await expect(proposal).toContainText("199,00", { timeout: 60_000 })
   // Proposed, not applied: the price list still says 189.
   await expect(products).toContainText("189,00")
 
-  await proposal.getByRole("button", { name: "Apply" }).click()
+  await proposal.getByRole("button", { name: "Doorvoeren" }).click()
   await expect(products).toContainText("199,00")
   await expect(page.getByTestId("proposal")).toHaveCount(0)
 })
@@ -70,18 +70,19 @@ test("an instruction becomes a proposed price change that only applies when a pe
 test("a customer's payment terms are set and cleared back to the default", async ({ page, baseURL }) => {
   await createAccount(page.request, baseURL ?? "")
   await page.goto("/sales")
-  const email = page.getByLabel("Customer email")
+  const email = page.getByLabel("E-mail klant")
   await expect(email).toBeEnabled()
   await email.fill("Piet@Smit-Transport.nl")
-  await page.getByLabel("Payment terms in days").fill("14")
-  await page.getByRole("button", { name: "Save terms" }).click()
+  await page.getByLabel("Betalingstermijn in dagen").fill("14")
+  await page.getByRole("button", { name: "Termijn opslaan" }).click()
 
-  const terms = page.getByRole("table", { name: "Customer payment terms" })
+  const terms = page.getByRole("table", { name: "Betalingstermijnen per klant" })
   // Stored lower-cased: two spellings of one address are one customer.
   await expect(terms).toContainText("piet@smit-transport.nl")
-  await expect(terms).toContainText("14 days")
+  await expect(terms).toContainText("14 dagen")
 
-  await page.getByRole("button", { name: "Use default terms for piet@smit-transport.nl" }).click()
+  await page.getByRole("button", { name: "Standaardtermijn gebruiken voor piet@smit-transport.nl" }).click()
   await expect(terms).toBeHidden()
-  await expect(page.getByText("Every customer pays within the default 30 days.")).toBeVisible()
+  await expect(page.getByText("Elke klant betaalt binnen de standaardtermijn van 30 dagen.", { exact: false }))
+    .toBeVisible()
 })

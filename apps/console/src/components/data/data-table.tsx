@@ -56,7 +56,7 @@ export function DataTable<Row>(props: {
                   key={column.key}
                   className={cn(
                     "px-3 py-2 align-middle text-ink",
-                    column.align === "right" ? "tabular text-right" : "text-left",
+                    column.align === "right" ? "tabular text-right whitespace-nowrap" : "text-left",
                     column.className
                   )}
                 >

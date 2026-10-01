@@ -19,6 +19,7 @@ import { useSchemaForm } from "@/hooks/use-schema-form"
 import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
+import { authErrorMessage } from "./api/auth-errors.ts"
 import { useSessionChange } from "./api/use-session-change.ts"
 import { AuthCard, authLinkClass } from "./components/auth-card.tsx"
 import { SubmitButton } from "./components/submit-button.tsx"
@@ -32,9 +33,9 @@ const Registration = Schema.Struct({
 })
 
 const FIELDS = [
-  { name: "name", label: "Name", type: "text", autoComplete: "name" },
-  { name: "email", label: "Email", type: "email", autoComplete: "email" },
-  { name: "password", label: "Password", type: "password", autoComplete: "new-password" }
+  { name: "name", label: "Naam", type: "text", autoComplete: "name" },
+  { name: "email", label: "E-mailadres", type: "email", autoComplete: "email" },
+  { name: "password", label: "Wachtwoord", type: "password", autoComplete: "new-password" }
 ] as const
 
 export function SignUpPage(props: { readonly next: string }) {
@@ -49,7 +50,7 @@ export function SignUpPage(props: { readonly next: string }) {
       setRejected(undefined)
       const result = await authClient.signUp.email(value)
       if (result.error !== null && result.error !== undefined) {
-        setRejected(result.error.message ?? "That account could not be created.")
+        setRejected(authErrorMessage(result.error, "Dit account kon niet worden aangemaakt."))
         return
       }
       // Sign-up signs in, so the router re-reads the session — see `useSessionChange`.
@@ -59,12 +60,12 @@ export function SignUpPage(props: { readonly next: string }) {
 
   return (
     <AuthCard
-      title="Create an account"
-      description="If you were invited, use the address the invitation was sent to."
+      title="Account aanmaken"
+      description="Ben je uitgenodigd? Gebruik dan het e-mailadres waarop je de uitnodiging kreeg."
       footer={
         <p>
-          Already have an account?{" "}
-          <Link to="/login" search={{ next: props.next }} className={authLinkClass}>Sign in</Link>
+          Heb je al een account?{" "}
+          <Link to="/login" search={{ next: props.next }} className={authLinkClass}>Inloggen</Link>
         </p>
       }
     >
@@ -95,8 +96,8 @@ export function SignUpPage(props: { readonly next: string }) {
               <SubmitButton
                 submitting={isSubmitting}
                 hydrated={hydrated}
-                label="Create account"
-                busyLabel="Creating account…"
+                label="Account aanmaken"
+                busyLabel="Account wordt aangemaakt…"
               />
             )}
           </form.Subscribe>

@@ -24,14 +24,14 @@ test("a channel created in one tab carries a message to another", async ({ brows
   // A unique name per run: the suite runs against a database that keeps its rows, and slugs are unique per org.
   const channel = `Billing ${Date.now()}`
   await author.goto("/chat")
-  await author.getByLabel("New channel name").fill(channel)
-  await author.getByRole("button", { name: "Create" }).click()
+  await author.getByLabel("Naam nieuw kanaal").fill(channel)
+  await author.getByRole("button", { name: "Aanmaken" }).click()
 
   // The channel appears, and creating it selected it — the pane's heading is the proof.
   await expect(author.getByRole("heading", { level: 2 })).toContainText("billing-")
 
-  await author.getByLabel("Write a message").fill("the PO matches")
-  await author.getByRole("button", { name: "Send" }).click()
+  await author.getByLabel("Schrijf een bericht").fill("the PO matches")
+  await author.getByRole("button", { name: "Versturen" }).click()
   await expect(author.getByText("the PO matches")).toBeVisible()
 
   /*
@@ -42,8 +42,8 @@ test("a channel created in one tab carries a message to another", async ({ brows
   await reader.getByRole("button", { name: new RegExp(channel.toLowerCase().replace(/[^a-z0-9]+/g, "-")) }).click()
   await expect(reader.getByText("the PO matches")).toBeVisible()
 
-  await author.getByLabel("Write a message").fill("and the totals add up")
-  await author.getByRole("button", { name: "Send" }).click()
+  await author.getByLabel("Schrijf een bericht").fill("and the totals add up")
+  await author.getByRole("button", { name: "Versturen" }).click()
 
   /*
    * NO reload on the reader. This is the assertion the whole realtime stack exists for; everything else in this

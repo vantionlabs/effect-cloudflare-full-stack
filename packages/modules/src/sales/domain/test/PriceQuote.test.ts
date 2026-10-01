@@ -62,7 +62,7 @@ describe("priceQuote", () => {
       CATALOGUE
     )
     expect(quote.lines).toEqual([])
-    expect(quote.flags[0]).toContain("does not contain")
+    expect(quote.flags[0]).toContain("niet in de aanvraag staat")
   })
 
   it("will not price a quantity the item's own words do not state", () => {
@@ -73,7 +73,7 @@ describe("priceQuote", () => {
       CATALOGUE
     )
     expect(quote.lines).toEqual([])
-    expect(quote.flags[0]).toContain("No quantity found")
+    expect(quote.flags[0]).toContain("Geen aantal gevonden")
   })
 
   it("refuses a SKU that is not in the price list, rather than inventing a product", () => {
@@ -83,7 +83,7 @@ describe("priceQuote", () => {
       CATALOGUE
     )
     expect(quote.lines).toEqual([])
-    expect(quote.flags[0]).toContain("not in the price list")
+    expect(quote.flags[0]).toContain("staat niet in de prijslijst")
   })
 
   it("does not offer a discontinued product", () => {
@@ -92,7 +92,7 @@ describe("priceQuote", () => {
       REQUEST,
       CATALOGUE
     )
-    expect(quote.flags[0]).toContain("no longer offered")
+    expect(quote.flags[0]).toContain("niet meer aangeboden")
   })
 
   it("flags a request with nothing in the catalogue for a person to handle", () => {
@@ -101,7 +101,7 @@ describe("priceQuote", () => {
       REQUEST,
       CATALOGUE
     )
-    expect(quote.flags).toContain("Nothing in the request could be priced.")
+    expect(quote.flags).toContain("Niets in de aanvraag kon geprijsd worden.")
   })
 
   it("never uses a customer email that is not in the request", () => {
@@ -111,7 +111,9 @@ describe("priceQuote", () => {
       CATALOGUE
     )
     expect(quote.customerEmail).toBeNull()
-    expect(quote.flags).toContain("The customer email given was not in the request, so it was not used.")
+    expect(quote.flags).toContain(
+      "Het opgegeven e-mailadres van de klant stond niet in de aanvraag en is dus niet gebruikt."
+    )
   })
 
   it("rounds fractional quantities half-up to the cent, per line", () => {

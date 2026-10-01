@@ -58,12 +58,16 @@ export const UpsertProduct = (input: UpsertProductInput) =>
   Effect.gen(function*() {
     const sku = input.sku.trim()
     const name = input.name.trim()
-    if (sku === "" || name === "") return yield* new InvalidProduct({ reason: "A product needs a SKU and a name." })
+    if (sku === "" || name === "") {
+      return yield* new InvalidProduct({ reason: "Een product heeft een artikelnummer en een naam nodig." })
+    }
     if (!Number.isInteger(input.unitPrice) || input.unitPrice < 0) {
-      return yield* new InvalidProduct({ reason: "The price must be a whole number of cents, not negative." })
+      return yield* new InvalidProduct({ reason: "De prijs moet een heel aantal centen zijn, niet negatief." })
     }
     if (!VAT_RATES.includes(input.vat)) {
-      return yield* new InvalidProduct({ reason: `VAT must be one of ${VAT_RATES.join(", ")} per mille.` })
+      return yield* new InvalidProduct({
+        reason: `Btw moet ${VAT_RATES.map((rate) => `${rate / 10}%`).join(", ")} zijn.`
+      })
     }
     const db = yield* Db
     const ids = yield* Ids

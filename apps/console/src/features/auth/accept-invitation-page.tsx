@@ -20,6 +20,7 @@ import type { InvitationView } from "@/features/auth/api/invitation"
 import { useHydrated } from "@/hooks/use-hydrated"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
+import { authErrorMessage, roleLabel } from "./api/auth-errors.ts"
 
 export function AcceptInvitationPage(props: { readonly invitationId: string; readonly invitation: InvitationView }) {
   const { invitation, invitationId } = props
@@ -36,7 +37,7 @@ export function AcceptInvitationPage(props: { readonly invitationId: string; rea
       ? await authClient.organization.acceptInvitation({ invitationId })
       : await authClient.organization.rejectInvitation({ invitationId })
     if (result.error !== null && result.error !== undefined) {
-      setRejected(result.error.message ?? "That did not work. The invitation may have expired.")
+      setRejected(authErrorMessage(result.error, "Dat lukte niet. De uitnodiging is misschien verlopen."))
       setBusy(false)
       return
     }
@@ -51,12 +52,12 @@ export function AcceptInvitationPage(props: { readonly invitationId: string; rea
   return (
     <Page width="narrow">
       <PageHeader
-        title="Invitation"
+        title="Uitnodiging"
         description={invitation._tag === "Pending"
           ? (
             <>
-              {invitation.inviterEmail} invited you to{" "}
-              <strong className="text-ink">{invitation.organizationName}</strong> as {invitation.role}.
+              {invitation.inviterEmail} heeft je uitgenodigd voor{" "}
+              <strong className="text-ink">{invitation.organizationName}</strong> als {roleLabel(invitation.role)}.
             </>
           )
           : undefined}
@@ -65,7 +66,7 @@ export function AcceptInvitationPage(props: { readonly invitationId: string; rea
         {invitation._tag === "Unavailable"
           ? <p className="text-sm text-red" role="alert">{invitation.reason}</p>
           : null}
-        {declined ? <p className="text-sm text-ink" role="status">Invitation declined.</p> : null}
+        {declined ? <p className="text-sm text-ink" role="status">Uitnodiging geweigerd.</p> : null}
         {invitation._tag === "Pending" && !declined
           ? (
             <div className="flex flex-col gap-3">
@@ -75,10 +76,10 @@ export function AcceptInvitationPage(props: { readonly invitationId: string; rea
                   disabled={busy || !hydrated}
                   onClick={() => void act("accept")}
                 >
-                  {busy ? "Working…" : "Accept"}
+                  {busy ? "Bezig…" : "Accepteren"}
                 </Button>
                 <Button variant="secondary" disabled={busy || !hydrated} onClick={() => void act("decline")}>
-                  Decline
+                  Weigeren
                 </Button>
               </div>
               {rejected === undefined ? null : <p className="text-sm text-red" role="alert">{rejected}</p>}

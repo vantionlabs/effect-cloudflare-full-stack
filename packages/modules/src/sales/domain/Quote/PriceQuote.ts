@@ -61,29 +61,29 @@ export const priceQuote = (
 
   for (const item of reading.items) {
     if (!containsVerbatim(item.request_text, request)) {
-      flags.push(`Dropped an item the request does not contain: "${item.request_text}".`)
+      flags.push(`Regel weggelaten die niet in de aanvraag staat: "${item.request_text}".`)
       continue
     }
     if (!containsVerbatim(item.quantity_text, item.request_text)) {
-      flags.push(`No quantity found in "${item.request_text}" — add the line by hand.`)
+      flags.push(`Geen aantal gevonden in "${item.request_text}" — voeg de regel zelf toe.`)
       continue
     }
     const quantity = parseScaledInteger(item.quantity_text, QUANTITY_DECIMALS)
     if (Result.isFailure(quantity) || quantity.success <= 0) {
-      flags.push(`The quantity "${item.quantity_text}" in "${item.request_text}" is ambiguous — check it.`)
+      flags.push(`Het aantal "${item.quantity_text}" in "${item.request_text}" is niet eenduidig — controleer het.`)
       continue
     }
     if (item.sku === null) {
-      flags.push(`Nothing in the price list matches "${item.request_text}".`)
+      flags.push(`Niets in de prijslijst past bij "${item.request_text}".`)
       continue
     }
     const product = bySku.get(item.sku.toLowerCase())
     if (product === undefined) {
-      flags.push(`"${item.request_text}" was matched to ${item.sku}, which is not in the price list.`)
+      flags.push(`"${item.request_text}" werd gekoppeld aan ${item.sku}, maar dat staat niet in de prijslijst.`)
       continue
     }
     if (!product.active) {
-      flags.push(`"${item.request_text}" matched ${product.sku}, which is no longer offered.`)
+      flags.push(`"${item.request_text}" past bij ${product.sku}, maar dat wordt niet meer aangeboden.`)
       continue
     }
     const amount = Milli.make(quantity.success)
@@ -107,10 +107,12 @@ export const priceQuote = (
     ? reading.customer_email.trim()
     : null
   if (reading.customer_email !== null && customerEmail === null) {
-    flags.push("The customer email given was not in the request, so it was not used.")
+    flags.push("Het opgegeven e-mailadres van de klant stond niet in de aanvraag en is dus niet gebruikt.")
   }
-  if (customerEmail === null) flags.push("No customer email — add one before the quote can be sent.")
-  if (lines.length === 0) flags.push("Nothing in the request could be priced.")
+  if (customerEmail === null) {
+    flags.push("Geen e-mailadres van de klant — vul het in voordat de offerte verstuurd kan worden.")
+  }
+  if (lines.length === 0) flags.push("Niets in de aanvraag kon geprijsd worden.")
 
   const subtotal = Cents.make(lines.reduce((sum, line) => sum + line.lineTotal, 0))
   const vatTotal = Cents.make(lines.reduce((sum, line) => sum + vatOn(line.lineTotal, line.vat), 0))

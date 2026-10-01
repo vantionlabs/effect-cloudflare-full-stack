@@ -5,9 +5,20 @@
  * invoices should not be moving a mouse. The keys are bound once in the page rather than per row, so focus never
  * decides whether a shortcut works.
  */
+import { loadQueuePage } from "@/features/queue/api/load-queue-page"
 import { QueuePage } from "@/features/queue/queue-page"
+import { HydrationBoundary } from "@effect/atom-react"
 import { createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_authenticated/")({
-  component: QueuePage
+  loader: () => loadQueuePage(),
+  component: QueueRoute
 })
+
+function QueueRoute() {
+  return (
+    <HydrationBoundary state={Route.useLoaderData()}>
+      <QueuePage />
+    </HydrationBoundary>
+  )
+}

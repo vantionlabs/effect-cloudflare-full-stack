@@ -10,12 +10,14 @@
  */
 import { Notice } from "@/components/feedback/notice"
 import { useIdentity } from "@/hooks/use-session"
+import { enter } from "@/lib/motion"
 import { usePresence } from "@/realtime/use-presence"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
+import { CheckCheck } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { approveAtom, queueAtom, rejectAtom, REVIEW_KEYS, reviewingAtom } from "./api/queue-atoms.ts"
-import { DecisionInspector } from "./components/decision-inspector.tsx"
-import { QueueList } from "./components/queue-list.tsx"
+import { DecisionInspector, InspectorSkeleton } from "./components/decision-inspector.tsx"
+import { QueueList, QueueListSkeleton } from "./components/queue-list.tsx"
 
 export function QueuePage() {
   const queue = useAtomValue(queueAtom)
@@ -155,17 +157,45 @@ export function QueuePage() {
   if (queue._tag === "Failure") {
     return (
       <main className="p-8">
-        <Notice tone="error">could not load the queue</Notice>
+        <Notice tone="error">
+          De wachtrij kon niet worden geladen. Vernieuw de pagina om het opnieuw te proberen.
+        </Notice>
       </main>
     )
   }
 
   return (
     <main className="grid min-h-0 flex-1 grid-rows-[auto_1fr] md:h-dvh md:grid-cols-[22rem_1fr] md:grid-rows-1">
-      <QueueList items={items} selected={selected} onSelect={setSelected} others={others} />
-      {current === undefined
-        ? <section className="p-8 text-[13px] text-ink-2">the queue is empty</section>
+      {
+        /*
+         * The server renders the queue (`load-queue-page.ts`), so `Initial` is only seen when the browser fetches it
+         * itself — and then the list's SHAPE stands in, never an empty state that would claim there is nothing to do.
+         */
+      }
+      {queue._tag === "Initial"
+        ? <QueueListSkeleton />
+        : <QueueList items={items} selected={selected} onSelect={setSelected} others={others} />}
+      {queue._tag === "Initial"
+        ? <InspectorSkeleton />
+        : current === undefined
+        ? <EmptyQueue />
         : <DecisionInspector decisionId={current.decisionId} />}
     </main>
+  )
+}
+
+/** Nothing pending — said so, with what will make something appear. */
+function EmptyQueue() {
+  return (
+    <section className="flex flex-col items-start gap-2 p-8 md:p-12" style={enter(0)}>
+      <span className="flex size-9 items-center justify-center rounded-card bg-green-tint text-green">
+        <CheckCheck className="size-5" aria-hidden />
+      </span>
+      <h2 className="text-[15px] font-semibold text-ink">Niets te beoordelen</h2>
+      <p className="max-w-sm text-[13px] text-ink-2">
+        Nieuwe documenten verschijnen hier zodra ze binnenkomen. Alles wat het systeem niet zelf mag beslissen, komt
+        hier terecht, met de reden erbij.
+      </p>
+    </section>
   )
 }

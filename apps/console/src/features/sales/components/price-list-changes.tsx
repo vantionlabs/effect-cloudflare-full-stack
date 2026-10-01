@@ -1,9 +1,10 @@
 /**
- * "Change the price list by asking": an instruction becomes PROPOSALS, each shown as before -> after, and nothing
- * changes until a person applies one. Refusals are the tools' own reasons (a price not in the instruction, an
- * unknown SKU), so the person knows exactly what was not done.
+ * "Change the price list by asking": an instruction becomes PROPOSALS, each shown as a field diff (now → becomes),
+ * and nothing changes until a person applies one. Refusals are the tools' own reasons (a price not in the
+ * instruction, an unknown SKU), so the person knows exactly what was not done.
  */
 import { Button } from "@/components/atoms/Button"
+import { Shimmer } from "@/components/atoms/Shimmer"
 import { Notice } from "@/components/feedback/notice"
 import { Input } from "@/components/ui/input"
 import {
@@ -14,8 +15,10 @@ import {
   proposeChangesAtom,
   rejectChangeAtom
 } from "@/features/sales/api/sales-atoms"
+import { useArrivals } from "@/hooks/use-arrivals"
 import { useHydrated } from "@/hooks/use-hydrated"
 import { describeFailure } from "@/lib/failure"
+import { enter } from "@/lib/motion"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { Exit } from "effect"
 import { useState } from "react"
@@ -40,6 +43,7 @@ export function PriceListChanges() {
   }
 
   const pending = changes._tag === "Success" ? changes.value.filter((change) => change.status === "pending") : []
+  const arrived = useArrivals(pending, (change) => change.id)
 
   return (
     <div className="flex flex-col gap-3">
@@ -60,20 +64,21 @@ export function PriceListChanges() {
         }}
       >
         <Input
-          aria-label="Price list instruction"
-          placeholder="Raise SV-350 to 199 and stop offering OLD-1"
+          aria-label="Opdracht voor de prijslijst"
+          placeholder="Verhoog SV-350 naar 199 en stop met OLD-1"
           value={instruction}
           maxLength={1000}
           disabled={!hydrated}
           onChange={(event) => setInstruction(event.target.value)}
         />
         <Button variant="primary" type="submit" disabled={!hydrated || busy || instruction.trim() === ""}>
-          {busy ? "Working…" : "Propose"}
+          {busy ? <Shimmer>Bezig…</Shimmer> : "Voorstellen"}
         </Button>
       </form>
       {refusals.length === 0 ? null : (
         <Notice>
-          <ul className="list-disc pl-4" aria-label="Not proposed">
+          <span className="font-medium text-ink">Niet voorgesteld</span>
+          <ul className="mt-1 list-disc pl-4" aria-label="Niet voorgesteld">
             {refusals.map((reason) => <li key={reason}>{reason}</li>)}
           </ul>
         </Notice>
@@ -82,13 +87,16 @@ export function PriceListChanges() {
       {pending.length === 0 ? null : (
         <div className="grid gap-3 sm:grid-cols-2">
           {pending.map((change) => (
-            <ProposalCard
-              key={change.id}
-              change={change}
-              disabled={!hydrated}
-              onApply={() => void decide(change.id, apply)}
-              onReject={() => void decide(change.id, reject)}
-            />
+            <div key={change.id} style={arrived.has(change.id) ? enter(arrived.get(change.id)) : undefined}>
+              <ProposalCard
+                change={change}
+                disabled={!hydrated}
+                onApply={() =>
+                  void decide(change.id, apply)}
+                onReject={() =>
+                  void decide(change.id, reject)}
+              />
+            </div>
           ))}
         </div>
       )}
