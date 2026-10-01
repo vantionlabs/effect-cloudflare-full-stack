@@ -1,20 +1,56 @@
 /**
  * The shell every signed-in page sits inside: navigation on the left with the account at its foot, and the page.
  */
+import {
+  type CommandItem,
+  CommandPalette,
+  type CommandRecords,
+  useCommandShortcut
+} from "@/components/command/command-palette"
 import { useIdentity, useOrganizationId } from "@/hooks/use-session"
 import { cn } from "@/lib/utils"
 import { Link } from "@tanstack/react-router"
-import type { ReactNode } from "react"
-import { AppSidebar } from "./app-sidebar.tsx"
+import { type ReactNode, useCallback, useState } from "react"
+import { AppSidebar, NAV_ITEMS } from "./app-sidebar.tsx"
 
-/** `signOut` is passed in rather than imported: the shell is shared, and the control belongs to the auth feature. */
-export function AppShell(props: { readonly signOut: ReactNode; readonly children: ReactNode }) {
+const PAGES: ReadonlyArray<CommandItem> = NAV_ITEMS.map((item) => ({
+  id: `page:${item.to}`,
+  label: item.label,
+  group: "Pagina's",
+  href: item.to,
+  icon: <item.icon className="size-3.5" aria-hidden />
+}))
+
+/**
+ * `signOut` and `useCommandRecords` are passed in rather than imported: the shell is shared, and the sign-out control
+ * and the searchable records belong to features.
+ */
+export function AppShell(
+  props: {
+    readonly signOut: ReactNode
+    readonly useCommandRecords: () => CommandRecords
+    readonly children: ReactNode
+  }
+) {
+  const [searching, setSearching] = useState(false)
+  const openSearch = useCallback(() => setSearching(true), [])
+  useCommandShortcut(openSearch)
   const identity = useIdentity()
   const organizationId = useOrganizationId()
   const initial = (identity.name ?? identity.email).charAt(0).toUpperCase()
   return (
     <div className="flex min-h-dvh flex-col bg-page md:flex-row">
+      {searching ?
+        (
+          <CommandPalette
+            pages={PAGES}
+            useRecords={props.useCommandRecords}
+            onClose={() => setSearching(false)}
+          />
+        ) :
+        null}
       <AppSidebar
+        onSearch={openSearch}
         footer={(collapsed) => (
           /*
            * Rendered ONCE at every width: an earlier version also had a mobile-only copy hidden by CSS, which a screen

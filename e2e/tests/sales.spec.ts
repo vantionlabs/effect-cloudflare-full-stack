@@ -86,3 +86,31 @@ test("a customer's payment terms are set and cleared back to the default", async
   await expect(page.getByText("Elke klant betaalt binnen de standaardtermijn van 30 dagen.", { exact: false }))
     .toBeVisible()
 })
+
+test("the price list sorts by price, both ways, and says so to a screen reader", async ({ page, baseURL }) => {
+  await createAccount(page.request, baseURL ?? "")
+  await page.goto("/sales")
+  const add = async (sku: string, name: string, price: string) => {
+    await page.getByLabel("Artikelnummer").fill(sku)
+    await page.getByLabel("Productnaam").fill(name)
+    await page.getByLabel("Prijs", { exact: true }).fill(price)
+    await page.getByRole("button", { name: "Product toevoegen" }).click()
+    await expect(page.getByRole("table", { name: "Producten" })).toContainText(sku)
+  }
+  await expect(page.getByLabel("Artikelnummer")).toBeEnabled()
+  await add("B-200", "Middel", "200,00")
+  await add("A-900", "Duur", "900,00")
+  await add("C-050", "Goedkoop", "50,00")
+
+  const table = page.getByRole("table", { name: "Producten" })
+  const skus = () => table.locator("tbody tr td:first-child").allInnerTexts()
+  const priceHeader = table.getByRole("columnheader", { name: /Prijs/ })
+
+  await priceHeader.getByRole("button").click()
+  await expect(priceHeader).toHaveAttribute("aria-sort", "ascending")
+  expect(await skus()).toEqual(["C-050", "B-200", "A-900"])
+
+  await priceHeader.getByRole("button").click()
+  await expect(priceHeader).toHaveAttribute("aria-sort", "descending")
+  expect(await skus()).toEqual(["A-900", "B-200", "C-050"])
+})

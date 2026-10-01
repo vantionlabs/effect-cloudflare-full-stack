@@ -398,5 +398,11 @@ through. Never put a `waitForTimeout` in its place — it hides the bug and re-i
 no local emulation. CI gates the job and prints a warning, for the same reason the `worker` project is
 gated. `E2E_BASE_URL` points the same specs at a deployed environment instead.
 
+**An RPC whose success schema is a `Schema.Class` must return an INSTANCE, not a plain object.** Encoding a class
+needs the instance, so a plain object fails on the SERVER ("Expected AskAnswer") and reaches the client as a defect —
+with nothing in the type checker to say so, because the shapes match. It has happened three times: `Ask.question`,
+then `Assistant.ask` and `Assistant.history`, both of which failed on every call and went unnoticed because no
+client called them until the console did. Build the instance in the handler (`new AskAnswer({...})`).
+
 **`Schema.TaggedError` is an `Error` whose `.message` is usually empty.** `failure.message` compiles and
 records a blank string. Lead with `_tag`.

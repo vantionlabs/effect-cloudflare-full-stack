@@ -29,6 +29,7 @@ import { SessionTable } from "@ea/modules/iam/tables/Session"
 import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
+import { ConversationTable } from "@ea/modules/policy/tables/Conversation"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
 import { ExpenseTable } from "@ea/modules/reporting/tables/Expense"
 import { ReportDeliveryTable } from "@ea/modules/reporting/tables/ReportDelivery"
@@ -148,7 +149,9 @@ export const migrations = {
   // Payment terms per customer, keyed by email; invoices copy them into their due date.
   "0033_customer_terms": CustomerTermsTable,
   // Expected payments out, one-off or monthly, so the cash forecast shows net cash and not only inflows.
-  "0034_expenses": ExpenseTable
+  "0034_expenses": ExpenseTable,
+  // The index of each person's docs-assistant conversations; the turns themselves live in the agent.
+  "0035_assistant_conversations": ConversationTable
 }
 
 export const loader = Migrator.fromRecord(migrations)

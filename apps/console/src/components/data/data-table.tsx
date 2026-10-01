@@ -3,9 +3,16 @@
  *
  * Columns are data, not markup — `{ key, header, cell, align }` — so a page describes WHAT to show and every table
  * looks and behaves the same. Deliberately not the registry's `RecordsTable`, whose rows are a fixed CRM shape.
+ *
+ * Two opt-in behaviours, both per column:
+ * - `sortBy`: the header becomes a button that sorts by this value, ascending then descending, announced with
+ *   `aria-sort`. Sorting is a view of the rows the page passed — it never refetches or reorders data on the server.
+ * - `priority: "secondary"`: the column is hidden below `md`. On a phone a wide table either scrolls sideways (cutting
+ *   off the buttons at its end) or drops what matters least; the page decides which columns those are.
  */
 import { cn } from "@/lib/utils"
-import type { ReactNode } from "react"
+import { ArrowDown, ArrowUp } from "lucide-react"
+import { type ReactNode, useState } from "react"
 
 export interface Column<Row> {
   readonly key: string
@@ -13,6 +20,8 @@ export interface Column<Row> {
   readonly cell: (row: Row) => ReactNode
   readonly align?: "left" | "right"
   readonly className?: string
+  readonly sortBy?: (row: Row) => string | number
+  readonly priority?: "primary" | "secondary"
 }
 
 export function DataTable<Row>(props: {
@@ -23,29 +32,75 @@ export function DataTable<Row>(props: {
   readonly caption?: string
   readonly rowTestId?: string
 }) {
+  const [sort, setSort] = useState<{ readonly key: string; readonly direction: "ascending" | "descending" } | null>(
+    null
+  )
   if (props.rows.length === 0) return <EmptyRow>{props.empty}</EmptyRow>
+
+  const sortColumn = sort === null ? undefined : props.columns.find((column) => column.key === sort.key)
+  const rows = sortColumn?.sortBy === undefined
+    ? props.rows
+    : [...props.rows].sort((a, b) => {
+      const x = sortColumn.sortBy!(a)
+      const y = sortColumn.sortBy!(b)
+      const order = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "nl")
+      return sort!.direction === "ascending" ? order : -order
+    })
+
+  const toggle = (key: string) =>
+    setSort((current) =>
+      current?.key !== key
+        ? { key, direction: "ascending" }
+        : current.direction === "ascending"
+        ? { key, direction: "descending" }
+        : null
+    )
+
+  const hidden = (column: Column<Row>) => column.priority === "secondary" ? "max-md:hidden" : undefined
+
   return (
     <div className="overflow-x-auto rounded-card bg-surface shadow-card">
       <table className="w-full border-collapse text-[13px]">
         {props.caption === undefined ? null : <caption className="sr-only">{props.caption}</caption>}
         <thead>
           <tr className="border-b border-line">
-            {props.columns.map((column) => (
-              <th
-                key={column.key}
-                scope="col"
-                className={cn(
-                  "px-3 py-2 text-[12px] font-medium whitespace-nowrap text-ink-2",
-                  column.align === "right" ? "text-right" : "text-left"
-                )}
-              >
-                {column.header}
-              </th>
-            ))}
+            {props.columns.map((column) => {
+              const active = sort?.key === column.key
+              return (
+                <th
+                  key={column.key}
+                  scope="col"
+                  aria-sort={active ? sort!.direction : column.sortBy === undefined ? undefined : "none"}
+                  className={cn(
+                    "px-3 py-2 text-[12px] font-medium whitespace-nowrap text-ink-2",
+                    column.align === "right" ? "text-right" : "text-left",
+                    hidden(column)
+                  )}
+                >
+                  {column.sortBy === undefined ? column.header : (
+                    <button
+                      type="button"
+                      onClick={() => toggle(column.key)}
+                      className={cn(
+                        "-mx-1 inline-flex items-center gap-1 rounded-chip px-1 transition-colors duration-100 hover:text-ink",
+                        active && "text-ink"
+                      )}
+                    >
+                      {column.header}
+                      {active
+                        ? sort!.direction === "ascending"
+                          ? <ArrowUp className="size-3" aria-hidden />
+                          : <ArrowDown className="size-3" aria-hidden />
+                        : null}
+                    </button>
+                  )}
+                </th>
+              )
+            })}
           </tr>
         </thead>
         <tbody>
-          {props.rows.map((row) => (
+          {rows.map((row) => (
             <tr
               key={props.rowKey(row)}
               data-testid={props.rowTestId}
@@ -57,7 +112,8 @@ export function DataTable<Row>(props: {
                   className={cn(
                     "px-3 py-2 align-middle text-ink",
                     column.align === "right" ? "tabular text-right whitespace-nowrap" : "text-left",
-                    column.className
+                    column.className,
+                    hidden(column)
                   )}
                 >
                   {column.cell(row)}

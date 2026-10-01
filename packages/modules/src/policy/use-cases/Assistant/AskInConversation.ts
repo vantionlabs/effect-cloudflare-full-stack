@@ -6,6 +6,9 @@
  * refusal — which is the property that makes this safe to add. If this file could influence how an answer is
  * produced, it would be a second place the grounding rule lives.
  *
+ * The one thing it adds to the loop is CONTEXT: the last few turns, so a follow-up ("and for the 500 model?") can be
+ * understood. Context is not evidence — `AskCorpus` still only accepts citations of chunks served in this run.
+ *
  * ## The ordering is the design
  *
  * **Answer first, record second.** So:
@@ -18,9 +21,13 @@
  *   the reviewer must see the refusal and not an empty answer.
  *
  * That last point is the subtle one: recording a refusal must not swallow it. The test asserts both halves.
+ *
+ * The conversation's INDEX row is updated by `AskAndIndex` (Conversations.ts), not here: this use case stays free of
+ * the database, so its tests need none — and the index is a list line, never part of an answer.
  */
 import { AssistantConversations } from "@ea/modules/policy/domain/Assistant"
-import { AskCorpus } from "@ea/modules/policy/use-cases/Ask"
+import { AskCorpus, MAX_PRIOR_TURNS } from "@ea/modules/policy/use-cases/Ask"
+import type { AskableCollection } from "@ea/modules/shared/domain/Corpus"
 import { Clock, Effect } from "effect"
 
 /**
@@ -32,15 +39,23 @@ import { Clock, Effect } from "effect"
  */
 export const AskInConversation = (
   conversationId: string,
-  question: string
+  question: string,
+  collection: AskableCollection = "knowledge"
 ) =>
   Effect.gen(function*() {
     const conversations = yield* AssistantConversations
     const now = yield* Clock.currentTimeMillis
     const askedAt = new Date(now).toISOString()
 
+    const earlier = yield* conversations.history(conversationId)
+    const history = earlier.turns.slice(-MAX_PRIOR_TURNS).map((turn) => ({
+      question: turn.question,
+      answer: turn.answer,
+      refusedBecause: turn.refusedBecause
+    }))
+
     const answer = yield* Effect.catchTag(
-      AskCorpus(question),
+      AskCorpus(question, collection, history),
       "UngroundedAnswer",
       (refusal) =>
         /*
@@ -53,6 +68,7 @@ export const AskInConversation = (
             question,
             refusedBecause: refusal.reasons.join("; "),
             citations: [],
+            sources: [],
             askedAt
           }),
           () => Effect.fail(refusal)
@@ -63,6 +79,14 @@ export const AskInConversation = (
       question,
       answer: answer.answer,
       citations: answer.citations.map((citation) => citation.chunk_id),
+      // Copied from the VERIFIED, located citations — the same objects the answer is returned with.
+      sources: answer.citations.map((citation) => ({
+        chunk_id: citation.chunk_id,
+        clause_ref: citation.clause_ref,
+        excerpt: citation.excerpt,
+        heading: citation.heading ?? null,
+        document: citation.document ?? null
+      })),
       askedAt
     })
 

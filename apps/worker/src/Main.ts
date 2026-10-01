@@ -83,6 +83,7 @@ import { ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
 import { AssistantConversationsAgent } from "@ea/modules/policy/server/Assistant"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
+import { weeklyCatchUpDue } from "@ea/modules/reporting/domain/WeeklyReport"
 import { SendWeeklyReports } from "@ea/modules/reporting/use-cases/WeeklyReport"
 import { isTerminal } from "@ea/modules/shared/domain/Errors"
 import { EventId } from "@ea/modules/shared/domain/Event"
@@ -653,7 +654,8 @@ export default {
           // Logged including zeros, for the same reason as the sweeper below: silence looks like a dead cron.
           yield* Effect.log(
             `cron ${controller.cron}: weekly reports for ${summary.period.from}..${summary.period.to} — ` +
-              `${summary.sent} sent, ${summary.alreadySent} already sent, ${summary.failed} failed`
+              `${summary.sent} sent, ${summary.alreadySent} already sent, ${summary.failed} failed` +
+              (summary.more ? " — LIMIT HIT, the five-minute cron continues" : "")
           )
         }))
       )
@@ -701,6 +703,21 @@ export default {
             `${stuck.stuckEvents} event(s) stuck in processing` +
             (stuck.more ? " — LIMIT HIT, more remain" : "")
         )
+
+        /*
+         * The weekly report's catch-up: on Mondays from 06:00 UTC, finish what the weekly run's bound left. A run
+         * skips organizations already claimed, so once everyone has their report this is one cheap query. Logged
+         * only when it sent something, so the five-minute log is not filled with zeros all Monday.
+         */
+        if (weeklyCatchUpDue(new Date())) {
+          const caughtUp = yield* SendWeeklyReports(new Date())
+          if (caughtUp.sent + caughtUp.failed > 0) {
+            yield* Effect.log(
+              `cron ${controller.cron}: weekly report catch-up — ${caughtUp.sent} sent, ${caughtUp.failed} failed` +
+                (caughtUp.more ? ", more remain" : "")
+            )
+          }
+        }
       }))
     )
   }

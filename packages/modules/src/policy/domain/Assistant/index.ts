@@ -3,3 +3,4 @@
 export * from "./Assistant.ts"
 export * from "./AssistantConversations.ts"
 export * from "./AssistantRpcs.ts"
+export * from "./ConversationSummary.ts"

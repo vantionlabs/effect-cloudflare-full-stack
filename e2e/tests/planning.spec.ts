@@ -66,3 +66,26 @@ test("a one-off expense lowers that week's net until it is removed", async ({ pa
   await expect(page.getByTestId("expense")).toHaveCount(0)
   await expect(forecast).not.toContainText("-€ 1.234,56")
 })
+
+/*
+ * Where the cash going out goes. Two one-off expenses in the window: the card's total is their sum, each part's share
+ * is computed from the amounts (3 : 1), and it adds up to what the forecast shows as going out.
+ */
+test("the expenses card splits the coming twelve weeks' outflow by expense", async ({ page, baseURL }) => {
+  await createAccount(page.request, baseURL ?? "")
+  await page.goto("/planning")
+  const inAWeek = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
+  for (const [description, amount] of [["Huur werkplaats", "1.500,00"], ["Verzekering", "500,00"]] as const) {
+    await expect(page.getByLabel("Omschrijving")).toBeEnabled()
+    await page.getByLabel("Omschrijving").fill(description)
+    await page.getByLabel("Bedrag (€)").fill(amount)
+    await page.getByLabel("Eerste betaling").fill(inAWeek)
+    await page.getByRole("button", { name: "Uitgave toevoegen" }).click()
+    await expect(page.getByTestId("expense").filter({ hasText: description })).toBeVisible()
+  }
+  const split = page.getByRole("radiogroup", { name: "Uitgaven in de komende 12 weken" })
+  await expect(split).toBeVisible()
+  await expect(split.getByRole("radio", { name: /Huur werkplaats: € 1\.500,00, 75%/ })).toBeVisible()
+  await expect(split.getByRole("radio", { name: /Verzekering: € 500,00, 25%/ })).toBeVisible()
+  await expect(page.getByRole("table", { name: "Prognose" })).toContainText("€ 2.000,00")
+})

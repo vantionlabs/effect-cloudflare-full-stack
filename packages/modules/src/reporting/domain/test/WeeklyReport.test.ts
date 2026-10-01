@@ -1,7 +1,12 @@
 /**
  * The week the report covers, and what it says. Pure, so every edge is a one-liner.
  */
-import { previousWeek, renderWeeklyReport, type WeeklyKpis } from "@ea/modules/reporting/domain/WeeklyReport"
+import {
+  previousWeek,
+  renderWeeklyReport,
+  weeklyCatchUpDue,
+  type WeeklyKpis
+} from "@ea/modules/reporting/domain/WeeklyReport"
 import { describe, expect, it } from "vitest"
 
 describe("previousWeek", () => {
@@ -49,5 +54,14 @@ describe("renderWeeklyReport", () => {
     const { text } = renderWeeklyReport("X", { ...kpis, decisions: { ...kpis.decisions, total: 0, autoApproved: 0 } })
     expect(text).toContain("automatisch goedgekeurd:     0 (—)")
     expect(text).not.toContain("NaN")
+  })
+})
+
+describe("weeklyCatchUpDue", () => {
+  it("is due on Mondays from 06:00 UTC, and at no other time", () => {
+    expect(weeklyCatchUpDue(new Date("2026-10-05T05:59:00Z"))).toBe(false)
+    expect(weeklyCatchUpDue(new Date("2026-10-05T06:00:00Z"))).toBe(true)
+    expect(weeklyCatchUpDue(new Date("2026-10-05T23:55:00Z"))).toBe(true)
+    expect(weeklyCatchUpDue(new Date("2026-10-06T06:00:00Z"))).toBe(false)
   })
 })

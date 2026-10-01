@@ -71,5 +71,11 @@ export const signIn = async (page: Page, account: Account): Promise<void> => {
    * where the same assertion resolves in well under a second — so the override was describing the dev
    * server rather than the product, and it is gone.
    */
-  await expect(page.getByText(account.email)).toBeVisible()
+  /*
+   * 20 s rather than the default 5: the FIRST sign-in on a freshly started dev server compiles the whole dashboard
+   * (the route chunks behind the redirect) while the button reads "Bezig met inloggen…". Seen once, as the first test
+   * of a cold run; never against the built preview CI uses. A longer wait, not a retry: a sign-in that genuinely fails
+   * still fails, it just has time to finish compiling first.
+   */
+  await expect(page.getByText(account.email)).toBeVisible({ timeout: 20_000 })
 }
