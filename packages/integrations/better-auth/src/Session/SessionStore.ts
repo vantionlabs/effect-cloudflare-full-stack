@@ -56,8 +56,19 @@ interface ResolvedSession {
  * from a membership lookup afterwards.
  */
 export interface ApiKeyOwner {
+  readonly _tag: "Owner"
   readonly userId: string
   readonly organizationId: string
+}
+
+/**
+ * A key that is valid but over its quota. Distinct from `null` ("not a key we accept") because the caller's
+ * remedy is the opposite one: wait, rather than fix the credential. Carries better-auth's own wait, in
+ * milliseconds; converting to `Retry-After` is the edge's job.
+ */
+export interface ApiKeyRateLimited {
+  readonly _tag: "RateLimited"
+  readonly tryAgainInMs: number
 }
 
 export interface BetterAuthService {
@@ -74,7 +85,7 @@ export interface BetterAuthService {
    * caller-supplied, so it is a CLAIM: what makes it safe is that the membership is checked afterwards, and a
    * key naming an organization its user does not belong to resolves to nothing.
    */
-  readonly verifyApiKey: (key: string) => Effect.Effect<ApiKeyOwner | null>
+  readonly verifyApiKey: (key: string) => Effect.Effect<ApiKeyOwner | ApiKeyRateLimited | null>
   /** Resolves the session from request headers, or `null` when there is none. */
   readonly session: (headers: Headers) => Effect.Effect<ResolvedSession | null>
   /**
@@ -183,14 +194,24 @@ export const acquireAuth = (
           (result) => {
             const verified = result as {
               valid?: boolean
+              error?: { code?: string; details?: { tryAgainIn?: number } } | null
               key?: { referenceId?: string; metadata?: Record<string, unknown> | null } | null
             } | null
+            /*
+             * Over quota is NOT a throw at this layer. The plugin throws `TOO_MANY_REQUESTS`, but its verify
+             * endpoint catches that and answers `{ valid: false, error: { code: "RATE_LIMITED", details } }` —
+             * read in `@better-auth/api-key` 1.7.6. So the breach was always in the result; flattening every
+             * `valid: false` to null is what turned it into a 401.
+             */
+            if (verified?.error?.code === "RATE_LIMITED") {
+              return { _tag: "RateLimited", tryAgainInMs: verified.error.details?.tryAgainIn ?? 0 } as const
+            }
             if (verified?.valid !== true || verified.key == null) return null
 
             const userId = verified.key.referenceId
             const organizationId = verified.key.metadata?.["organizationId"]
             if (typeof userId !== "string" || typeof organizationId !== "string") return null
-            return { userId, organizationId }
+            return { _tag: "Owner", userId, organizationId } as const
           }
         ),
       activeRole: (headers) =>

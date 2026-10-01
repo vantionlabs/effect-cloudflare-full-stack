@@ -60,6 +60,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         }
       }
@@ -233,6 +251,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         }
       },
@@ -311,6 +347,24 @@
                 "schema": {
                   "$ref": "#/components/schemas/UnsupportedDocumentV1Encoded"
                 }
+              }
+            }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
               }
             }
           }
@@ -502,6 +556,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         }
       }
@@ -679,6 +751,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         }
       }
@@ -761,6 +851,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         }
       }
@@ -841,6 +949,24 @@
                 "schema": {
                   "$ref": "#/components/schemas/DecisionNotPendingV1Encoded"
                 }
+              }
+            }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
               }
             }
           }
@@ -1009,6 +1135,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         }
       },
@@ -1127,6 +1271,24 @@
                 "schema": {
                   "$ref": "#/components/schemas/RoomNameInvalidV1Encoded"
                 }
+              }
+            }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
               }
             }
           }
@@ -1279,6 +1441,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         },
         "requestBody": {
@@ -1364,6 +1544,24 @@
                 "schema": {
                   "$ref": "#/components/schemas/RoomNotFoundV1Encoded"
                 }
+              }
+            }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
               }
             }
           }
@@ -1612,6 +1810,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         }
       },
@@ -1774,6 +1990,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         },
         "requestBody": {
@@ -1871,6 +2105,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         },
         "requestBody": {
@@ -1962,6 +2214,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         }
       }
@@ -2042,6 +2312,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         }
       },
@@ -2118,6 +2406,24 @@
                 "schema": {
                   "$ref": "#/components/schemas/MessageNotFoundV1Encoded"
                 }
+              }
+            }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
               }
             }
           }
@@ -2214,6 +2520,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "RateLimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitedV1"
+                }
+              }
+            },
+            "headers": {
+              "retry-after": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           }
         },
         "requestBody": {
@@ -2240,6 +2564,29 @@
   },
   "components": {
     "schemas": {
+      "RateLimitedV1": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "RateLimited"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "retry_after_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "_tag",
+          "message",
+          "retry_after_seconds"
+        ],
+        "additionalProperties": false
+      },
       "effect_HttpApiError_UnauthorizedEncoded": {
         "type": "object",
         "properties": {

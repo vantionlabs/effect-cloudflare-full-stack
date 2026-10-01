@@ -234,7 +234,7 @@ describe("the per-key quota", () => {
       (await withKey("/api/v1/intakes", issued.key)).status
     ]
     // Two inside the ceiling, the third over it. The ceiling is per KEY, not per account.
-    expect(statuses).toEqual([200, 200, 401])
+    expect(statuses).toEqual([200, 200, 429])
   })
 
   it("counts every authenticated request on the key's own row", async () => {
@@ -255,20 +255,16 @@ describe("the per-key quota", () => {
     expect(after.lastRequest).not.toBeNull()
   })
 
-  it("answers 401 for a breach, which is WRONG and is pinned here deliberately", async () => {
+  it("answers a breach with 429 and Retry-After, not 401", async () => {
     /*
-     * The one real defect, asserted as it behaves so the day it is fixed this test fails and points at the
-     * decision.
+     * This test used to pin the 401 deliberately, so that fixing it would fail here and point at the decision.
+     * It was fixed: a breach now answers 429 with `Retry-After`, because "fix your credentials" and "back off and
+     * retry" have opposite remedies and the integrator this API exists for could not tell them apart.
      *
-     * The plugin signals a breach by THROWING `APIError TOO_MANY_REQUESTS` with code `RATE_LIMITED`.
-     * `SessionStore.verifyApiKey` wraps the call in `orNull`, so the throw becomes `null`, `apiKeyOwner`
-     * returns null, and the middleware answers `HttpApiError.Unauthorized`. A caller is told their key is
-     * bad when it is fine and they are over quota — and those have opposite remedies. The Laravel consumer
-     * this API exists for cannot tell "fix your credentials" from "back off and retry".
-     *
-     * Fixing it means adding 429 to the `Authenticated` middleware's declared error, which changes the v1
-     * OpenAPI document — additive for clients, but a contract change, so a decision rather than a patch.
-     * See `.scratch/api-quota/issues/01`.
+     * The old explanation of the cause was also wrong, and is corrected rather than deleted: the plugin's throw
+     * does NOT reach us. Its verify endpoint catches it and returns `{ valid: false, error: { code:
+     * "RATE_LIMITED", details: { tryAgainIn } } }`, so the breach was in the result all along — it was the
+     * `valid !== true -> null` check that flattened it. See `.scratch/api-quota/issues/01`.
      */
     const { cookie, organizationId } = await harness.signedInWithOrg()
     const issued = await issueKey(cookie, organizationId)
@@ -276,6 +272,22 @@ describe("the per-key quota", () => {
 
     expect((await withKey("/api/v1/intakes", issued.key)).status).toBe(200)
     const over = await withKey("/api/v1/intakes", issued.key)
-    expect(over.status, "should be 429 with Retry-After; it is 401").toBe(401)
+    expect(over.status).toBe(429)
+
+    // Whole seconds, at least one, and inside the hour-long window the key is configured with.
+    const header = Number(over.headers.get("retry-after"))
+    expect(Number.isInteger(header)).toBe(true)
+    expect(header).toBeGreaterThanOrEqual(1)
+    expect(header).toBeLessThanOrEqual(3600)
+
+    const body = (await over.json()) as { readonly _tag: string; readonly retry_after_seconds: number }
+    expect(body._tag).toBe("RateLimited")
+    expect(body.retry_after_seconds).toBe(header)
+  })
+
+  it("still answers 401 for a key that does not exist — the two refusals stay distinct", async () => {
+    const bogus = await withKey("/api/v1/intakes", `ea_${"x".repeat(40)}`)
+    expect(bogus.status).toBe(401)
+    expect(bogus.headers.get("retry-after")).toBeNull()
   })
 })

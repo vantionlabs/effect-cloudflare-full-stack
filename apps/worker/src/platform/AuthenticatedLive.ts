@@ -22,6 +22,7 @@
  */
 import { apiKeyOwner, authSettings } from "@ea/better-auth/Session"
 import { Connect, withDatabase } from "@ea/database/Database"
+import { RateLimited, retryAfterSeconds } from "@ea/domain/Errors"
 import { Authenticated, CurrentUser, IdentityResolver } from "@ea/domain/Identity"
 import { IdentityForMember } from "@ea/modules/iam/use-cases/Identity"
 import { Effect, Layer, Redacted } from "effect"
@@ -71,6 +72,10 @@ export const AuthenticatedLive = Layer.effect(Authenticated)(
              * a key naming an organization its user does not belong to resolves to nothing.
              */
             const owner = yield* apiKeyOwner(config, key)
+            // Before the membership lookup: an over-quota key spends no database round trip.
+            if (owner?._tag === "RateLimited") {
+              return yield* new RateLimited({ retryAfterSeconds: retryAfterSeconds(owner.tryAgainInMs) })
+            }
             const identity = owner === null
               ? null
               : yield* Effect.orElseSucceed(

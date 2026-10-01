@@ -20,6 +20,7 @@
  */
 import { HttpApiError, HttpApiMiddleware, HttpApiSecurity } from "effect/http-api"
 import { RpcMiddleware } from "effect/rpc"
+import { RateLimitedV1 } from "../Errors/RateLimited.ts"
 import { Unauthenticated } from "../Errors/Unauthenticated.ts"
 import type { CurrentUser } from "./Identity.ts"
 
@@ -47,7 +48,8 @@ export class Authenticated extends HttpApiMiddleware.Service<Authenticated, {
   provides: CurrentUser
   security: { readonly apiKey: HttpApiSecurity.ApiKey }
 }>()("iam/Authenticated", {
-  error: HttpApiError.Unauthorized,
+  // 429 is the API-key path's quota refusal, distinct from a bad credential. See `Errors/RateLimited.ts`.
+  error: [HttpApiError.Unauthorized, RateLimitedV1],
   security: { apiKey: HttpApiSecurity.apiKey({ key: "x-api-key" }) }
 }) {}
 

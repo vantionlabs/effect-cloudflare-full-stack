@@ -1,6 +1,14 @@
 # A quota breach answers 401, and should answer 429
 
-Status: ready-for-human — it changes the v1 contract, so it is a decision rather than a patch
+Status: done 2026-10-01 — approved by the user ("go with 1 and 2"). A breach now answers **429** with
+`Retry-After` (whole seconds, at least one) and `retry_after_seconds` in the body; a bad key still answers 401.
+The OpenAPI change is additive: 18 authenticated endpoints gained a `429` response and one `RateLimitedV1`
+component, 347 lines added and none removed.
+
+**The cause below was misdiagnosed, and is corrected here rather than edited out.** Step 1 and 2 are wrong:
+the plugin's throw never reaches `SessionStore`. Its verify endpoint CATCHES it and answers
+`{ valid: false, error: { code: "RATE_LIMITED", details: { tryAgainIn } } }` (read in `@better-auth/api-key`
+1.7.6), so `orNull` had nothing to swallow. What flattened the breach was `valid !== true -> null`.
 
 ## What happens
 
