@@ -193,7 +193,8 @@ asserts the new semantics explicitly. Both were negative-tested.
    `ServicesLayer`. Both adapters already have a binding transport for this reason.
 2. A dispatch: `document.decide → DecideDocumentWorkflow.execute`, `decision.execute → ExecuteDecision`,
    passed to `consumeBatch` as the `work` callback instead of the current constant.
-3. `WorkflowEnginePg` and `PolicySearchLive` in the queue-side layer.
+3. ~~`WorkflowEnginePg` and `PolicySearchLive` in the queue-side layer.~~ Both gone as of 2026-09-30: the
+   queue starts a Workflow instance, so it needs no engine, no policy port and no pipeline layer.
 4. A `scheduled` export plus `triggers.crons`, for the enqueue-gap sweeper and the stuck-claim report —
    both of which the plan describes as the recovery record for failure modes that have no transaction.
 5. The intake path emitting `document.decide` on upload.
@@ -476,9 +477,13 @@ Nothing is installable today. **But it exists and is in active development**, in
 in `references.md`; the two things that matter here:
 
 **What it will give us.** `CloudflareWorkflowEngine.ts`, with its own storage, runtime, registry and wire,
-plus unit and integration tests — **an official `WorkflowEngine` backed by Durable Objects.** That is a
-direct alternative to our hand-written `WorkflowEnginePg`, and it arrives with capabilities ours
-deliberately stubs. ADR-0003 carries the analysis and the revisit trigger.
+plus unit and integration tests — **an official `WorkflowEngine` backed by Durable Objects.**
+
+**That mattered more before 2026-09-30 than it does now.** It was the alternative to our hand-written
+`WorkflowEnginePg`; that engine is deleted and the decide pipeline runs on Cloudflare Workflows directly
+(ADR-0024), so an official `effect/workflow` engine would now be a way to get the typed channels back
+ACROSS step boundaries rather than a way to avoid maintaining an engine. Still worth watching — ADR-0024's
+last revisit trigger names it — but it is no longer load-bearing.
 
 **What it will NOT give us**, quoting the PR: _"cluster plus the minimum Worker/DO glue; **no
 HttpServer/Crypto/FS parity**"_. This is the more useful half of the answer. It means the Cloudflare
@@ -493,7 +498,7 @@ So the integration is ours, and deliberately thin:
 | HTTP serving                       | `HttpRouter.toWebHandler` from core `effect/http` — web-standard, no platform package                | no — out of scope         |
 | Bindings as services               | `Context.Service` for `Bindings`; `RequestCtx` separate because `ExecutionContext` is per-invocation | no                        |
 | R2 / Queues / AI                   | structural interfaces in `modules`, so Cloudflare's ambient types stay out of the domain             | no                        |
-| Durable workflow execution         | our ~200-line `WorkflowEnginePg`                                                                     | **yes — this is the one** |
+| Durable workflow execution         | Cloudflare Workflows directly, via a `WorkflowEntrypoint` (ADR-0024)                                 | **yes — this is the one** |
 
 The two Cloudflare-adjacent Effect packages that do exist are `@effect/sql-d1` (0.50.0) and
 `@effect/sql-sqlite-do` (0.30.0) — both **v3-era**, neither at `4.0.0-rc.118`, and both for stores this
@@ -518,7 +523,7 @@ full stack, with B2B SaaS basics._ Honest scoring.
 | **Rails / guardrails**         | ✅ four rails behind an unconstructible brand — a decision _cannot compile_ without passing them                                                                                                                                                                                                                                                                                                                                               |
 | **Model-free gate**            | ✅ `evals:rule` — assumes the model is maximally wrong; found 190/300 released, now 1/300 (ADR-0016)                                                                                                                                                                                                                                                                                                                                           |
 | **End-to-end evals**           | ⚠️ built, genuinely blocked on model quota — ~47 neurons an uncached call × several calls × 99 cases exceeds the 10,000/day allocation. Real corpus with distractors, scored against docket's 33/99                                                                                                                                                                                                                                             |
-| **Durable execution**          | ✅ `effect/workflow` on a ~200-line Postgres engine; memoised activities, proven by a "exactly one extraction call" test                                                                                                                                                                                                                                                                                                                       |
+| **Durable execution**          | ✅ **Cloudflare Workflows** as of 2026-09-30, replacing the 298-line hand-written engine (risk R7 retired). Five steps, memo proven in real `workerd`, terminal failures mapped to `NonRetryableError`, and the queue hands off rather than running the pipeline inline                                                                                                                                                                        |
 | **Structured output**          | ✅ native JSON mode with a provider-side JSON schema, measured field ordering                                                                                                                                                                                                                                                                                                                                                                  |
 | **AI Gateway**                 | ✅ in use and **verified by execution** — every adapter routes (embeddings joined 2026-09-30, provable from the logs' before/after), the gateway carries `cache_ttl: 3600`, and cached calls report `cost: 0`. §7                                                                                                                                                                                                                              |
 | **Agents (tool-calling loop)** | ✅ **built 2026-09-29, this row was stale.** `AskCorpus` runs a real `Tool.make("search_policy")` loop under `AgentModel`, streams progress, and **refuses an answer whose citation it cannot verify**. The claim below about `toolChoice: "none"` is true only of the DECIDE adapter, which is deliberate                                                                                                                                     |
