@@ -303,10 +303,11 @@ rather than the claim.
 | `bun run dev:worker`                           | the API Worker alone on :8787 — its `email()` handler, crons, `curl` against the API       |
 | `bun run dev:all`                              | Postgres, then console and API Worker in parallel, one prefixed log (`bun run --parallel`) |
 | `bun run dev:remote`                           | the API Worker against `env.dev`'s REAL resources (below)                                  |
+| `bun run ports`                                | which port each service uses, whether it is free, and WHICH process holds it if not        |
 | `bun run db:up` / `db:down` / `db:logs`        | the compose Postgres                                                                       |
 | `bun run db:migrate:local` / `db:verify:local` | the compose Postgres, WHATEVER `DATABASE_URL` says (see the two-databases trap)            |
 
-The console is `--strictPort`: if :5173 is taken — another project's Vite, a stale server — it exits with "Port
+`dev` and `dev:all` run that port check first and stop with its table if a port they need is taken. The console is also `--strictPort`: if :5173 is taken — another project's Vite, a stale server — it exits with "Port
 5173 is already in use" instead of moving to :5174, where sign-in breaks because `BASE_URL` and `ALLOWED_HOSTS`
 name :5173. `bun run dev` used to start only the API Worker; that is `dev:worker` now.
 
