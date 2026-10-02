@@ -291,10 +291,26 @@ keep:
 | Hyperdrive      | the compose container | `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_*` in `apps/worker/.env`         |
 | **Workers AI**  | **NOT emulated**      | always remote, which is the trap below                                          |
 
-So `bun run dev` plus `docker compose up` exercises the whole stack bar one binding, and the 92 tests in the
-`worker` project are the proof rather than the claim.
+So `bun run dev` exercises the whole stack bar one binding, and the 92 tests in the `worker` project are the proof
+rather than the claim.
 
-**`bun run --filter @ea/worker dev:remote`** is `wrangler dev --remote --env dev`, and it is a different
+**Running it locally — the root scripts:**
+
+| script                                         | runs                                                                                       |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `bun run dev`                                  | Postgres (compose, waits until healthy), then the console with the API behind it on :5173  |
+| `bun run dev:console`                          | the console + API on :5173 alone (Postgres assumed up)                                     |
+| `bun run dev:worker`                           | the API Worker alone on :8787 — its `email()` handler, crons, `curl` against the API       |
+| `bun run dev:all`                              | Postgres, then console and API Worker in parallel, one prefixed log (`bun run --parallel`) |
+| `bun run dev:remote`                           | the API Worker against `env.dev`'s REAL resources (below)                                  |
+| `bun run db:up` / `db:down` / `db:logs`        | the compose Postgres                                                                       |
+| `bun run db:migrate:local` / `db:verify:local` | the compose Postgres, WHATEVER `DATABASE_URL` says (see the two-databases trap)            |
+
+The console is `--strictPort`: if :5173 is taken — another project's Vite, a stale server — it exits with "Port
+5173 is already in use" instead of moving to :5174, where sign-in breaks because `BASE_URL` and `ALLOWED_HOSTS`
+name :5173. `bun run dev` used to start only the API Worker; that is `dev:worker` now.
+
+**`bun run dev:remote`** is `wrangler dev --remote --env dev`, and it is a different
 thing: it runs against the REAL products with `env.dev`'s own throwaway resources — its Neon project, KV
 namespace, R2 bucket and Hyperdrive pair. Reach for it when the question is "does this binding behave the way
 the emulator says", which is the question `cloudflare:sockets` (ADR-0009) and the Workflows step memo were
