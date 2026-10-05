@@ -9,7 +9,8 @@
  * - a quantity that is not verbatim in that item's own words, or is ambiguous (`1.234`), is not priced;
  * - a SKU that is null, not in the catalogue, or inactive is not priced;
  * - a customer email not written in the request is not used, so a quote can never be sent to an address the
- *   model made up.
+ *   model made up — UNLESS the request arrived by email: then the sender's address (from the mail envelope, not
+ *   from the model) is the customer's, passed in as `sender`, and replies go there.
  *
  * Each of those becomes a FLAG, in words a person can act on, rather than a silent omission — the draft is for a
  * person to approve, and what they most need is to know what the machine could not do.
@@ -53,7 +54,8 @@ const QUANTITY_DECIMALS = 3
 export const priceQuote = (
   reading: QuoteReading,
   request: string,
-  catalogue: ReadonlyArray<Product>
+  catalogue: ReadonlyArray<Product>,
+  sender?: { readonly email: string; readonly name: string | null } | undefined
 ): PricedQuote => {
   const flags: Array<string> = []
   const bySku = new Map(catalogue.map((product) => [product.sku.toLowerCase(), product]))
@@ -100,13 +102,16 @@ export const priceQuote = (
     })
   }
 
-  const customerName = reading.customer_name !== null && containsVerbatim(reading.customer_name, request)
+  const readName = reading.customer_name !== null && containsVerbatim(reading.customer_name, request)
     ? reading.customer_name
     : null
-  const customerEmail = reading.customer_email !== null && containsVerbatim(reading.customer_email, request)
+  const customerName = readName ?? sender?.name ?? null
+  const readEmail = reading.customer_email !== null && containsVerbatim(reading.customer_email, request)
     ? reading.customer_email.trim()
     : null
-  if (reading.customer_email !== null && customerEmail === null) {
+  // The envelope sender wins over anything in the text: it is where the request came from and where a reply goes.
+  const customerEmail = sender?.email ?? readEmail
+  if (reading.customer_email !== null && readEmail === null) {
     flags.push("Het opgegeven e-mailadres van de klant stond niet in de aanvraag en is dus niet gebruikt.")
   }
   if (customerEmail === null) {

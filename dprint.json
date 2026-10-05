@@ -26,6 +26,7 @@
     ".agents/",
     ".claude/skills/",
     ".claude/agents/",
+    ".claude/worktrees/",
     ".github/skills/",
     ".github/agents/",
     ".github/hooks/",

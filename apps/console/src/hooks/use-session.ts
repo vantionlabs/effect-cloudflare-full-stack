@@ -32,8 +32,8 @@ import { useEffect } from "react"
  *
  * The effect afterwards is not redundant. Seeding happens once, but router context can be resolved again —
  * `router.invalidate()` re-runs `beforeLoad` — and without this the atom would then disagree with the context
- * the guards use. Sign-in and sign-out do not rely on it, because both reload the document and therefore
- * build a new registry.
+ * the guards use. Sign-in, sign-up and a password reset rely on it now (`useSessionChange`); sign-out still reloads
+ * the document and therefore builds a new registry.
  *
  * It must render ABOVE anything calling `useSession`, which is why it lives in the root component rather than
  * being a hook each screen remembers to call. A consumer above it reads the Guest default and fails closed.
@@ -50,11 +50,10 @@ export const useHydrateSession = (): void => {
  * could read either; going through the atom means there is one answer in the app rather than one for
  * components and another for atoms, and it is the atom that other atoms can depend on.
  *
- * Not exported yet: `useIdentity` is its only caller, and knip flags an export with no importer. Export it
- * the moment something renders differently for a guest — a marketing header, or a nav with either a name or
- * a sign-in link.
+ * Exported for the authenticated layout, which must render nothing — not throw — in the moment between the session
+ * becoming Guest and the guard's redirect landing (see `routes/_authenticated.tsx`).
  */
-const useSession = (): CurrentSession => useAtomValue(sessionAtom)
+export const useSession = (): CurrentSession => useAtomValue(sessionAtom)
 
 export const useIdentity = () => {
   const session = useSession()

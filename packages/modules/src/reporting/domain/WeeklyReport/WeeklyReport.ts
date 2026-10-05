@@ -87,3 +87,10 @@ export const renderWeeklyReport = (
     text: lines.join("\n")
   }
 }
+
+/**
+ * Whether the five-minute cron should run the weekly report again: on Mondays from 06:00 UTC, when the weekly cron
+ * fires. Repeating is safe — a run skips organizations already claimed for the week — and it is what lets a run that
+ * stopped at its bound finish the rest the same day.
+ */
+export const weeklyCatchUpDue = (now: Date): boolean => now.getUTCDay() === 1 && now.getUTCHours() >= 6

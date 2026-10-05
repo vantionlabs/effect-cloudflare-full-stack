@@ -164,6 +164,12 @@ export interface Env {
   readonly OTLP_HEADERS?: string | undefined
   /** The AI Gateway id, when one is configured. Absent means direct, unmetered, uncached model calls. */
   readonly AI_GATEWAY?: string | undefined
+  /**
+   * The domain an organization's quote-request address lives on (`<token>@<domain>`), when Cloudflare Email Routing
+   * is set up for one and routes it to this Worker. Absent: addresses exist and can be tested locally, but nothing
+   * outside can reach them yet.
+   */
+  readonly INBOUND_EMAIL_DOMAIN?: string | undefined
 
   /**
    * Tier 3 parsing: Mistral OCR, for scanned documents.

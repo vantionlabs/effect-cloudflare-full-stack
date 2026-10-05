@@ -13,6 +13,7 @@ import { ProposalRun, ProposedChange } from "../Change/Change.ts"
 import { ChangeIsStale } from "../Errors/ChangeIsStale.ts"
 import { ChangeNotFound } from "../Errors/ChangeNotFound.ts"
 import { ChangeNotPending } from "../Errors/ChangeNotPending.ts"
+import { InboundAddressForbidden } from "../Errors/InboundAddressForbidden.ts"
 import { InvalidProduct } from "../Errors/InvalidProduct.ts"
 import { InvalidTerms } from "../Errors/InvalidTerms.ts"
 import { InvoiceAlreadyPaid } from "../Errors/InvoiceAlreadyPaid.ts"
@@ -22,6 +23,7 @@ import { JobNotInState } from "../Errors/JobNotInState.ts"
 import { QuoteHasNoRecipient } from "../Errors/QuoteHasNoRecipient.ts"
 import { QuoteNotFound } from "../Errors/QuoteNotFound.ts"
 import { QuoteNotInState } from "../Errors/QuoteNotInState.ts"
+import { InboundAddress, InboundMessage } from "../Inbound/Inbound.ts"
 import { Product, Unit } from "../Product/Product.ts"
 import { Quote, QuoteStatus } from "../Quote/Quote.ts"
 import { CustomerTerms } from "../Work/Terms.ts"
@@ -120,5 +122,11 @@ export const SalesRpcs = RpcGroup.make(
     payload: { customerEmail: Schema.String, termsDays: Schema.NullOr(Schema.Int) },
     success: Schema.Array(CustomerTerms),
     error: InvalidTerms
-  })
+  }),
+  /** The organization's quote-request address, or null when none has been created yet. */
+  Rpc.make("Sales.inboundAddress", { payload: {}, success: Schema.NullOr(InboundAddress) }),
+  /** Creates the address, or replaces it — the old one stops accepting mail at once. Owner and admin only. */
+  Rpc.make("Sales.rotateInboundAddress", { payload: {}, success: InboundAddress, error: InboundAddressForbidden }),
+  /** The most recent emails to that address, refused ones included. */
+  Rpc.make("Sales.inboundMessages", { payload: {}, success: Schema.Array(InboundMessage) })
 ).middleware(AuthenticatedRpc)

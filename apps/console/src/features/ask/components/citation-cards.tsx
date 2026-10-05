@@ -6,14 +6,24 @@
  * invented: the badge is the document's file extension, and a missing heading says so rather than guessing one.
  */
 import ContextCards, { type ContextChunk } from "@/components/primitives/ContextCards"
-import type { AskAnswerCitation } from "@ea/modules/policy/domain/Ask"
+
+/**
+ * What a citation card needs — the shape of both a fresh answer's `AskAnswerCitation` and a recorded turn's
+ * `AssistantSource`, so a reloaded conversation renders its sources exactly as the live answer did.
+ */
+export interface CitedPassage {
+  readonly clause_ref: string | null
+  readonly excerpt: string
+  readonly heading?: string | null | undefined
+  readonly document?: string | null | undefined
+}
 
 const extensionOf = (document: string | null | undefined): string => {
   const match = document?.match(/\.([a-z0-9]{1,4})$/i)
   return match === undefined || match === null ? "DOC" : match[1]!.toUpperCase()
 }
 
-export function CitationCards(props: { readonly citations: ReadonlyArray<AskAnswerCitation> }) {
+export function CitationCards(props: { readonly citations: ReadonlyArray<CitedPassage> }) {
   /*
    * `ContextCards` keys its cards by title, so two excerpts from one section would collide. The second gets a
    * visible ordinal — "2. Hydraulische druk (2)" — which is true (it IS the second passage from there) and keeps

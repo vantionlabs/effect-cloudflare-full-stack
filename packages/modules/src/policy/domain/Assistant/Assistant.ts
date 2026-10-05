@@ -19,6 +19,19 @@
 import { Schema } from "effect"
 
 /**
+ * A citation as the console shows it: the verified quote and WHERE it is, copied from the answer's
+ * `AskAnswerCitation` at the moment it was verified — so a reloaded conversation shows the sources an answer was
+ * checked against, without searching again. A convenience copy, like the turn itself; the chunk is the authority.
+ */
+export class AssistantSource extends Schema.Class<AssistantSource>("policy/AssistantSource")({
+  chunk_id: Schema.String,
+  clause_ref: Schema.NullOr(Schema.String),
+  excerpt: Schema.String,
+  heading: Schema.NullOr(Schema.String),
+  document: Schema.NullOr(Schema.String)
+}) {}
+
+/**
  * One exchange, including the refusals.
  *
  * **A refusal is a turn, not an error.** `AskCorpus` refuses an answer whose citation it cannot verify, and
@@ -36,6 +49,11 @@ export class AssistantTurn extends Schema.Class<AssistantTurn>("policy/Assistant
   refusedBecause: Schema.optional(Schema.String),
   /** Chunk ids, so the console can render the same citations the answer was verified against. */
   citations: Schema.Array(Schema.String),
+  /**
+   * The citations' quotes and locations. OPTIONAL so turns recorded before this field existed still decode — the
+   * conversation lives in a Durable Object whose stored state no migration reaches.
+   */
+  sources: Schema.optional(Schema.Array(AssistantSource)),
   askedAt: Schema.String
 }) {}
 

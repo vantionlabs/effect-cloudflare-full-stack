@@ -1,5 +1,6 @@
 /**
- * The mechanics' Ask page: server-rendered document list, and a question that reaches a real answer.
+ * The mechanics' Ask page: server-rendered document list, conversations that keep their turns, and a question that
+ * reaches a real answer.
  *
  * The second test is the one that matters most. Until 2026-10-01 every question answered 500 in every environment
  * — the agent's client spoke an API Workers AI does not accept — and nothing noticed, because ask had only ever been
@@ -32,13 +33,63 @@ test("a question reaches the model and comes back as an answer or a refusal, nev
   await uploadManual(page.request, baseURL ?? "")
 
   await page.goto("/ask")
-  await page.getByLabel("Vraag").fill("Wat is de maximale werkdruk van het hoofdsysteem?")
+  const question = page.getByLabel("Vraag", { exact: true })
+  await expect(question).toBeEnabled()
+  await question.fill("Wat is de maximale werkdruk van het hoofdsysteem?")
   await page.getByRole("button", { name: "Vraag stellen" }).click()
 
   const answered = page.getByTestId("answer")
-  const refused = page.getByText("Geen betrouwbaar antwoord")
+  const refused = page.getByTestId("refused-turn")
   await expect(answered.or(refused)).toBeVisible({ timeout: 60_000 })
-  await expect(page.getByText("kon niet worden beantwoord")).toBeHidden()
+  await expect(page.getByRole("alert")).toBeHidden()
+})
+
+/*
+ * The conversation is the feature: a follow-up is asked IN it, the page's URL becomes the conversation, and a reload
+ * brings back every turn with its sources — server-rendered from the agent's record, not re-asked. The model's
+ * wording is not asserted (it is a real model); what is asserted is that turns, their order and their sources survive.
+ */
+test("a conversation keeps its turns and sources across a reload, is listed, and can be archived", async ({ page, baseURL }) => {
+  test.setTimeout(180_000)
+  await createAccount(page.request, baseURL ?? "")
+  await uploadManual(page.request, baseURL ?? "")
+
+  await page.goto("/ask")
+  const question = page.getByLabel("Vraag", { exact: true })
+  await expect(question).toBeEnabled()
+  await question.fill("Wat is de maximale werkdruk van het hoofdsysteem van de PK 23.500?")
+  await page.getByRole("button", { name: "Vraag stellen" }).click()
+
+  // The first answer moves the page to the conversation's own URL.
+  await expect(page).toHaveURL(/\/ask\/[A-Za-z0-9_-]+$/, { timeout: 60_000 })
+  const turns = page.getByTestId("conversation-turn")
+  await expect(turns).toHaveCount(1)
+
+  await expect(question).toBeEnabled()
+  await question.fill("En in welke eenheid staat die druk?")
+  await page.getByRole("button", { name: "Vraag stellen" }).click()
+  await expect(turns).toHaveCount(2, { timeout: 60_000 })
+
+  const answeredBefore = await page.getByTestId("answer").count()
+  await page.reload()
+  await expect(turns).toHaveCount(2)
+  await expect(turns.nth(0)).toContainText("Wat is de maximale werkdruk")
+  await expect(turns.nth(1)).toContainText("En in welke eenheid")
+  // Answers keep their sources after the reload: the newest one opens them, and they quote the manual.
+  expect(await page.getByTestId("answer").count()).toBe(answeredBefore)
+  if (answeredBefore > 0) {
+    await expect(page.getByText("350 bar").first()).toBeVisible()
+  }
+  // The whole thread is in the server's HTML — not fetched again after load.
+  const html = await (await page.request.get(page.url())).text()
+  expect(html).toContain("En in welke eenheid staat die druk?")
+
+  // Listed, newest first, titled by the first question; archiving takes it off the list.
+  const list = page.getByRole("list", { name: "Eerdere gesprekken" })
+  await expect(list).toContainText("Wat is de maximale werkdruk")
+  await page.getByRole("button", { name: /Gesprek archiveren: Wat is de maximale werkdruk/ }).click()
+  await expect(page).toHaveURL(/\/ask\/?$/)
+  await expect(page.getByText("Je gesprekken worden hier bewaard")).toBeVisible()
 })
 
 test("uploading through the page uses the RPC and the new manual appears in the list", async ({ page, baseURL }) => {

@@ -176,3 +176,98 @@ describe("a refusal", () => {
     expect(conversations.recorded[0]!.citations).toEqual([])
   })
 })
+
+describe("a follow-up", () => {
+  const EARLIER = {
+    question: "Wat gebeurt er met een factuur van een onbekende leverancier?",
+    answer: "Hij wordt doorgestuurd, volgens Artikel 4.",
+    citations: ["c1"],
+    askedAt: "2026-10-01T10:00:00.000Z"
+  }
+
+  /** A conversation that already holds one turn, and records what is added. */
+  const withHistory = () => {
+    const recorded: Array<typeof AssistantTurn.Encoded> = []
+    const layer = Layer.succeed(AssistantConversations)({
+      history: () => Effect.succeed({ turns: [EARLIER] }),
+      record: (_id, turn) =>
+        Effect.flatMap(CurrentOrg, () =>
+          Effect.sync(() => {
+            recorded.push(turn)
+            return { turns: [EARLIER, ...recorded] }
+          }))
+    })
+    return { recorded, layer }
+  }
+
+  it("puts the earlier turns in the prompt, before the new question", async () => {
+    const seen: Array<string> = []
+    let calls = 0
+    const model = Layer.effect(AgentModel)(
+      LanguageModel.make({
+        generateText: (options) =>
+          Effect.sync(() => {
+            calls++
+            if (calls === 1) {
+              for (const message of options.prompt.content) seen.push(JSON.stringify(message))
+              return [{ type: "tool-call" as const, id: "call_1", name: "search_policy", params: { query: "factuur" } }]
+            }
+            return calls === 2
+              ? [{ type: "text" as const, text: "Ja." }]
+              : [{
+                type: "text" as const,
+                text: JSON.stringify({
+                  answer: "Ja.",
+                  citations: [{ chunk_id: "c1", clause_ref: "Artikel 4", excerpt: CHUNK.content }]
+                })
+              }]
+          }),
+        streamText: () => Stream.die(new Error("not used"))
+      })
+    )
+    const conversations = withHistory()
+    await Effect.runPromise(run(model, conversations.layer) as Effect.Effect<unknown, never, never>)
+    const earlierAt = seen.findIndex((message) => message.includes(EARLIER.question))
+    const answerAt = seen.findIndex((message) => message.includes(EARLIER.answer))
+    const nowAt = seen.findIndex((message) => message.includes(QUESTION))
+    expect(earlierAt).toBeGreaterThan(-1)
+    expect(answerAt).toBeGreaterThan(earlierAt)
+    expect(nowAt).toBeGreaterThan(answerAt)
+    // And the turn records the verified source, so a reloaded conversation can show it without searching.
+    expect(conversations.recorded[0]!.sources).toEqual([{
+      chunk_id: "c1",
+      clause_ref: "Artikel 4",
+      excerpt: CHUNK.content,
+      heading: "Artikel 4",
+      document: null
+    }])
+  })
+
+  it("refuses a quote taken from an earlier answer when this run did not search for it", async () => {
+    // The earlier turn cited c1. A model that reuses that citation WITHOUT searching again has nothing served in
+    // this run, so the grounding check must refuse it — history is context, never evidence.
+    let calls = 0
+    const model = Layer.effect(AgentModel)(
+      LanguageModel.make({
+        generateText: () =>
+          Effect.sync(() => {
+            calls++
+            return calls === 1
+              ? [{ type: "text" as const, text: "Zoals eerder gezegd: doorgestuurd." }]
+              : [{
+                type: "text" as const,
+                text: JSON.stringify({
+                  answer: "Zoals eerder gezegd: doorgestuurd.",
+                  citations: [{ chunk_id: "c1", clause_ref: "Artikel 4", excerpt: CHUNK.content }]
+                })
+              }]
+          }),
+        streamText: () => Stream.die(new Error("not used"))
+      })
+    )
+    const failure = await Effect.runPromise(
+      Effect.flip(run(model, withHistory().layer)) as unknown as Effect.Effect<{ _tag: string }, never, never>
+    )
+    expect(failure._tag).toBe("UngroundedAnswer")
+  })
+})

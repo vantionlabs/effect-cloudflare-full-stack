@@ -33,8 +33,8 @@ Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/
 
 ## The Effect source is vendored at `repos/effect`
 
-`git subtree`, pinned to the tag this repo runs — `effect@4.0.0-rc.118`, the same version as the `catalog:`
-entry. Added because v4 RC documentation is thin and reading the source is faster and more reliable than
+`git subtree`, pinned to the tag this repo runs — `effect@4.0.0`, the same version as the `catalog:`
+entry. Added because v4 RC documentation was thin and reading the source is faster and more reliable than
 guessing: several APIs in this repo were settled by reading it (`Result` uses `.success`, not `.value`;
 `Schema.toStandardSchemaV1` exists so no form adapter is needed; `createStartHandler` is all the default
 server entry does).
@@ -57,8 +57,9 @@ Pinned to a tag rather than `main` on purpose. Tip-of-main would show APIs the i
 have, and an agent reading source that disagrees with the lockfile is worse off than one reading nothing —
 it would be confidently wrong instead of uncertain.
 
-**It costs 54 MB and 4311 files.** That is the trade: a slower clone and a larger checkout, for a local
-copy of the answers.
+**It costs 49 MB and 2575 files** (54 MB and 4311 at rc.118; the stable tag dropped the RC's
+`.changeset/pre` notes). That is the trade: a slower clone and a larger checkout, for a local copy of the
+answers.
 
 ## Filename conventions
 
@@ -194,7 +195,7 @@ visible default so SSR content is never hidden waiting for JavaScript.
 
 ## What stays in `apps/worker`
 
-The app is an entrypoint. Eight files, and each one is there for a reason that survives the question "could this
+The app is an entrypoint. Nine files, and each one is there for a reason that survives the question "could this
 be a module?":
 
 | File                            | Why it cannot move                                                                                          |
@@ -204,6 +205,7 @@ be a module?":
 | `platform/CloudflareSocket.ts`  | imports `cloudflare:sockets`                                                                                |
 | `platform/HyperdriveConnect.ts` | builds the driver over that socket and the Hyperdrive binding                                               |
 | `platform/QueueHandler.ts`      | queue batch semantics — ack/retry per message, which is a platform contract                                 |
+| `platform/EmailHandler.ts`      | the `email()` entry: `setReject` (a bounce) is a platform contract; what a message means lives in `sales`   |
 | `platform/DispatchEvent.ts`     | wiring: names every slice's handler                                                                         |
 | `platform/WorkerPlatform.ts`    | the layer bundle                                                                                            |
 | `RoomDurableObject.ts`          | a `DurableObject` subclass must be exported from the entry and declared in `exports`                        |
@@ -233,6 +235,12 @@ immediately — the fix is to recognise the error, not to add a check that impli
 
 **`RpcServer.layerHttp` mounts a WebSocket when `protocol` is omitted.** Despite the name. A plain POST
 gets a 404 with nothing in the logs. Always pass `protocol: "http"` explicitly.
+
+**Do not mount RPC with `RpcServer.layerHttp` (or `RpcServer.layer`) in the Worker.** They fork the server while
+the layer is built, which `toWebHandler` does inside the isolate's first request; when that request does no I/O
+the fork's start timer is dropped with it, and every later RPC call hangs ("code had hung", 500). Use
+`platform/RpcHttp.ts`, which builds the server per request. The general rule: no fiber forked in one request may
+be needed by another. ADR-0026.
 
 **A superuser bypasses RLS whatever `FORCE` says.** The local Worker connects as the bootstrap user, so
 `Db.scoped` issues `set local role effect_ai_app` inside its transaction. A tenancy test that connects as
@@ -289,10 +297,27 @@ keep:
 | Hyperdrive      | the compose container | `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_*` in `apps/worker/.env`         |
 | **Workers AI**  | **NOT emulated**      | always remote, which is the trap below                                          |
 
-So `bun run dev` plus `docker compose up` exercises the whole stack bar one binding, and the 92 tests in the
-`worker` project are the proof rather than the claim.
+So `bun run dev` exercises the whole stack bar one binding, and the 92 tests in the `worker` project are the proof
+rather than the claim.
 
-**`bun run --filter @ea/worker dev:remote`** is `wrangler dev --remote --env dev`, and it is a different
+**Running it locally — the root scripts:**
+
+| script                                         | runs                                                                                       |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `bun run dev`                                  | Postgres (compose, waits until healthy), then the console with the API behind it on :5173  |
+| `bun run dev:console`                          | the console + API on :5173 alone (Postgres assumed up)                                     |
+| `bun run dev:worker`                           | the API Worker alone on :8787 — its `email()` handler, crons, `curl` against the API       |
+| `bun run dev:all`                              | Postgres, then console and API Worker in parallel, one prefixed log (`bun run --parallel`) |
+| `bun run dev:remote`                           | the API Worker against `env.dev`'s REAL resources (below)                                  |
+| `bun run ports`                                | which port each service uses, whether it is free, and WHICH process holds it if not        |
+| `bun run db:up` / `db:down` / `db:logs`        | the compose Postgres                                                                       |
+| `bun run db:migrate:local` / `db:verify:local` | the compose Postgres, WHATEVER `DATABASE_URL` says (see the two-databases trap)            |
+
+`dev` and `dev:all` run that port check first and stop with its table if a port they need is taken. The console is also `--strictPort`: if :5173 is taken — another project's Vite, a stale server — it exits with "Port
+5173 is already in use" instead of moving to :5174, where sign-in breaks because `BASE_URL` and `ALLOWED_HOSTS`
+name :5173. `bun run dev` used to start only the API Worker; that is `dev:worker` now.
+
+**`bun run dev:remote`** is `wrangler dev --remote --env dev`, and it is a different
 thing: it runs against the REAL products with `env.dev`'s own throwaway resources — its Neon project, KV
 namespace, R2 bucket and Hyperdrive pair. Reach for it when the question is "does this binding behave the way
 the emulator says", which is the question `cloudflare:sockets` (ADR-0009) and the Workflows step memo were
@@ -397,6 +422,12 @@ through. Never put a `waitForTimeout` in its place — it hides the bug and re-i
 `CLOUDFLARE_API_TOKEN` in a non-interactive environment, because it boots the API and the `ai` binding has
 no local emulation. CI gates the job and prints a warning, for the same reason the `worker` project is
 gated. `E2E_BASE_URL` points the same specs at a deployed environment instead.
+
+**An RPC whose success schema is a `Schema.Class` must return an INSTANCE, not a plain object.** Encoding a class
+needs the instance, so a plain object fails on the SERVER ("Expected AskAnswer") and reaches the client as a defect —
+with nothing in the type checker to say so, because the shapes match. It has happened three times: `Ask.question`,
+then `Assistant.ask` and `Assistant.history`, both of which failed on every call and went unnoticed because no
+client called them until the console did. Build the instance in the handler (`new AskAnswer({...})`).
 
 **`Schema.TaggedError` is an `Error` whose `.message` is usually empty.** `failure.message` compiles and
 records a blank string. Lead with `_tag`.

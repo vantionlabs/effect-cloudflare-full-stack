@@ -30,9 +30,13 @@ export const toProduct = (row: ProductRow): Product =>
     active: row.active
   })
 
+/**
+ * `scopedForOrg`, not `scoped`: reading the price list needs a tenant, not a person — and the queue drafts quotes
+ * from email with no person at all. The API edge provides `CurrentOrg` from the session, so nothing changes there.
+ */
 export const ListProducts = (options: { readonly includeInactive?: boolean | undefined } = {}) =>
   Effect.flatMap(Db, (db) =>
-    db.scoped((sql, orgId) =>
+    db.scopedForOrg((sql, orgId) =>
       Effect.map(
         sql<ProductRow>`
           select id, sku, name, unit, unit_price_cents, vat_per_mille, active from products

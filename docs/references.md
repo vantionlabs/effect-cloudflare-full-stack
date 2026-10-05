@@ -118,6 +118,29 @@ response bodies", merged 2026-09-25.)
 — neither is published at `4.0.0-rc.118`, and both target stores this project rejected (D1 per ADR-0002,
 DO-SQLite by extension).
 
+### Effect 4.0.0 (stable): what changed since rc.118
+
+**Checked 2026-10-01** against the `## 4.0.0` section of `repos/effect/packages/effect/CHANGELOG.md`
+(tag `effect@4.0.0`, commit 67ba4e46). Effect 4.0 shipped 2026-09-30, and npm `latest` is `4.0.0` for
+`effect`, `@effect/sql-pg`, `@effect/atom-react`, `@effect/ai-openai-compat` and `@effect/vitest`. The export
+map is the same 28 paths as rc.118, and no module moved or was renamed.
+
+The changes that could break a caller, and where each one lands here:
+
+| Change in 4.0.0                                                                                | This repo                                                                                                         |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `Schema.brand` takes ONE identifier, and a brand is type-only (no longer kept in the AST)      | every brand is `Schema.String.pipe(Schema.brand("XId"))` or `Schema.Int` likewise; none is read back from the AST |
+| `partition` / `separate` / `Option.partitionMap` return `[successes, failures]`, swapped       | not called anywhere                                                                                               |
+| `Queue.State.takers` holds `Queue.Taker` entries; `takeN` waits for its whole batch            | `AskCorpus` only offers to and ends a queue                                                                       |
+| `RpcMessage.ExitEncoded` interrupt `fiberId` may be `null`                                     | nothing reads encoded exits                                                                                       |
+| `TestSchema.verifyLosslessTransformation` renamed to `verifyRoundTrip`, module marked unstable | not used                                                                                                          |
+| Server WebSockets close with 1000 / 1001 / 1011                                                | the room socket is the push-only one from ADR-0020, so Effect's server socket is not used                         |
+| Fixes: `Atom.family` stale finalizer, lost `Atom.fn` results, `Effect.race` losers interrupted | the console uses `Atom.family` (`knowledge-atoms.ts`), so it gets the fix without a change                        |
+
+The upgrade needed **no source change**: `tsc`, oxlint and the unit and worker suites pass unchanged. The
+`RpcServer.layerProtocolWebsocket` / `makeProtocolWithHttpEffectWebsocket` reading below (rc.118) still holds
+at 4.0.0.
+
 ---
 
 ## Cloudflare
@@ -632,6 +655,13 @@ by upgrading a request object in place.
 Related and already recorded above: `RpcServer.layerHttp` mounts a WebSocket when `protocol` is omitted,
 which is in `AGENTS.md` as a trap because a plain POST then 404s with nothing in the logs.
 
+**Checked 2026-10-05** (effect 4.0.0, wrangler 4.143.0 / local workerd): a fiber forked with `Effect.fork*` starts
+on its parent's dispatcher behind a `setTimeout(0)` (`forkUnsafe`, `MixedScheduler`). In a Worker, a request that
+returns before that timer fires leaves it unfired for good, so the forked fiber never runs. That is why
+`RpcServer.layerHttp` cannot be built lazily inside a request (ADR-0026). `HttpEffect.toWebHandler` hands the
+request scope to a streamed response body (`scopeTransferToStream`), so a per-request resource lives until the
+body ends.
+
 ## PlanetScale
 
 ### Postgres 18.6, pgvector 0.8.5, and a non-superuser `CREATEROLE` role
@@ -681,6 +711,20 @@ and `bundle:check` confirmed the browser bundle has no Resend.
 message is _"Unable to fetch data. The request could not be resolved."_, so DNS, timeout and TLS failures are
 indistinguishable in our logs. Found when a test asserting on the real cause failed; `EmailResend.test.ts` now
 pins the measured behaviour.
+
+### Inbound email: `postal-mime@4.0.2` and the local email endpoint — checked 2026-10-01
+
+- **`postal-mime` 4.0.2 is MIT-0** (npm `license`), ESM with its own types, and parses a Worker's `message.raw`
+  (`ReadableStream<Uint8Array>`) directly via `PostalMime.parse(raw)`. `Email.messageId`, `from: { name, address }`,
+  `subject`, `text` and `html` are what we read. 2.7.6 is also in the tree, as a dependency of `agents` and `resend`.
+- **Local testing posts to `/cdn-cgi/local/email?from=…&to=…`** with a raw RFC 5322 body (Cloudflare's Email
+  Routing local-development docs; earlier changelog posts call it `/cdn-cgi/handler/email`). It needs a `Message-ID`.
+  Measured: Miniflare 5.20260926.1 sends it to the ENTRY worker — under the console's Vite plugin that is the console,
+  which has no `email()`, and an `MF-Route-Override` header did not get through the plugin. So the email e2e posts to
+  the API Worker run on its own (`wrangler dev`, :8787), which shares the compose Postgres.
+- **A refused message bounces.** `message.setReject(reason)` returns the reason to the sender (locally: a 400 with
+  "Worker rejected email with the following reason: …"). We use it for unknown addresses and oversized messages only;
+  auto-replies and over-limit mail are recorded as refused, not bounced, to avoid mail loops and backscatter.
 
 ### better-auth 1.7.6's email senders — read in `dist/`, 2026-10-01
 

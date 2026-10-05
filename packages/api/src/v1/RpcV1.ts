@@ -6,8 +6,8 @@
  * Adding a slice to the product is therefore a one-line diff here, and an unexposed slice is visibly
  * unexposed rather than accidentally absent.
  *
- * Mounted by the composition root with `RpcServer.layerHttp`, which puts it on the *same* router as the
- * HTTP API. One origin, one auth seam, one deploy.
+ * Mounted by the composition root as a per-request route (`apps/worker/src/platform/RpcHttp.ts`, ADR-0026), on
+ * the *same* router as the HTTP API. One origin, one auth seam, one deploy.
  */
 import { MessageRpcs } from "@ea/modules/chat/domain/Message"
 import { RoomRpcs } from "@ea/modules/chat/domain/Room"

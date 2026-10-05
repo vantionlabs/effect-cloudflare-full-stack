@@ -85,7 +85,7 @@ swappable adapter option.
 
 | Concern     | Choice                                                                             |
 | ----------- | ---------------------------------------------------------------------------------- |
-| Core        | the latest `effect@rc`, pinned exactly in the Bun catalog (rc.118 at writing)      |
+| Core        | `effect@4.0.0` (stable), pinned exactly in the Bun catalog (rc.118 at writing)     |
 | Serving     | `HttpApiBuilder.layer` + `HttpRouter.toWebHandler` in the Worker `fetch`           |
 | SQL         | `@effect/sql-pg` over Hyperdrive, via a `cloudflare:sockets` `Duplex` adapter      |
 | Row schemas | `Model` / `VariantSchema` from `effect/unstable/schema`                            |

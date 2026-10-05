@@ -14,16 +14,19 @@ const COLUMNS: ReadonlyArray<Column<Product>> = [
   {
     key: "sku",
     header: "Artikelnummer",
+    sortBy: (product) => product.sku,
     cell: (product) => <span className="font-mono text-[12px]">{product.sku}</span>
   },
   {
     key: "name",
     header: "Product",
+    sortBy: (product) => product.name,
     cell: (product) => <span className={product.active ? "text-ink" : "text-ink-3"}>{product.name}</span>
   },
   {
     key: "unit",
     header: "Eenheid",
+    priority: "secondary",
     cell: (product) => (
       <span className="text-ink-2">{UNIT_LABEL[product.unit as keyof typeof UNIT_LABEL] ?? product.unit}</span>
     )
@@ -32,9 +35,10 @@ const COLUMNS: ReadonlyArray<Column<Product>> = [
     key: "price",
     header: "Prijs excl. btw",
     align: "right",
+    sortBy: (product) => product.unitPrice,
     cell: (product) => <span className="whitespace-nowrap">{formatEuro(product.unitPrice)}</span>
   },
-  { key: "vat", header: "Btw", align: "right", cell: (product) => `${product.vat / 10}%` },
+  { key: "vat", header: "Btw", align: "right", priority: "secondary", cell: (product) => `${product.vat / 10}%` },
   {
     key: "active",
     header: <span className="sr-only">Status</span>,

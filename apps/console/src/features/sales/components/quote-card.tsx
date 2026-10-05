@@ -23,7 +23,7 @@ import { formatEuro, formatMoment, plural } from "@/lib/format"
 import type { Quote } from "@ea/modules/sales/domain/Quote"
 import { useAtomSet } from "@effect/atom-react"
 import { Exit } from "effect"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, Mail } from "lucide-react"
 import { useId, useState } from "react"
 import { SALES_FAILURES } from "../sales-failures.ts"
 import { QuoteLines } from "./quote-lines.tsx"
@@ -52,7 +52,11 @@ export function QuoteCard(props: { readonly quote: Quote; readonly onFailure: (m
   const label = (name: string, text: string) => busy === name ? <Shimmer>{text}…</Shimmer> : text
 
   return (
-    <article data-testid="quote" className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card">
+    <article
+      id={`quote-${quote.id}`}
+      data-testid="quote"
+      className="flex scroll-mt-6 flex-col gap-3 rounded-card bg-surface p-4 shadow-card"
+    >
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <h3 className="text-sm font-semibold text-ink">
@@ -60,6 +64,16 @@ export function QuoteCard(props: { readonly quote: Quote; readonly onFailure: (m
             <EntityChip name={quote.customerName ?? "Onbekende klant"} className="mx-0 text-[13px]" />
           </h3>
           <span className="truncate text-[12px] text-ink-2">{quote.customerEmail ?? "geen e-mailadres"}</span>
+          {quote.source === null ?
+            null :
+            (
+              <span className="flex min-w-0 items-center gap-1 text-[12px] text-ink-2" data-testid="quote-source">
+                <Mail className="size-3.5 shrink-0" aria-hidden />
+                <span className="truncate">
+                  Via e-mail{quote.source.subject === null ? "" : ` · ${quote.source.subject}`}
+                </span>
+              </span>
+            )}
         </div>
         <QuoteStatus status={quote.status} />
       </header>

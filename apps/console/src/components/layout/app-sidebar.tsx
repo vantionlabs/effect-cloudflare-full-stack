@@ -10,6 +10,7 @@
  *   nothing reflows while the width animates (`SIDEBAR_MOTION`). The choice is remembered in this browser, read after
  *   hydration so the server always renders the expanded sidebar.
  */
+import { useHydrated } from "@/hooks/use-hydrated"
 import { EASE_LINK } from "@/lib/motion"
 import { cn } from "@/lib/utils"
 import { Link, useRouterState } from "@tanstack/react-router"
@@ -25,6 +26,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ReceiptText,
+  Search,
   Settings
 } from "lucide-react"
 import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react"
@@ -66,10 +68,16 @@ const SECTIONS: ReadonlyArray<{ readonly title: string; readonly items: Readonly
   }
 ]
 
+/** Every destination as a flat list, for the ⌘K palette's "Pagina's" group. */
+export const NAV_ITEMS: ReadonlyArray<NavItem> = SECTIONS.flatMap((section) => section.items)
+
 const isActive = (to: Destination, pathname: string) => to === "/" ? pathname === "/" : pathname.startsWith(to)
 
-export function AppSidebar(props: { readonly footer: (collapsed: boolean) => ReactNode }) {
+export function AppSidebar(
+  props: { readonly footer: (collapsed: boolean) => ReactNode; readonly onSearch: () => void }
+) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const hydrated = useHydrated()
   const [collapsed, setCollapsed] = useState(false)
   const [hovered, setHovered] = useState<Destination | null>(null)
   const [box, setBox] = useState<{ readonly top: number; readonly height: number } | null>(null)
@@ -135,6 +143,32 @@ export function AppSidebar(props: { readonly footer: (collapsed: boolean) => Rea
             </span>
           </Link>
         </div>
+
+        <button
+          type="button"
+          onClick={props.onSearch}
+          // Until hydration a click would do nothing at all — the trap AGENTS.md names; disabled says so honestly.
+          disabled={!hydrated}
+          aria-keyshortcuts="Meta+K Control+K"
+          title="Zoeken (⌘K)"
+          className={cn(
+            "flex items-center gap-2 rounded-control bg-inset px-2 py-1.5 text-[13px] text-ink-3 shadow-hairline",
+            "transition-colors duration-100 hover:bg-hover hover:text-ink active:scale-[0.98] disabled:opacity-60"
+          )}
+        >
+          <Search className="size-4 shrink-0" aria-hidden />
+          <span className={cn("flex-1 text-left transition-opacity duration-150", collapsed && "md:opacity-0")}>
+            Zoeken
+          </span>
+          <kbd
+            className={cn(
+              "hidden rounded-[4px] bg-surface px-1 font-sans text-[11px] text-ink-3 shadow-hairline transition-opacity duration-150 md:inline",
+              collapsed && "md:opacity-0"
+            )}
+          >
+            ⌘K
+          </kbd>
+        </button>
 
         <nav
           ref={nav}

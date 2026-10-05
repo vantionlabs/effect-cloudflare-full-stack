@@ -29,6 +29,7 @@ import { SessionTable } from "@ea/modules/iam/tables/Session"
 import { DocumentTable } from "@ea/modules/intake/tables/Document"
 import { IntakeTable } from "@ea/modules/intake/tables/Intake"
 import { ChunkTable } from "@ea/modules/policy/tables/Chunk"
+import { ConversationTable } from "@ea/modules/policy/tables/Conversation"
 import { RetrievalTable } from "@ea/modules/policy/tables/Retrieval"
 import { ExpenseTable } from "@ea/modules/reporting/tables/Expense"
 import { ReportDeliveryTable } from "@ea/modules/reporting/tables/ReportDelivery"
@@ -36,12 +37,13 @@ import {
   ChangeProposalTable,
   ChangeProposalUnique,
   CustomerTermsTable,
+  InboundEmailTable,
   SalesTable,
   WorkTable
 } from "@ea/modules/sales/tables/Sales"
 import { Migrator } from "effect/sql"
 import { CorpusKnowledge } from "../Corpus/CorpusTable.ts"
-import { EventIndexType, EventTable } from "../Event/EventTable.ts"
+import { EventIndexType, EventQuoteFromEmailType, EventTable } from "../Event/EventTable.ts"
 import { TenancyTable } from "../Tenancy/TenancyTable.ts"
 import { UsageTable } from "../Usage/UsageTable.ts"
 
@@ -148,7 +150,13 @@ export const migrations = {
   // Payment terms per customer, keyed by email; invoices copy them into their due date.
   "0033_customer_terms": CustomerTermsTable,
   // Expected payments out, one-off or monthly, so the cash forecast shows net cash and not only inflows.
-  "0034_expenses": ExpenseTable
+  "0034_expenses": ExpenseTable,
+  // The index of each person's docs-assistant conversations; the turns themselves live in the agent.
+  "0035_assistant_conversations": ConversationTable,
+  // A customer's email becomes a draft quote: receiving addresses, the messages, and each draft's source.
+  "0036_inbound_email": InboundEmailTable,
+  // `quote.draft-from-email` on the event engine.
+  "0037_event_quote_from_email": EventQuoteFromEmailType
 }
 
 export const loader = Migrator.fromRecord(migrations)

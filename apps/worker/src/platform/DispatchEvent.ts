@@ -45,8 +45,10 @@ import {
   ocrParserVersion
 } from "@ea/modules/intake/server/Document"
 import { IndexPolicyDocument } from "@ea/modules/policy/use-cases/Chunk"
+import { DraftFromEmail, MarkInboundFailed } from "@ea/modules/sales/use-cases/Inbound"
 import { type Cache, readThrough } from "@ea/modules/shared/domain/Cache"
 import { Collection } from "@ea/modules/shared/domain/Corpus"
+import { isTerminal } from "@ea/modules/shared/domain/Errors"
 import type { QueueMessage } from "@ea/modules/shared/domain/Event"
 import { ConsumeEvent, type EventRow } from "@ea/modules/shared/use-cases/Event"
 import { Effect, Schema } from "effect"
@@ -71,6 +73,9 @@ const IndexPayload = Schema.Struct({
   title: Schema.String
 })
 
+const DraftFromEmailPayload = Schema.Struct({
+  inboundMessageId: Schema.String
+})
 const ExecutePayload = Schema.Struct({
   decisionId: Schema.String,
   action: Schema.Literals(["dry_run", "post_to_ledger", "schedule_payment"])
@@ -278,6 +283,23 @@ const workFor = (startDecide: DecideBinding) => (row: EventRow) =>
           text,
           collection: payload.collection
         })
+        return
+      }
+      case "quote.draft-from-email": {
+        /*
+         * A customer's email, read into a draft quote. Inline in the consumer, like `document.index`: one model call,
+         * retried as a whole by Queues, and idempotent — `DraftFromEmail` skips a message already drafted and a unique
+         * index stops a racing delivery drafting it twice. A TERMINAL failure is written onto the message so the inbox
+         * shows it; a transient one is left for the retry and the message stays "received" in between.
+         */
+        const payload = yield* Schema.decodeUnknownEffect(DraftFromEmailPayload)(row.payload)
+        yield* DraftFromEmail(payload.inboundMessageId).pipe(
+          Effect.tapError((error) =>
+            isTerminal(error)
+              ? MarkInboundFailed(payload.inboundMessageId, `Kon niet gelezen worden (${error._tag}).`)
+              : Effect.void
+          )
+        )
         return
       }
       default:

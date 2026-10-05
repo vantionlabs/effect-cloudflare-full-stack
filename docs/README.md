@@ -51,6 +51,7 @@ Each one ends in **Revisit when**, so these are decisions with expiry dates rath
 | [0020](./adr/0020-push-only-socket-with-schema-frames.md)          | the socket is push-only, carrying Schema frames                              | hibernation forbids an in-memory RPC session                                                                        |
 | [0022](./adr/0022-an-api-key-acts-as-a-member.md)                  | an API key acts as a member, with no authority of its own                    | revoking the member revokes the key; `approved_by` stays a real person                                              |
 | [0021](./adr/0021-package-taxonomy.md)                             | packages by kind: features, capabilities, integrations                       | executed: six packages, and every package's source under `src/` — refines 0011                                      |
+| [0026](./adr/0026-rpc-server-per-request.md)                       | the RPC server is built per request, not mounted with `RpcServer.layerHttp`  | a synchronous first request left the server unstarted and every later RPC call hung — amends 0012                   |
 
 **No gaps left in the numbering.** 0004–0008 were written on 2026-09-30, and three of them do not say what
 `PLAN.md` predicted they would: 0005 was superseded before it was written, 0007 reverses the choice of

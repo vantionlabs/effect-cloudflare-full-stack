@@ -20,7 +20,14 @@ import { Email } from "@ea/modules/shared/domain/Email"
 import { Effect } from "effect"
 import { ComputeWeeklyKpis } from "./ComputeWeeklyKpis.ts"
 
-/** A bound on one run, so a large tenant count cannot turn one cron invocation into an unbounded one. */
+/**
+ * A bound on one run, so a large tenant count cannot turn one cron invocation into an unbounded one.
+ *
+ * A bound is only safe if the rest are picked up later — and they were not: the job ran once a week, ordered by id,
+ * so organization 501 onwards never received a report, and the next Monday moved on to a new week. Now a run skips
+ * organizations already claimed for the period, reports `more` when it hit the bound, and the five-minute cron
+ * repeats it on Mondays from 06:00 UTC (`weeklyCatchUpDue`) until nothing is left. Claims make repeating safe.
+ */
 const MAX_ORGANIZATIONS = 500
 
 export interface WeeklyReportSummary {
@@ -28,6 +35,8 @@ export interface WeeklyReportSummary {
   readonly sent: number
   readonly alreadySent: number
   readonly failed: number
+  /** True when the run stopped at `MAX_ORGANIZATIONS`: more organizations are waiting for a later run. */
+  readonly more: boolean
 }
 
 /** Owners and admins, by email, and the organization's display name — better-auth's tables, read tenant-scoped. */
@@ -102,15 +111,22 @@ export const SendWeeklyReports = (now: Date) =>
     const active = yield* db.unscopedForCron((sql) =>
       sql<{ organization_id: string }>`
         -- tenant: the organization is the answer
-        select organization_id from intakes
-         where received_at >= (${period.from}::date::timestamp at time zone 'UTC')
-           and received_at <  (${period.to}::date::timestamp at time zone 'UTC')
-        union
-        select organization_id from decisions
-         where decided_at >= (${period.from}::date::timestamp at time zone 'UTC')
-           and decided_at <  (${period.to}::date::timestamp at time zone 'UTC')
-        order by organization_id
-        limit ${MAX_ORGANIZATIONS}
+        select organization_id from (
+          select organization_id from intakes
+           where received_at >= (${period.from}::date::timestamp at time zone 'UTC')
+             and received_at <  (${period.to}::date::timestamp at time zone 'UTC')
+          union
+          select organization_id from decisions
+           where decided_at >= (${period.from}::date::timestamp at time zone 'UTC')
+             and decided_at <  (${period.to}::date::timestamp at time zone 'UTC')
+        ) active
+         where not exists (
+           select 1 from report_deliveries d
+            where d.organization_id = active.organization_id and d.report = 'weekly'
+              and d.period_start = ${period.from}::date
+         )
+         order by organization_id
+         limit ${MAX_ORGANIZATIONS}
       `
     )
 
@@ -127,5 +143,11 @@ export const SendWeeklyReports = (now: Date) =>
       } else if (outcome.value) sent++
       else alreadySent++
     }
-    return { period, sent, alreadySent, failed } satisfies WeeklyReportSummary
+    return {
+      period,
+      sent,
+      alreadySent,
+      failed,
+      more: active.length === MAX_ORGANIZATIONS
+    } satisfies WeeklyReportSummary
   })

@@ -41,8 +41,15 @@ export function CashForecast(props: { readonly plan: PlanningView }) {
             header: "Week van",
             cell: (week) => <span className="whitespace-nowrap">{formatDay(week.weekStart)}</span>
           },
-          { key: "invoices", header: "Facturen", align: "right", cell: (week) => quiet(week.fromInvoices) },
-          { key: "work", header: "Werk", align: "right", cell: (week) => quiet(week.fromWork) },
+          // The breakdown of "In": hidden on phones, where In, Uit and Netto are what fits and what matters.
+          {
+            key: "invoices",
+            header: "Facturen",
+            align: "right",
+            priority: "secondary",
+            cell: (week) => quiet(week.fromInvoices)
+          },
+          { key: "work", header: "Werk", align: "right", priority: "secondary", cell: (week) => quiet(week.fromWork) },
           { key: "in", header: "In", align: "right", cell: (week) => quiet(week.total) },
           { key: "out", header: "Uit", align: "right", cell: (week) => quiet(week.out) },
           { key: "net", header: "Netto", align: "right", cell: (week) => signed(week.net) },

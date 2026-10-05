@@ -34,6 +34,7 @@ import {
   WORK_REFRESH
 } from "./api/planning-atoms.ts"
 import { CashForecast } from "./components/cash-forecast.tsx"
+import { ExpenseAllocation } from "./components/expense-allocation.tsx"
 import { ExpenseForm } from "./components/expense-form.tsx"
 import { ExpenseList } from "./components/expense-list.tsx"
 import { InvoiceList } from "./components/invoice-list.tsx"
@@ -114,10 +115,14 @@ export function PlanningPage() {
         {expenses._tag === "Initial"
           ? <SkeletonTable rows={2} columns={3} label="Uitgaven worden geladen" />
           : (
-            <ExpenseList
-              expenses={expenses._tag === "Success" ? expenses.value : []}
-              onStop={(expenseId) => void act(stopExpense({ payload: { expenseId }, reactivityKeys: EXPENSE_REFRESH }))}
-            />
+            <>
+              <ExpenseList
+                expenses={expenses._tag === "Success" ? expenses.value : []}
+                onStop={(expenseId) =>
+                  void act(stopExpense({ payload: { expenseId }, reactivityKeys: EXPENSE_REFRESH }))}
+              />
+              <ExpenseAllocation plan={plan} expenses={expenses._tag === "Success" ? expenses.value : []} />
+            </>
           )}
       </PageSection>
 

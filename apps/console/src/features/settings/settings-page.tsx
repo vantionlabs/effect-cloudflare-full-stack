@@ -12,6 +12,7 @@ import { superseded } from "@/lib/motion"
 import { useRouterState } from "@tanstack/react-router"
 import { canManage, type SettingsView } from "./api/settings-view.ts"
 import { ApiKeys } from "./components/api-keys.tsx"
+import { InboundAddress } from "./components/inbound-address.tsx"
 import { InvitationList } from "./components/invitation-list.tsx"
 import { InviteForm } from "./components/invite-form.tsx"
 import { MemberList } from "./components/member-list.tsx"
@@ -72,6 +73,14 @@ export function SettingsPage(props: { readonly view: SettingsView }) {
 
           <PageSection id="organisatie" title="Organisatie">
             <OrganizationForm name={view.organization.name} manage={manage} />
+          </PageSection>
+
+          <PageSection
+            id="offerte-email"
+            title="E-mail voor offerteaanvragen"
+            description="Elke e-mail naar dit adres wordt een conceptofferte in Verkoop. Je controleert en keurt goed voordat er iets terug gaat; het antwoord gaat naar de afzender."
+          >
+            <InboundAddress manage={manage} />
           </PageSection>
 
           <PageSection

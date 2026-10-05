@@ -50,7 +50,9 @@ const TERMINAL_TAGS: ReadonlySet<string> = new Set([
   "UnknownEventType",
   // policy: the embedder's width does not match the column. A configuration fact, so every retry fails the
   // same way — and each would spend an embedding call to find out.
-  "EmbeddingWidthMismatch"
+  "EmbeddingWidthMismatch",
+  // sales: the inbound message the event names is gone; a retry cannot bring it back.
+  "InboundMessageNotFound"
 ])
 
 export const isTerminal = (error: unknown): boolean =>

@@ -11,6 +11,12 @@
  *
  *   bun run db:migrate                                    # DATABASE_URL, or apps/worker/.env
  *   DATABASE_URL=postgresql://... bun run db:migrate       # explicit
+ *   bun run db:migrate:local                              # the compose container, whatever DATABASE_URL says
+ *
+ * `--local` exists because `DATABASE_URL` in apps/worker/.env names the REMOTE dev database, so plain
+ * `db:migrate` on a laptop migrates Neon, not the container the tests read (the "two databases" trap in AGENTS.md).
+ * It takes the container's URL from `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` — the same string
+ * `wrangler dev` uses — so there is still no credential in package.json.
  *
  * Run `bun run db:verify` first against an unfamiliar database. Verifying the platform assumptions
  * takes a second; discovering a missing `dutch` configuration from a half-applied migration does not.
@@ -40,8 +46,14 @@ const loadWorkerEnv = () => {
  */
 if (process.env["CI"] === undefined) loadWorkerEnv()
 
-const url = process.env["DATABASE_URL"] ??
-  process.env["CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"]
+const local = process.argv.includes("--local")
+if (local && process.env["CI"] !== undefined) {
+  console.error("--local is for a laptop's compose container; CI must name its database in DATABASE_URL.")
+  process.exit(1)
+}
+const url = local
+  ? process.env["CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"]
+  : process.env["DATABASE_URL"] ?? process.env["CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"]
 
 if (url === undefined || url === "") {
   /*

@@ -83,7 +83,9 @@ import { ChunkerHeading } from "@ea/modules/policy/domain/Chunk"
 import { AssistantConversationsAgent } from "@ea/modules/policy/server/Assistant"
 import { EmbedderWorkersAiBinding } from "@ea/modules/policy/server/Embedding"
 import { PolicySearchLive } from "@ea/modules/policy/use-cases/Retrieval"
+import { weeklyCatchUpDue } from "@ea/modules/reporting/domain/WeeklyReport"
 import { SendWeeklyReports } from "@ea/modules/reporting/use-cases/WeeklyReport"
+import { parseInboundEmail } from "@ea/modules/sales/server/Inbound"
 import { isTerminal } from "@ea/modules/shared/domain/Errors"
 import { EventId } from "@ea/modules/shared/domain/Event"
 import type { Retrieval } from "@ea/modules/shared/domain/Retrieval"
@@ -103,7 +105,7 @@ import { Effect, Layer, ManagedRuntime, Redacted } from "effect"
 import { LanguageModel } from "effect/ai"
 import { HttpRouter } from "effect/http"
 import { HttpApiBuilder, HttpApiScalar } from "effect/http-api"
-import { RpcSerialization, RpcServer } from "effect/rpc"
+import { RpcSerialization } from "effect/rpc"
 import {
   type DecideWork,
   type ExtractedFields,
@@ -114,8 +116,10 @@ import {
 import { AuthenticatedLive } from "./platform/AuthenticatedLive.ts"
 import { Bindings, type Env, layerConfigProvider, WorkerCtx } from "./platform/Bindings.ts"
 import { cachedDocumentTextFor, dispatchEvent } from "./platform/DispatchEvent.ts"
+import { handleInboundEmail, type InboundEmailMessage } from "./platform/EmailHandler.ts"
 import { ConnectHyperdrive, ReactivityLive } from "./platform/HyperdriveConnect.ts"
 import { consumeBatch, type QueueBatchLike } from "./platform/QueueHandler.ts"
+import { RpcHttp } from "./platform/RpcHttp.ts"
 import { WorkerPlatform } from "./platform/WorkerPlatform.ts"
 
 /**
@@ -334,21 +338,15 @@ const AppLayer = (env: Env) =>
      * resolve to the same `CurrentUser` and call the same use cases, so the second transport adds a
      * door rather than a parallel implementation. HTTP stays frozen and snake_case for callers we do
      * not control; RPC carries domain types for the console, which ships with the server.
+     *
+     * Request/response over POST rather than a socket because the console's calls are discrete queries, and
+     * a Worker billed on wall-clock time should not hold an idle socket open per viewer.
+     *
+     * **A server per request, not `RpcServer.layerHttp`.** That one forks the server while the layer is built,
+     * inside the isolate's first request, and when that request had no I/O to wait on the server never started
+     * and every later RPC call in the isolate hung (ADR-0026). See `platform/RpcHttp.ts`.
      */
-    RpcServer.layerHttp({
-      group: RpcV1,
-      path: RPC_V1_PATH,
-      /*
-       * `protocol` is NOT optional in practice. Despite the name, `layerHttp` mounts a **WebSocket**
-       * endpoint when this is omitted (`protocol === "http" ? layerProtocolHttp : layerProtocolWebsocket`),
-       * so a plain POST gets a 404 with nothing in the logs to explain it.
-       *
-       * Request/response rather than a socket because the console's calls are discrete queries, and a
-       * Worker billed on wall-clock time should not hold an idle socket open per viewer. A socket
-       * becomes right when the queue needs live updates, and that is a one-word change here.
-       */
-      protocol: "http"
-    }),
+    RpcHttp(RpcV1, RPC_V1_PATH),
     /*
      * The realtime upgrade. On this router, so it shares the origin — and therefore the cookie — with
      * everything else; a socket that had to authenticate differently from a request would be a second
@@ -387,7 +385,14 @@ const AppLayer = (env: Env) =>
      * router, so merging changes nothing about how they compose.
      */
     Layer.provide(HttpEdges),
-    Layer.provide(RpcEdges),
+    /*
+     * `provideMerge` for the three things the RPC route needs — these handlers, the serialization below and the
+     * RPC middleware (`SessionRpcLive`, further down) — because it builds its server PER REQUEST: they are read
+     * from the built context when a call arrives, not consumed while the layer is built (see `RpcHttp`). With
+     * `provide`, the missing one shows up as a required argument at the per-request door, which is the compiler
+     * saying so.
+     */
+    Layer.provideMerge(RpcEdges),
     /*
      * The authorization seam, provided HERE rather than beside `IdentityResolverLive` below — order in this pipe
      * is what satisfies requirements, and this middleware needs the resolver, so it has to come before the layer
@@ -396,7 +401,7 @@ const AppLayer = (env: Env) =>
     Layer.provide(AuthenticatedLive),
     // JSON rather than msgpack: the console is a browser, the payloads are small, and a wire format a
     // human can read in devtools is worth more here than a few bytes.
-    Layer.provide(RpcSerialization.layerJson),
+    Layer.provideMerge(RpcSerialization.layerJson),
     Layer.provide(RoomsLive(env.ROOMS)),
     /*
      * The identity port, which the realtime upgrade requires and no middleware provides.
@@ -412,7 +417,7 @@ const AppLayer = (env: Env) =>
      * the graph for the same reason — `ServicesLayer` is merged, not provided.
      */
     Layer.provideMerge(IdentityResolverLive),
-    Layer.provide(SessionRpcLive),
+    Layer.provideMerge(SessionRpcLive),
     Layer.provideMerge(ServicesLayer(env)),
     Layer.provide(WorkerPlatform)
   )
@@ -622,6 +627,15 @@ export default {
   },
 
   /**
+   * An email routed here by Cloudflare Email Routing — a customer's request becoming a draft quote. See
+   * `platform/EmailHandler.ts`. Same runtime and one connection, like the queue: the work is a token lookup, one
+   * insert and one emitted event; the model call happens later, in the queue consumer.
+   */
+  async email(message: InboundEmailMessage, env: Env, _ctx: ExecutionContext): Promise<void> {
+    await getQueueRuntime(env).runPromise(withDatabase(handleInboundEmail(parseInboundEmail)(message)))
+  },
+
+  /**
    * The cron. Recovery work only — it never decides anything.
    *
    * One job today: re-send events that were recorded but never enqueued. No transaction spans the
@@ -653,7 +667,8 @@ export default {
           // Logged including zeros, for the same reason as the sweeper below: silence looks like a dead cron.
           yield* Effect.log(
             `cron ${controller.cron}: weekly reports for ${summary.period.from}..${summary.period.to} — ` +
-              `${summary.sent} sent, ${summary.alreadySent} already sent, ${summary.failed} failed`
+              `${summary.sent} sent, ${summary.alreadySent} already sent, ${summary.failed} failed` +
+              (summary.more ? " — LIMIT HIT, the five-minute cron continues" : "")
           )
         }))
       )
@@ -701,6 +716,21 @@ export default {
             `${stuck.stuckEvents} event(s) stuck in processing` +
             (stuck.more ? " — LIMIT HIT, more remain" : "")
         )
+
+        /*
+         * The weekly report's catch-up: on Mondays from 06:00 UTC, finish what the weekly run's bound left. A run
+         * skips organizations already claimed, so once everyone has their report this is one cheap query. Logged
+         * only when it sent something, so the five-minute log is not filled with zeros all Monday.
+         */
+        if (weeklyCatchUpDue(new Date())) {
+          const caughtUp = yield* SendWeeklyReports(new Date())
+          if (caughtUp.sent + caughtUp.failed > 0) {
+            yield* Effect.log(
+              `cron ${controller.cron}: weekly report catch-up — ${caughtUp.sent} sent, ${caughtUp.failed} failed` +
+                (caughtUp.more ? ", more remain" : "")
+            )
+          }
+        }
       }))
     )
   }

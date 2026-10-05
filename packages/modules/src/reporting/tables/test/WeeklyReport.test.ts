@@ -27,10 +27,12 @@ const asAdmin = <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) =>
 
 const ACTIVE = "weekly_org_active"
 const IDLE = "weekly_org_idle"
-// Monday 06:00 UTC: the report covers 2026-09-28 .. 2026-10-05.
-const NOW = new Date("2026-10-05T06:00:00Z")
-const IN_WEEK = "2026-09-30T10:00:00Z"
-const BEFORE_WEEK = "2026-09-20T10:00:00Z"
+// Monday 06:00 UTC: the report covers 2025-01-06 .. 2025-01-13. A week in the PAST on purpose: the browser suite
+// creates organizations with activity every day, and a week that includes today put this test's organization behind
+// hundreds of others in a run's bound.
+const NOW = new Date("2025-01-13T06:00:00Z")
+const IN_WEEK = "2025-01-08T10:00:00Z"
+const BEFORE_WEEK = "2024-12-29T10:00:00Z"
 
 const sendWith = (now: Date) => {
   const sent: Array<EmailMessage> = []
@@ -126,7 +128,7 @@ describe("the weekly report", () => {
   it("counts only the week it covers, and reports the backlog as it is now", async () => {
     const { sent } = await sendWith(NOW)
     const text = sent.find((message) => message.to === "owner@workshop.test")!.text
-    expect(text).toContain("2026-09-28 tot 2026-10-05")
+    expect(text).toContain("2025-01-06 tot 2025-01-13")
     expect(text).toContain("Documenten ontvangen:          1")
     expect(text).toContain("Beslissingen genomen:          2")
     expect(text).toContain("automatisch goedgekeurd:     1 (50%)")
@@ -138,15 +140,21 @@ describe("the weekly report", () => {
 
   it("goes out ONCE: a second run in the same week sends nothing and says why", async () => {
     await sendWith(NOW)
-    const again = await sendWith(new Date("2026-10-05T06:05:00Z"))
+    const again = await sendWith(new Date("2025-01-13T06:05:00Z"))
     expect(again.sent.filter((message) => message.subject.startsWith("Acme Hydraulics"))).toEqual([])
-    expect(again.summary.alreadySent).toBeGreaterThanOrEqual(1)
+    /*
+     * Not "already sent": a run now skips organizations claimed for the week before it starts, which is what lets the
+     * five-minute cron repeat the job on Mondays to finish what one run's bound left. The claim row below is the
+     * record of why nothing went out twice.
+     */
+    expect(again.summary.sent).toBe(0)
+    expect(again.summary.more).toBe(false)
 
     const [delivery] = await asAdmin(
       Effect.flatMap(SqlClient.SqlClient, (sql) =>
         sql<{ recipients: number; sent: boolean }>`
         select recipients, sent_at is not null as sent from report_deliveries
-         where organization_id = ${ACTIVE} and period_start = '2026-09-28'
+         where organization_id = ${ACTIVE} and period_start = '2025-01-06'
       `)
     )
     expect(delivery).toEqual({ recipients: 2, sent: true })

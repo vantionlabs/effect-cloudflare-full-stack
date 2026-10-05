@@ -39,8 +39,10 @@ const loadWorkerEnv = () => {
 }
 loadWorkerEnv()
 
-const url = process.env["DATABASE_URL"] ??
-  process.env["CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"]
+// `--local`: the compose container, whatever DATABASE_URL says — see scripts/migrate.ts for why.
+const url = process.argv.includes("--local")
+  ? process.env["CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"]
+  : process.env["DATABASE_URL"] ?? process.env["CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"]
 
 if (url === undefined || url === "") {
   console.error(

@@ -269,10 +269,42 @@ const ungroundedCitations = (
  * Extracted so that `AskCorpus` and `AskCorpusStream` are one implementation rather than two that agree today.
  * The hook is the only difference between them: one discards it, the other offers a frame to a queue.
  */
+/**
+ * An earlier exchange in the same conversation, offered so a follow-up ("and for the 500 model?") can be understood.
+ *
+ * Context, never evidence: the grounding check below only accepts chunks served in THIS run, so an earlier answer's
+ * quote cannot be re-cited without searching again — which is exactly what the follow-up rule tells the model.
+ */
+export interface PriorTurn {
+  readonly question: string
+  readonly answer?: string | undefined
+  readonly refusedBecause?: string | undefined
+}
+
+/** How many earlier turns reach the prompt. Enough for a follow-up to resolve "it"; few enough to stay cheap. */
+export const MAX_PRIOR_TURNS = 4
+
+const FOLLOW_UP_RULE = `
+- Earlier questions and answers in this conversation are context only. To use anything from them, search again:
+  quote only what the tool returns now, never a quote from an earlier answer.`
+
+const priorMessages = (history: ReadonlyArray<PriorTurn>) =>
+  history.slice(-MAX_PRIOR_TURNS).flatMap((turn) => [
+    { role: "user" as const, content: [{ type: "text" as const, text: turn.question }] },
+    {
+      role: "assistant" as const,
+      content: [{
+        type: "text" as const,
+        text: turn.answer ?? `(No answer was given: ${turn.refusedBecause ?? "the documentation did not settle it"}.)`
+      }]
+    }
+  ])
+
 const runLoop = (
   question: string,
   onSearch: (query: string, mode: string | null) => void,
-  collection: AskableCollection
+  collection: AskableCollection,
+  history: ReadonlyArray<PriorTurn> = []
 ) =>
   Effect.gen(function*() {
     /*
@@ -283,7 +315,8 @@ const runLoop = (
     const model = yield* AgentModel
 
     let prompt = Prompt.make([
-      { role: "system", content: systemFor(collection, question) },
+      { role: "system", content: systemFor(collection, question) + (history.length > 0 ? FOLLOW_UP_RULE : "") },
+      ...priorMessages(history),
       { role: "user", content: [{ type: "text", text: question }] }
     ])
 
@@ -396,8 +429,11 @@ type LoopRequirements = ReturnType<typeof runLoop> extends Effect.Effect<infer _
 
 /** Runs the loop and returns the verified answer. What a non-streaming caller wants. */
 /** `collection` picks the corpus AND the system prompt; the toolkit provided must be `askToolkitFor` the same one. */
-export const AskCorpus = (question: string, collection: AskableCollection = "policy") =>
-  runLoop(question, () => {}, collection)
+export const AskCorpus = (
+  question: string,
+  collection: AskableCollection = "policy",
+  history: ReadonlyArray<PriorTurn> = []
+) => runLoop(question, () => {}, collection, history)
 
 /**
  * The same loop, reporting each search as it happens.

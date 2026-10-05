@@ -5,7 +5,7 @@
 import { StatusPill, type StatusTone } from "@/components/data/status-pill"
 import type { QuoteStatus as Status } from "@ea/modules/sales/domain/Quote"
 
-const QUOTE_STATUS_LABEL: Record<Status, string> = {
+export const QUOTE_STATUS_LABEL: Record<Status, string> = {
   draft: "concept",
   approved: "goedgekeurd",
   sent: "verstuurd",

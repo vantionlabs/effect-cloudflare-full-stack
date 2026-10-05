@@ -6,7 +6,7 @@
  * product that has since changed is refused rather than silently overwriting the newer change.
  */
 import { Db } from "@ea/database/Database"
-import { CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
+import { CurrentOrg, CurrentUser, Identity, OrgId, UserId } from "@ea/domain/Identity"
 import { ApplyChange, changeToolkitFor, ProposeChanges, RejectChange } from "@ea/modules/sales/use-cases/Change"
 import { ListProducts, UpsertProduct } from "@ea/modules/sales/use-cases/Product"
 import { IdsUuid } from "@ea/modules/shared/server/Ids"
@@ -32,7 +32,12 @@ const user = new Identity({ userId: UserId.make("changer"), orgId: ORG, email: "
 
 const run = <A, E>(effect: Effect.Effect<A, E, any>) =>
   Effect.runPromise(
-    Effect.exit(effect).pipe(Effect.provideService(CurrentUser, user), Effect.provide(Base)) as Effect.Effect<
+    Effect.exit(effect).pipe(
+      Effect.provideService(CurrentUser, user),
+      // As the API edge does: the tenant comes from the session (`serveForTenant`).
+      Effect.provideService(CurrentOrg, user.orgId),
+      Effect.provide(Base)
+    ) as Effect.Effect<
       Exit.Exit<A, E>,
       never,
       never

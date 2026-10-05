@@ -12,10 +12,11 @@
  */
 import { AppShell } from "@/components/layout/app-shell"
 import { SignOutButton } from "@/features/auth/components/sign-out-button"
-import { useOrganizationId } from "@/hooks/use-session"
+import { useSession } from "@/hooks/use-session"
 import { RealtimeBridge } from "@/realtime/realtime-bridge"
 import { WebSocketProvider } from "@/realtime/socket-provider"
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
+import { useCommandRecords } from "./-command-records.tsx"
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: ({ context, location }) => {
@@ -35,7 +36,15 @@ export const Route = createFileRoute("/_authenticated")({
 })
 
 function AuthenticatedLayout() {
-  const organizationId = useOrganizationId()
+  const session = useSession()
+  /*
+   * Guest HERE is a transition, not a state: `router.invalidate()` re-resolved the session (a sign-out elsewhere, a
+   * revoked session) and the guard above is about to redirect. The session atom updates a render earlier than the
+   * navigation lands, and the shell's hooks throw for a Guest by design — so for that one render, render nothing
+   * rather than let the error boundary flash.
+   */
+  if (session._tag === "Guest") return null
+  const organizationId = session.organizationId ?? null
   return (
     /*
      * ONE socket for the whole authenticated app, opened here.
@@ -52,7 +61,7 @@ function AuthenticatedLayout() {
     <WebSocketProvider enabled={organizationId !== null}>
       {/* Frames become atoms here, and only here — see realtime-bridge.tsx. Renders nothing. */}
       {organizationId === null ? null : <RealtimeBridge />}
-      <AppShell signOut={<SignOutButton />}>
+      <AppShell signOut={<SignOutButton />} useCommandRecords={useCommandRecords}>
         <Outlet />
       </AppShell>
     </WebSocketProvider>

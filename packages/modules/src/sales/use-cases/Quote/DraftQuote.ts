@@ -35,7 +35,23 @@ Do not state prices, totals or VAT — they are computed from the price list, no
 PRICE LIST (SKU | product | unit):
 ${catalogue}`
 
-export const DraftQuote = (input: { readonly request: string }) =>
+/** What a draft is read from, and who or what asked for it. */
+export interface DraftInput {
+  readonly request: string
+  /** The customer, from the mail envelope, when the request arrived by email. Trusted as the reply address. */
+  readonly sender?: { readonly email: string; readonly name: string | null } | undefined
+  /** Who the draft is recorded as created by: a user id, or `email` for one read from the inbox. */
+  readonly createdBy: string
+  /** The inbound message this draft answers; at most one draft per message (a partial unique index). */
+  readonly inboundMessageId?: string | undefined
+}
+
+/**
+ * The drafting itself, for any caller with a tenant: a person through the console, or the queue reading an email.
+ * Requires `CurrentOrg`, not `CurrentUser` — the queue has no user, and inventing one would put a fabricated identity
+ * in `created_by`.
+ */
+export const draftQuoteFor = (input: DraftInput) =>
   Effect.gen(function*() {
     const request = input.request.slice(0, MAX_REQUEST_LENGTH)
     const catalogue = yield* ListProducts()
@@ -46,23 +62,23 @@ export const DraftQuote = (input: { readonly request: string }) =>
       schema: QuoteReading,
       objectName: "QuoteReading"
     })
-    const priced = priceQuote(response.value, request, catalogue)
+    const priced = priceQuote(response.value, request, catalogue, input.sender)
     const usage = modelUsageOf(response)
-
     const db = yield* Db
     const ids = yield* Ids
-    const user = yield* CurrentUser
     const quoteId = yield* ids.next
-    return yield* db.scoped((sql, orgId) =>
+    return yield* db.scopedForOrg((sql, orgId) =>
       Effect.gen(function*() {
         yield* sql`
           insert into quotes (
             id, organization_id, status, customer_name, customer_email, request,
-            subtotal_cents, vat_total_cents, total_cents, flags, model, created_by
+            subtotal_cents, vat_total_cents, total_cents, flags, model, created_by,
+            request_source, inbound_message_id
           ) values (
             ${quoteId}, ${orgId}, 'draft', ${priced.customerName}, ${priced.customerEmail}, ${request},
             ${priced.subtotal}, ${priced.vatTotal}, ${priced.total}, ${textArray(sql, priced.flags)},
-            ${usage?.model ?? null}, ${user.userId}
+            ${usage?.model ?? null}, ${input.createdBy},
+            ${input.inboundMessageId === undefined ? "manual" : "email"}, ${input.inboundMessageId ?? null}
           )
         `
         for (const [ordinal, line] of priced.lines.entries()) {
@@ -76,6 +92,13 @@ export const DraftQuote = (input: { readonly request: string }) =>
             )
           `
         }
+        // The message is marked drafted in the SAME transaction as the draft: one cannot exist without the other.
+        if (input.inboundMessageId !== undefined) {
+          yield* sql`
+            update inbound_messages set status = 'drafted', quote_id = ${quoteId}, reason = null
+             where organization_id = ${orgId} and id = ${input.inboundMessageId}
+          `
+        }
         // The cost of reading the request commits with the draft it produced.
         yield* writeUsage(sql, orgId, modelUsageEntries(usage))
         const [quote] = yield* loadQuotes(sql, orgId, [quoteId])
@@ -83,3 +106,7 @@ export const DraftQuote = (input: { readonly request: string }) =>
       })
     )
   })
+
+/** A person drafting from a request they pasted in. */
+export const DraftQuote = (input: { readonly request: string }) =>
+  Effect.flatMap(CurrentUser, (user) => draftQuoteFor({ request: input.request, createdBy: user.userId }))

@@ -88,36 +88,54 @@ export default defineConfig({
    */
   ...(process.env.E2E_BASE_URL === undefined
     ? {
-      webServer: {
-        /*
-         * CI runs the BUILT console; a developer runs the dev server.
-         *
-         * The suite asserts a topology — cookies, redirects, what the SSR payload contains, and the
-         * hydration gate — and none of it depends on vite. Running it against `vite dev` meant paying a dev
-         * server's costs to test production behaviour, and the dependency optimizer's full reloads made the
-         * hydration gate untestable: `disabled={!hydrated}` would flip, the page would reload, and the
-         * button would be disabled again.
-         *
-         * `vite preview` runs the built app in workerd WITH its auxiliary API worker, so it is the same
-         * one-origin topology, with no optimizer and no HMR. Measured on the same machine:
-         *
-         *     vite dev      8 passed in 48.6 s, and the chat spec timed out at 90 s in CI
-         *     vite preview  8 passed in  6.4 s, and the chat spec took 2.0 s
-         *
-         * Local keeps `dev` because that is what a developer is editing against, and a warm dev server does
-         * not reload-loop the way a cold one does.
-         */
-        command: process.env.CI === undefined
-          ? "bun run --filter @ea/console dev"
-          : "bun run --filter @ea/console preview:e2e",
-        url: baseURL,
-        // A cold start compiles the console and boots two workerd instances; 60s is not generous.
-        timeout: 120_000,
-        // Locally, reuse whatever is already on the port instead of fighting it for the socket.
-        reuseExistingServer: process.env.CI === undefined,
-        stdout: "pipe" as const,
-        stderr: "pipe" as const
-      }
+      webServer: [
+        {
+          /*
+           * CI runs the BUILT console; a developer runs the dev server.
+           *
+           * The suite asserts a topology — cookies, redirects, what the SSR payload contains, and the
+           * hydration gate — and none of it depends on vite. Running it against `vite dev` meant paying a dev
+           * server's costs to test production behaviour, and the dependency optimizer's full reloads made the
+           * hydration gate untestable: `disabled={!hydrated}` would flip, the page would reload, and the
+           * button would be disabled again.
+           *
+           * `vite preview` runs the built app in workerd WITH its auxiliary API worker, so it is the same
+           * one-origin topology, with no optimizer and no HMR. Measured on the same machine:
+           *
+           *     vite dev      8 passed in 48.6 s, and the chat spec timed out at 90 s in CI
+           *     vite preview  8 passed in  6.4 s, and the chat spec took 2.0 s
+           *
+           * Local keeps `dev` because that is what a developer is editing against, and a warm dev server does
+           * not reload-loop the way a cold one does.
+           */
+          command: process.env.CI === undefined
+            ? "bun run --filter @ea/console dev"
+            : "bun run --filter @ea/console preview:e2e",
+          url: baseURL,
+          // A cold start compiles the console and boots two workerd instances; 60s is not generous.
+          timeout: 120_000,
+          // Locally, reuse whatever is already on the port instead of fighting it for the socket.
+          reuseExistingServer: process.env.CI === undefined,
+          stdout: "pipe" as const,
+          stderr: "pipe" as const
+        },
+        ...(process.env.CI === undefined
+          ? [{
+            /*
+             * The API Worker on its own (`wrangler dev`, :8787), for the one thing the console's dev server cannot
+             * reach: the Worker's `email()` handler. Miniflare sends `/cdn-cgi/local/email` to the ENTRY worker, which
+             * under the Vite plugin is the console, and the plugin does not pass a route override through. Same compose
+             * Postgres, so mail delivered here shows up in the console on :5173. Local only — see `inbound-email.spec.ts`.
+             */
+            command: "bun run --filter @ea/worker dev",
+            url: "http://localhost:8787/api/v1/health",
+            timeout: 120_000,
+            reuseExistingServer: true,
+            stdout: "pipe" as const,
+            stderr: "pipe" as const
+          }]
+          : [])
+      ]
     }
     : {})
 })

@@ -107,16 +107,19 @@ Two rules that are easy to get wrong:
 Nothing in the cloud is required to develop, with one exception noted below.
 
 ```sh
-docker compose up -d      # Postgres 18 + pgvector 0.8.5 on :55433
-bun run db:migrate        # apply migrations to it
-bun run db:verify         # confirm pgvector and the Dutch stemmer are present
+bun run db:up               # Postgres 18 + pgvector 0.8.5 on :55433, waits until healthy
+bun run db:migrate:local    # apply migrations to THAT container (plain db:migrate targets DATABASE_URL)
+bun run db:verify:local     # confirm pgvector and the Dutch stemmer are present
 
 # ONE command for both Workers. The console's vite dev server boots the API as an AUXILIARY Worker,
 # so the `API` service binding resolves and the browser has one origin, as it does deployed.
-bun run --filter @ea/console dev   # console on :5173, API behind it
+bun run dev                 # db:up, then console on :5173 with the API behind it
 
 # The API alone, on its own port, when you are working on it rather than on the console.
-bun run dev                        # wrangler dev — REAL workerd on :8799
+bun run dev:worker          # wrangler dev — REAL workerd on :8787
+
+# Both at once, one prefixed log — e.g. to send local email to the API's email() handler while using the console.
+bun run dev:all
 ```
 
 What each binding resolves to locally:

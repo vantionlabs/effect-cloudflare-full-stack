@@ -28,6 +28,11 @@ export interface EmailMessage {
   /** Plain text. Required: see the note above on why this is the body that always exists. */
   readonly text: string
   readonly html?: string | undefined
+  /**
+   * Extra message headers. Used for `In-Reply-To` / `References`, so a reply to a customer's email lands in the same
+   * thread in their mail client. An adapter that cannot carry headers may drop them; threading is a courtesy.
+   */
+  readonly headers?: Readonly<Record<string, string>> | undefined
 }
 
 export interface EmailService {

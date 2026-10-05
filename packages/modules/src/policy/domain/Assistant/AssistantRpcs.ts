@@ -13,10 +13,12 @@
 import { AuthenticatedRpc } from "@ea/domain/Identity"
 import { AskAnswer } from "@ea/modules/policy/domain/Ask"
 import { ConversationUnavailable, UngroundedAnswer } from "@ea/modules/policy/domain/Errors"
+import { AskableCollection } from "@ea/modules/shared/domain/Corpus"
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { AssistantConversation } from "./Assistant.ts"
 import { ConversationId } from "./AssistantConversations.ts"
+import { ConversationSummary } from "./ConversationSummary.ts"
 
 export const AssistantRpcs = RpcGroup.make(
   /**
@@ -36,7 +38,12 @@ export const AssistantRpcs = RpcGroup.make(
        */
       conversationId: ConversationId,
       /** Capped in the handler, not trusted from here — a long question is a long paid prompt. */
-      question: Schema.String
+      question: Schema.String,
+      /**
+       * Which corpus to search. Optional, defaulting to `knowledge` (the technical documentation, which is what the
+       * console asks); a conversation keeps the collection it was started with in its index row.
+       */
+      collection: Schema.optional(AskableCollection)
     },
     success: Schema.Struct({
       answer: AskAnswer,
@@ -57,5 +64,23 @@ export const AssistantRpcs = RpcGroup.make(
     payload: { conversationId: ConversationId },
     success: AssistantConversation,
     error: ConversationUnavailable
+  }),
+  /** The caller's own conversations in the active organization, newest first. A read of the index; no model. */
+  Rpc.make("Assistant.conversations", {
+    payload: {},
+    success: Schema.Array(ConversationSummary)
+  }),
+  /** Renames a conversation in the caller's list. Returns the list after the change. */
+  Rpc.make("Assistant.rename", {
+    payload: { conversationId: ConversationId, title: Schema.String },
+    success: Schema.Array(ConversationSummary)
+  }),
+  /**
+   * Takes a conversation off the caller's list. The turns stay in the agent — tidying a list is not erasing what
+   * was asked — and an unknown id is a no-op. Returns the list after the change.
+   */
+  Rpc.make("Assistant.archive", {
+    payload: { conversationId: ConversationId },
+    success: Schema.Array(ConversationSummary)
   })
 ).middleware(AuthenticatedRpc)
