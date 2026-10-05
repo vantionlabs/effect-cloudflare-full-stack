@@ -76,6 +76,10 @@ RPC needed. HTTP handlers are now `.http.ts`. The rule: **in `domain` a facet is
 1. **`RpcServer.layerHttp` mounts a WebSocket when `protocol` is omitted.** Despite the name:
    `options.protocol === "http" ? layerProtocolHttp(options) : layerProtocolWebsocket(options)`. A
    plain POST gets a 404 with nothing in the logs. Always pass `protocol: "http"` explicitly.
+
+   _Amended 2026-10-05 by [ADR-0026](0026-rpc-server-per-request.md):_ `layerHttp` is no longer used. Mounted
+   that way, the server is forked inside the isolate's first request, and it never started when that request did
+   no I/O, so every later RPC call hung. The server is now built per request.
 2. **RLS was doing nothing, in every environment.** The first `Intake.list` test returned another
    organization's rows. Two independent causes, both fixed:
    - The query relied on RLS alone; the plan's app-layer predicate was missing. Added.

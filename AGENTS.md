@@ -236,6 +236,12 @@ immediately — the fix is to recognise the error, not to add a check that impli
 **`RpcServer.layerHttp` mounts a WebSocket when `protocol` is omitted.** Despite the name. A plain POST
 gets a 404 with nothing in the logs. Always pass `protocol: "http"` explicitly.
 
+**Do not mount RPC with `RpcServer.layerHttp` (or `RpcServer.layer`) in the Worker.** They fork the server while
+the layer is built, which `toWebHandler` does inside the isolate's first request; when that request does no I/O
+the fork's start timer is dropped with it, and every later RPC call hangs ("code had hung", 500). Use
+`platform/RpcHttp.ts`, which builds the server per request. The general rule: no fiber forked in one request may
+be needed by another. ADR-0026.
+
 **A superuser bypasses RLS whatever `FORCE` says.** The local Worker connects as the bootstrap user, so
 `Db.scoped` issues `set local role effect_ai_app` inside its transaction. A tenancy test that connects as
 the app role cannot discover that production does not.

@@ -655,6 +655,13 @@ by upgrading a request object in place.
 Related and already recorded above: `RpcServer.layerHttp` mounts a WebSocket when `protocol` is omitted,
 which is in `AGENTS.md` as a trap because a plain POST then 404s with nothing in the logs.
 
+**Checked 2026-10-05** (effect 4.0.0, wrangler 4.143.0 / local workerd): a fiber forked with `Effect.fork*` starts
+on its parent's dispatcher behind a `setTimeout(0)` (`forkUnsafe`, `MixedScheduler`). In a Worker, a request that
+returns before that timer fires leaves it unfired for good, so the forked fiber never runs. That is why
+`RpcServer.layerHttp` cannot be built lazily inside a request (ADR-0026). `HttpEffect.toWebHandler` hands the
+request scope to a streamed response body (`scopeTransferToStream`), so a per-request resource lives until the
+body ends.
+
 ## PlanetScale
 
 ### Postgres 18.6, pgvector 0.8.5, and a non-superuser `CREATEROLE` role
