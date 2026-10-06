@@ -935,8 +935,8 @@ from failure. docket's M3 notes record 3 of 5 seeded invoices landing in `needs_
 
 ### Preconditions (environment, before milestone 0)
 
-Verified on 2026-09-28: wrangler is installed at `3.109.2` and authenticated as
-`ishak@stacklane.co`, account `f4599b98c2430a831bcfc291d156a988`. Two blockers:
+Verified on 2026-09-28: wrangler is installed at `3.109.2` and authenticated to the
+Stacklane account `f4599b98c2430a831bcfc291d156a988`. Two blockers:
 
 1. **Wrangler is three majors behind** (latest `4.143.0`). Not cosmetic: the **Rate Limiting
    binding requires wrangler ≥ 4.36.0**, and the `@cloudflare/vite-plugin` and
